@@ -1,4 +1,5 @@
 import {
+  AnyPgColumn,
   boolean,
   integer,
   jsonb,
@@ -68,7 +69,7 @@ export const economyLedger = pgTable('economy_ledger', {
   sourceType: text('source_type').notNull(),
   sourceId: uuid('source_id'),
   delta: jsonb('delta').notNull(),
-  revertsLedgerId: uuid('reverts_ledger_id').references(() => economyLedger.id),
+  revertsLedgerId: uuid('reverts_ledger_id').references((): AnyPgColumn => economyLedger.id),
   isReverted: boolean('is_reverted').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
