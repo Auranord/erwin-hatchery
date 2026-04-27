@@ -1,5 +1,12 @@
 # Codex Task Plan - Erwin Hatchery MVP
 
+## Progress status
+
+- ✅ Milestone 0 foundation created.
+- ✅ Milestone 1 foundation created (health route, DB connection, schema/migration scaffolding).
+- ⏳ Milestone 2+ pending.
+
+
 ## Milestone 0 - Repo skeleton
 
 - Create monorepo layout:
