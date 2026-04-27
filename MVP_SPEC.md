@@ -1,0 +1,280 @@
+# MVP Spec - Erwin Hatchery
+
+## Product vision
+
+A fantasy pet battler built around Erwin, the NTKOH quail mascot. Viewers use Twitch Channel Points, called eggs, to collect mystery eggs, hatch pets, and participate in stream events. The vibe should be cozy, chaotic, fantasy, and community-focused.
+
+## Language
+
+- UI: mostly German.
+- Pet names, item names, and flavor text may mix German and English if it feels fun.
+- Code and internal docs: English.
+
+## Twitch reward
+
+Initial custom Channel Point reward:
+
+```text
+Name: 1x Mystery Ei
+Cost: 500
+Effect: Adds one Basic Mystery Egg to the viewer's Erwin Hatchery account.
+```
+
+The reward is created manually in Twitch for the MVP. The Twitch reward ID is configured through `.env`.
+
+## Player states
+
+A Twitch user can exist in three practical states:
+
+1. **Provisional player**
+   - Created from Channel Point redemption before first login.
+   - Can receive eggs.
+   - Cannot interact with inventory until login.
+
+2. **Authenticated player**
+   - Logged in with Twitch.
+   - Can manage eggs, incubators, pets, selected battle pet, and account deletion.
+
+3. **Deleted/anonymized player**
+   - User requested deletion.
+   - Personal data removed/anonymized.
+   - Economy objects can be deleted or anonymized based on implementation policy.
+
+## Core inventories
+
+Each player needs separate inventories for:
+
+- Mystery eggs
+- Hidden pet eggs
+- Hatched pets
+- Consumables
+- Resources, starting with cracked eggs
+
+## Egg lifecycle
+
+### 1. Mystery egg created
+
+A Twitch Channel Point redemption creates a mystery egg.
+
+The egg contents are determined immediately at redemption time and stored server-side, but not shown to the user yet.
+
+### 2. Egg identified
+
+The player identifies a mystery egg in the web UI.
+
+Outcome A: egg cracks into resources.
+
+- Player receives cracked eggs.
+- Mystery egg is consumed.
+
+Outcome B: egg contains a pet.
+
+- Pet type remains hidden.
+- Mystery egg is consumed.
+- A hidden pet egg is added to the pet egg inventory.
+
+### 3. Pet egg incubated
+
+The player selects a hidden pet egg and places it in an incubator slot.
+
+### 4. Pet egg hatches
+
+When incubation finishes, the pet is revealed.
+
+The generated pet has:
+
+- pet type
+- base stats from pet type
+- slight per-pet stat variance
+- unique pet instance ID
+- owner
+- creation/hatch metadata
+
+## Initial incubators
+
+- Normal viewer: 1 incubator.
+- Subscriber: +1 temporary subscriber incubator while subbed.
+
+If a user loses the sub perk while an egg is already in the subscriber incubator, that egg should finish. After it finishes, the subscriber incubator is removed or becomes unavailable until the user is subbed again.
+
+Later upgrades can add more incubators for non-subs.
+
+## Stream acceleration
+
+Incubation should continue over real time.
+
+While the stream is live, incubation is faster. The system should support modifiers based on:
+
+- stream live/offline state
+- current viewer count
+- future chat activity multiplier
+- future event multipliers
+
+MVP implementation may start with simple rules:
+
+```text
+Offline: 1.0x
+Live: 2.0x
+Live viewer multiplier: +0.01x per current viewer, capped at a configurable max
+```
+
+Example with 25 viewers and cap 3.0x:
+
+```text
+2.0x + 0.25x = 2.25x
+```
+
+The exact formula should be config-driven.
+
+## MVP pets
+
+MVP has 4 regular pets and 1 rare pet.
+
+Suggested initial pet types:
+
+| Pet type | Rarity | Role | HP | Attack | Defense | Speed |
+|---|---:|---|---:|---:|---:|---:|
+| Waldwachtel | Regular | Balanced | 100 | 10 | 8 | 12 |
+| Glitzer-Spatz | Regular | Fast | 80 | 8 | 5 | 18 |
+| Moorente | Regular | Tank | 120 | 7 | 12 | 7 |
+| Turmeule | Regular | Striker | 90 | 14 | 7 | 10 |
+| Goldener Erwin | Rare | Rare all-rounder | 110 | 13 | 10 | 13 |
+
+Each hatched pet should get slight stat variance, for example ±10%, calculated server-side at hatch time.
+
+## Egg loot table MVP
+
+The system must support multiple egg types later. MVP starts with one egg type: `basic_mystery_egg`.
+
+Suggested granular loot table:
+
+| Outcome | Probability | Result |
+|---|---:|---|
+| Resource small | 28% | 10 cracked eggs |
+| Resource medium | 22% | 20 cracked eggs |
+| Resource large | 12% | 35 cracked eggs |
+| Resource huge | 6% | 60 cracked eggs |
+| Pet | 8% | Waldwachtel hidden pet egg |
+| Pet | 8% | Glitzer-Spatz hidden pet egg |
+| Pet | 7% | Moorente hidden pet egg |
+| Pet | 7% | Turmeule hidden pet egg |
+| Rare pet | 2% | Goldener Erwin hidden pet egg |
+
+Total: 100%.
+
+The content is determined when the Channel Point redemption is processed, not when the egg is later identified or hatched.
+
+## Resources and consumables
+
+Initial resource:
+
+- Cracked eggs
+
+MVP cracked egg uses:
+
+1. Buy consumables.
+2. Buy hatchery upgrades.
+
+Suggested MVP consumables:
+
+| Consumable | Effect |
+|---|---|
+| Ei-Lupe | Reveals whether a mystery egg contains a pet before identifying it |
+| Kraftfutter | Small permanent or temporary stat change to a selected pet, if implemented in MVP |
+| Wärmekissen | Reduces remaining incubation time for one selected egg |
+
+If time is limited, implement only `Wärmekissen` first and keep the data model ready for more.
+
+Suggested MVP upgrades:
+
+| Upgrade | Effect |
+|---|---|
+| Incubator Level 2 | Shortens incubation time by a small percentage |
+| Incubator Level 3 | Larger incubation speed bonus |
+| Incubator Level 4 | Larger incubation speed bonus |
+
+## Bits and subs
+
+Subs:
+
+- Fixed transparent perk: +1 extra incubator while subbed.
+- Current egg in that incubator finishes even if the sub ends.
+
+Bits:
+
+- Included in the event ingestion/data model from the start.
+- MVP may expose fixed Bits effects only if implementation is simple and compliant.
+- Bits must not buy random eggs or random pet outcomes.
+- Bits may later trigger fixed, clearly described boosts such as a fixed hatch speed boost or fixed stream visual effect.
+
+## Battle/event system
+
+The event should not be hardcoded as “end of stream.” It is an admin-started game event that can be run any time.
+
+MVP battle flow:
+
+1. Player selects one pet as their event pet at any time.
+2. Admin opens admin UI and starts a battle event.
+3. Backend collects all currently selected pets.
+4. If fewer than 3 selected pets exist, still run with available participants or show a clear admin warning.
+5. MVP randomly selects 1st, 2nd, and 3rd place from selected pets.
+6. Awards leaderboard points:
+   - 1st: 3 points
+   - 2nd: 2 points
+   - 3rd: 1 point
+7. Battle overlay displays winners with pet visuals.
+8. Event is written as a game event and ledger entries.
+9. Selected pets from the event are deselected after the event.
+10. Admin can revert the event, removing the awarded leaderboard points.
+
+Future battle versions can use pet stats, items, training, or animation stages.
+
+## Overlays
+
+Target resolution: 1920x1080.
+
+MVP overlay routes:
+
+```text
+/overlay/alerts
+/overlay/battle
+```
+
+### Alerts overlay
+
+Shows who hatched what during stream with a visual representation of the pet.
+
+Events to support:
+
+- egg received
+- egg identified
+- pet egg started incubating
+- pet hatched
+- rare pet hatched
+- consumable used
+
+### Battle overlay
+
+Separate overlay for the battle/event UI and animations.
+
+Shows:
+
+- event start
+- participants count
+- suspense/animation placeholder
+- 1st/2nd/3rd winners
+- pet visuals
+- points awarded
+
+## Account deletion
+
+Users must be able to delete their account/progress from the authenticated UI.
+
+For MVP, deletion may:
+
+- remove personal data
+- delete game inventory
+- anonymize or remove leaderboard entries
+- preserve non-personal ledger rows only if needed for audit/revert integrity
+
+Implement this in a simple and transparent way.

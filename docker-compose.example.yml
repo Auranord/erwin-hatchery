@@ -1,0 +1,50 @@
+services:
+  api:
+    image: ghcr.io/auranord/erwin-hatchery:dev
+    container_name: erwin-hatchery-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - erwin_internal
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.erwin-hatchery.rule=Host(`hatchery.auranord.net`)"
+      - "traefik.http.routers.erwin-hatchery.entrypoints=websecure"
+      - "traefik.http.routers.erwin-hatchery.tls=true"
+      - "traefik.http.services.erwin-hatchery.loadbalancer.server.port=3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: erwin-hatchery-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-erwin_hatchery}
+      POSTGRES_USER: ${POSTGRES_USER:-erwin_hatchery}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - /mnt/tank/apps/erwin-hatchery/postgres:/var/lib/postgresql/data
+    networks:
+      - erwin_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erwin_hatchery} -d ${POSTGRES_DB:-erwin_hatchery}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  erwin_internal:
+    name: erwin_hatchery_internal
+  proxy:
+    external: true
+    name: proxy
