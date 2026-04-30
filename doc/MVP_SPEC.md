@@ -22,6 +22,11 @@ Effect: Adds one Basic Mystery Egg to the viewer's Erwin Hatchery account.
 
 The reward is created manually in Twitch for the MVP. The Twitch reward ID is configured through `.env`.
 
+## Current MVP implementation status
+
+- ✅ Milestone 2 auth baseline is implemented: Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap from `TWITCH_BROADCASTER_ID`, and a basic authenticated shell UI.
+- ⏳ Channel Point processing and economy mutations are intentionally not part of this milestone.
+
 ## Player states
 
 A Twitch user can exist in three practical states:
