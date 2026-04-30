@@ -69,6 +69,7 @@ The current repo implementation includes:
 - React + Vite frontend shell
 - Fastify backend with `GET /api/health`
 - PostgreSQL client and Drizzle schema/migration scaffolding
+- Seed script for MVP egg types, pet types, and loot table
 - Production Dockerfile for GHCR image builds
 
 Not yet implemented in Phase 1:
@@ -82,6 +83,7 @@ Not yet implemented in Phase 1:
 pnpm install
 pnpm dev
 pnpm db:migrate
+pnpm db:seed
 pnpm build
 ```
 
