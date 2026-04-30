@@ -38,6 +38,19 @@ export async function ensureCoreSchema(): Promise<void> {
       created_at timestamptz NOT NULL DEFAULT now()
     );
 
+
+    CREATE UNIQUE INDEX IF NOT EXISTS roles_user_id_role_idx ON roles (user_id, role);
+
+    CREATE TABLE IF NOT EXISTS admin_action_logs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      actor_user_id uuid NOT NULL REFERENCES users(id),
+      target_user_id uuid REFERENCES users(id),
+      action_type text NOT NULL,
+      request_id text NOT NULL UNIQUE,
+      payload jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS sessions (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid NOT NULL REFERENCES users(id),

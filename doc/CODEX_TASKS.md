@@ -5,7 +5,8 @@
 - ✅ Milestone 0 foundation created.
 - ✅ Milestone 1 completed and verified (Fastify server, config validation, PostgreSQL, Drizzle, migrations, seed data, health route, container baseline).
 - ✅ Milestone 2 completed (Twitch OAuth login, state validation, secure session cookie, `/api/me`, logout, owner bootstrap).
-- ⏳ Milestone 3+ pending.
+- ✅ Milestone 3 completed (admin panel foundation: `/admin`, role hierarchy, owner role mutation, server-side protection, user search/detail shell, admin action logging).
+- ⏳ Next milestones pending.
 
 
 ## Milestone 0 - Repo skeleton
