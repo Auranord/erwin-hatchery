@@ -1,6 +1,5 @@
 # Node / package manager artifacts
 node_modules/
-**/node_modules/
 
 # Build artifacts
 dist/
