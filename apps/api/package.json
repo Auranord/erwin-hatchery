@@ -11,7 +11,8 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo 'No tests for @erwin/api yet'",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "@erwin/shared": "workspace:*",

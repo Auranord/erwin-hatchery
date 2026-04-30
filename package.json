@@ -9,6 +9,7 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "db:migrate": "pnpm --filter @erwin/api db:migrate",
-    "db:generate": "pnpm --filter @erwin/api db:generate"
+    "db:generate": "pnpm --filter @erwin/api db:generate",
+    "db:seed": "pnpm --filter @erwin/api db:seed"
   }
 }

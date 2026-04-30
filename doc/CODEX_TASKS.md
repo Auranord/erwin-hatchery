@@ -3,8 +3,9 @@
 ## Progress status
 
 - ✅ Milestone 0 foundation created.
-- ✅ Milestone 1 foundation created (health route, DB connection, schema/migration scaffolding).
-- ⏳ Milestone 2+ pending.
+- ✅ Milestone 1 completed and verified (Fastify server, config validation, PostgreSQL, Drizzle, migrations, seed data, health route, container baseline).
+- ✅ Milestone 2 completed (Twitch OAuth login, state validation, secure session cookie, `/api/me`, logout, owner bootstrap).
+- ⏳ Milestone 3+ pending.
 
 
 ## Milestone 0 - Repo skeleton
@@ -167,7 +168,7 @@ Acceptance:
 
 ## Milestone 10 - Deployment hardening
 
-- Docker image produces production build.
+- Docker image produces production build for both API and web assets.
 - Compose/YAML works with Postgres and Traefik.
 - Health check.
 - Basic rate limiting.
@@ -179,3 +180,4 @@ Acceptance:
 Acceptance:
 
 - App runs on TrueNAS and survives restart with persistent DB.
+- `GET /` returns the landing page and frontend route fallback works without impacting `/api/*` routes.

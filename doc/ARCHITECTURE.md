@@ -19,6 +19,8 @@ The frontend should be buildable as static assets. Preferred production options:
 1. **Traffic-saving mode**: deploy `apps/web` to Cloudflare Pages and point it at the API host.
 2. **Simplest fallback mode**: serve the built frontend from the backend container behind Traefik.
 
+For all-in-one deployments, the Fastify container must serve the compiled `apps/web/dist` assets and provide SPA fallback behavior: `GET /` returns `index.html`, unknown non-API frontend routes return `index.html`, and API endpoints stay reserved under `/api/*`.
+
 Codex should implement the repo so both modes remain possible.
 
 ## External endpoints

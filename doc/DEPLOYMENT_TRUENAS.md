@@ -26,7 +26,7 @@ Adjust to the actual TrueNAS pool/dataset names.
 
 ### Mode A: simplest all-in-one web serving
 
-The API container also serves the built React app. Traefik routes all `hatchery.auranord.net` traffic to the API container.
+The API container also serves the built React app from `apps/web/dist` (built during Docker image build). Traefik routes all `hatchery.auranord.net` traffic to the API container. `GET /` must return the frontend page, unknown non-API routes should fallback to `index.html`, and API stays namespaced under `/api/*`.
 
 Pros:
 
@@ -79,12 +79,19 @@ Expected networks:
 
 Copy `.env.example` to your TrueNAS app environment and fill values.
 
-Important values:
+Important values for Milestone 1 foundation:
 
 ```text
-PUBLIC_APP_URL=https://hatchery.auranord.net
-PUBLIC_API_URL=https://hatchery.auranord.net
+NODE_ENV=production
+HOST=0.0.0.0
+PORT=3000
 DATABASE_URL=postgres://...
+PUBLIC_APP_URL=https://hatchery.auranord.net
+```
+
+Values below are already documented in `.env.example` but are only required once Twitch/Auth/EventSub milestones are implemented:
+
+```text
 TWITCH_CLIENT_ID=...
 TWITCH_CLIENT_SECRET=...
 TWITCH_BROADCASTER_ID=...
@@ -168,6 +175,7 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm db:migrate
+pnpm db:seed
 ```
 
 Codex should add these scripts to `package.json` during implementation.
