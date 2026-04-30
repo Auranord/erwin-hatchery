@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { registerHealthRoute } from './routes/health.js';
+import { registerAuthRoutes } from './routes/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,7 @@ export function buildApp() {
   const app = fastify({ logger: true });
 
   app.register(registerHealthRoute);
+  app.register(registerAuthRoutes);
 
   app.register(fastifyStatic, {
     root: webDist,
