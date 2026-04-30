@@ -3,7 +3,7 @@
 ## Progress status
 
 - ✅ Milestone 0 foundation created.
-- ✅ Milestone 1 foundation created (health route, DB connection, schema/migration scaffolding).
+- ✅ Milestone 1 completed and verified (Fastify server, config validation, PostgreSQL, Drizzle, migrations, seed data, health route, container baseline).
 - ⏳ Milestone 2+ pending.
 
 
