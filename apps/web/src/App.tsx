@@ -79,6 +79,7 @@ export function App(): JSX.Element {
         <section className="card">
           <h2>Adminbereich</h2>
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
+          <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
           <button onClick={() => void loadUsers(query)}>Suchen</button>
           <ul>
@@ -111,6 +112,8 @@ export function App(): JSX.Element {
     );
   }
 
+  const showAdminNav = me?.authenticated && (me.roles.includes('owner') || me.roles.includes('admin'));
+
   return (
     <main className="container">
       <header className="hero">
@@ -119,7 +122,31 @@ export function App(): JSX.Element {
       </header>
       <section className="card">
         <h2>Login</h2>
-        {me?.authenticated ? <><p>Angemeldet als <strong>{me.user.displayName ?? me.user.login}</strong></p><button onClick={() => void logout()}>Logout</button></> : <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>}
+        {me?.authenticated ? (
+          <>
+            <p>
+              Angemeldet als <strong>{me.user.displayName ?? me.user.login}</strong>
+            </p>
+            {me.user.avatarUrl ? <img src={me.user.avatarUrl} alt="Profilbild" width={72} height={72} /> : null}
+            <p>Rolle: {me.isAdmin ? 'Admin' : 'Spieler'}</p>
+            {showAdminNav ? <p><a href="/admin">Zum Adminbereich</a></p> : null}
+            <button onClick={() => void logout()}>Logout</button>
+          </>
+        ) : (
+          <>
+            <p>Bitte melde dich mit Twitch an.</p>
+            <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>
+          </>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Spielbereich</h2>
+        {me?.authenticated ? (
+          <p>Du bist eingeloggt. Der authentifizierte Spielbereich ist bereit (Milestone 2).</p>
+        ) : (
+          <p>Nach dem Login siehst du hier deinen Spielbereich.</p>
+        )}
       </section>
     </main>
   );
