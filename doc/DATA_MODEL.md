@@ -360,3 +360,10 @@ Use weights totaling 10000:
  700 pet turmeule
  200 pet goldener_erwin
 ```
+
+
+## Admin action log
+
+- `admin_action_logs` stores immutable admin mutations.
+- Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
+- Role changes are the only economy-adjacent admin mutation in milestone 3.

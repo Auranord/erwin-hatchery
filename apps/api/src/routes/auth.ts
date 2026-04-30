@@ -1,8 +1,9 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { roles, sessions, users } from '../db/schema.js';
+import { getSessionIdentity, isAdminRole } from './session-auth.js';
 import { config, getOAuthRedirectUri, isProduction } from '../config.js';
 
 const SESSION_COOKIE_NAME = 'eh_session';
@@ -16,9 +17,6 @@ type TwitchUser = {
   profile_image_url: string;
 };
 
-function hashToken(token: string): string {
-  return createHash('sha256').update(`${token}:${config.SESSION_SECRET}`).digest('hex');
-}
 
 function parseCookie(request: FastifyRequest, name: string): string | null {
   const raw = request.headers.cookie;
@@ -126,7 +124,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const sessionToken = randomBytes(32).toString('hex');
-    await db.insert(sessions).values({ userId: user.id, sessionTokenHash: hashToken(sessionToken), expiresAt });
+    await db.insert(sessions).values({ userId: user.id, sessionTokenHash: createHash('sha256').update(`${sessionToken}:${config.SESSION_SECRET}`).digest('hex'), expiresAt });
 
     reply.header('Set-Cookie', [
       `${SESSION_COOKIE_NAME}=${sessionToken}; HttpOnly; Path=/; Max-Age=${SESSION_TTL_DAYS * ONE_DAY_SECONDS}; SameSite=Lax${isProduction ? '; Secure' : ''}`,
@@ -139,27 +137,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/auth/logout', async (request, reply) => {
     const token = parseCookie(request, SESSION_COOKIE_NAME);
     if (token) {
-      await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.sessionTokenHash, hashToken(token)));
+      const hashed = createHash('sha256').update(`${token}:${config.SESSION_SECRET}`).digest('hex');
+      await db.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.sessionTokenHash, hashed));
     }
     reply.header('Set-Cookie', `${SESSION_COOKIE_NAME}=deleted; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${isProduction ? '; Secure' : ''}`);
     return reply.code(204).send();
   });
 
-  app.get('/api/me', async (request, reply) => {
-    const token = parseCookie(request, SESSION_COOKIE_NAME);
-    if (!token) return { authenticated: false };
+  app.get('/api/me', async (request) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return { authenticated: false };
 
-    const activeSession = await db
-      .select({ userId: sessions.userId })
-      .from(sessions)
-      .where(and(eq(sessions.sessionTokenHash, hashToken(token)), gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt)))
-      .limit(1);
-
-    const session = activeSession[0];
-    if (!session) return { authenticated: false };
-
-    const userRows = await db.select().from(users).where(eq(users.id, session.userId)).limit(1);
-    const roleRows = await db.select({ role: roles.role }).from(roles).where(eq(roles.userId, session.userId));
+    const userRows = await db.select().from(users).where(eq(users.id, identity.userId)).limit(1);
     const currentUser = userRows[0];
     if (!currentUser) return { authenticated: false };
 
@@ -171,7 +160,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         displayName: currentUser.displayName,
         avatarUrl: currentUser.avatarUrl
       },
-      isAdmin: roleRows.some((x) => x.role === 'owner' || x.role === 'admin')
+      roles: identity.roles,
+      isAdmin: identity.roles.some(isAdminRole)
     };
   });
 }
