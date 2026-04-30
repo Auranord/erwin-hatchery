@@ -63,9 +63,7 @@ For MVP, implement the code so both modes are possible.
 
 ## TrueNAS YAML / Compose reference
 
-Use `docker-compose.example.yml` as the starting point. TrueNAS YAML may require adjustments depending on the Apps UI and your existing Traefik network.
-For a single-environment app YAML template (copy once per `dev` / `testing` / `main`) with dataset separation and `pull_policy: always`, see `truenas-multi-env.example.yml`.
-A practical option is 2 dataset roots: `/mnt/fast/config/erwin-hatchery` for `main` and `/mnt/fast/config/erwin-hatchery-test` for `dev` + `testing`.
+Use `truenas-deployment.yml` as the single deployment template. Adjust datasets, image tag, and Traefik labels based on your TrueNAS Apps setup.
 
 Expected services:
 

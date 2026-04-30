@@ -59,7 +59,6 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 - `DEPLOYMENT_TRUENAS.md`: TrueNAS + Traefik deployment guide
 - `CODEX_TASKS.md`: implementation checklist
 - `.github/workflows/docker.yml`: GHCR build workflow
-- `docker-compose.example.yml`: deployment reference
 - `.env.example`: environment variables
 
 ## Phase 1 implementation status
@@ -70,7 +69,7 @@ The current repo implementation includes:
 - React + Vite frontend shell
 - Fastify backend with `GET /api/health`
 - PostgreSQL client and Drizzle schema/migration scaffolding
-- Local `docker-compose.yml` and production Dockerfile
+- Production Dockerfile for GHCR image builds
 
 Not yet implemented in Phase 1:
 
@@ -86,8 +85,3 @@ pnpm db:migrate
 pnpm build
 ```
 
-Local Docker run:
-
-```bash
-docker compose up --build
-```
