@@ -6,7 +6,7 @@ Viewers collect and hatch mystery eggs, discover pets, gather egg resources, and
 
 ## Links
 
-- Twitch: [NTKOH on Twitch](https://www.twitch.tv/ntkoh)
+- Twitch: [NTKOH on Twitch](https://www.twitch.tv/notthatkindofheroes)
 - Stable app: [hatchery.auranord.net](https://hatchery.auranord.net)
 - Testing app: [test.hatchery.auranord.net](https://test.hatchery.auranord.net)
 
