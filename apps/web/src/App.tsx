@@ -119,9 +119,7 @@ export function App(): JSX.Element {
       <header className="hero">
         <p className="badge">Öffentliche Vorschau · MVP</p>
         <h1>Erwin Hatchery</h1>
-        <p>Mobiles Twitch-Minispiel rund um Eier, Inkubation und Pet-Battles.</p>
       </header>
-
       <section className="card">
         <h2>Login</h2>
         {me?.authenticated ? (
