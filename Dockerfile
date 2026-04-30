@@ -14,7 +14,7 @@ COPY . .
 RUN pnpm build
 
 FROM build AS deploy
-RUN pnpm --filter @erwin/api deploy --prod /app/deploy
+RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
 
 FROM node:22-alpine AS runner
 WORKDIR /app
