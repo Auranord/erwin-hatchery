@@ -6,6 +6,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
   timestamp,
   uuid
 } from 'drizzle-orm/pg-core';
@@ -45,8 +46,20 @@ export const roles = pgTable('roles', {
   role: text('role').notNull(),
   createdByUserId: uuid('created_by_user_id').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  userRoleUnique: uniqueIndex('roles_user_id_role_idx').on(table.userId, table.role)
+}));
 
+
+export const adminActionLogs = pgTable('admin_action_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  actorUserId: uuid('actor_user_id').notNull().references(() => users.id),
+  targetUserId: uuid('target_user_id').references(() => users.id),
+  actionType: text('action_type').notNull(),
+  requestId: text('request_id').notNull().unique(),
+  payload: jsonb('payload').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
 export const twitchEvents = pgTable('twitch_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   twitchEventId: text('twitch_event_id').notNull().unique(),
