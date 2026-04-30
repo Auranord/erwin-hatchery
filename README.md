@@ -86,9 +86,8 @@ Before opening a pull request, please read:
 
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - [`AGENTS.md`](./AGENTS.md)
-- [`SECURITY_AND_COMPLIANCE.md`](./SECURITY_AND_COMPLIANCE.md)
 
-By submitting a pull request, you agree that Auranord / NTKOH may use, modify, sublicense, and relicense your contribution as part of Erwin Hatchery or related NTKOH projects.
+By submitting a pull request, you agree that Auranord may use, modify, sublicense, and relicense your contribution as part of Erwin Hatchery or related NTKOH projects.
 
 ## Security
 
