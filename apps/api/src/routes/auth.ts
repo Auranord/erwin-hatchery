@@ -87,16 +87,25 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       const existing = await tx.select().from(users).where(eq(users.twitchUserId, twitchUser.id)).limit(1);
       const existingUser = existing[0];
 
-      const currentUser = existingUser
-        ? (await tx
-            .update(users)
-            .set({ twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, lastLoginAt: now, updatedAt: now, isProvisional: false })
-            .where(eq(users.id, existingUser.id))
-            .returning())[0]
-        : (await tx
-            .insert(users)
-            .values({ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now })
-            .returning())[0];
+      let currentUser;
+      if (existingUser) {
+        const updatedRows = await tx
+          .update(users)
+          .set({ twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, lastLoginAt: now, updatedAt: now, isProvisional: false })
+          .where(eq(users.id, existingUser.id))
+          .returning();
+        currentUser = updatedRows[0];
+      } else {
+        const insertedRows = await tx
+          .insert(users)
+          .values({ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now })
+          .returning();
+        currentUser = insertedRows[0];
+      }
+
+      if (!currentUser) {
+        throw new Error('Failed to persist Twitch user during OAuth callback');
+      }
 
       const ownerRole = await tx
         .select()
@@ -110,6 +119,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       return currentUser;
     });
+
+    if (!user) {
+      request.log.error('OAuth callback transaction completed without user row');
+      return reply.code(500).send({ message: 'Authentication failed' });
+    }
 
     const sessionToken = randomBytes(32).toString('hex');
     await db.insert(sessions).values({ userId: user.id, sessionTokenHash: hashToken(sessionToken), expiresAt });
