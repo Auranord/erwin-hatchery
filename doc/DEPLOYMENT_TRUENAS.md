@@ -26,7 +26,7 @@ Adjust to the actual TrueNAS pool/dataset names.
 
 ### Mode A: simplest all-in-one web serving
 
-The API container also serves the built React app. Traefik routes all `hatchery.auranord.net` traffic to the API container.
+The API container also serves the built React app from `apps/web/dist` (built during Docker image build). Traefik routes all `hatchery.auranord.net` traffic to the API container. `GET /` must return the frontend page, unknown non-API routes should fallback to `index.html`, and API stays namespaced under `/api/*`.
 
 Pros:
 

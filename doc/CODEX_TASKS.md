@@ -167,7 +167,7 @@ Acceptance:
 
 ## Milestone 10 - Deployment hardening
 
-- Docker image produces production build.
+- Docker image produces production build for both API and web assets.
 - Compose/YAML works with Postgres and Traefik.
 - Health check.
 - Basic rate limiting.
@@ -179,3 +179,4 @@ Acceptance:
 Acceptance:
 
 - App runs on TrueNAS and survives restart with persistent DB.
+- `GET /` returns the landing page and frontend route fallback works without impacting `/api/*` routes.

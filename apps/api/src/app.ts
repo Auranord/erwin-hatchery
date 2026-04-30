@@ -6,7 +6,7 @@ import { registerHealthRoute } from './routes/health.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const webDist = path.resolve(__dirname, '../../web/dist');
+const webDist = path.resolve(__dirname, '../apps/web/dist');
 
 export function buildApp() {
   const app = fastify({ logger: true });
