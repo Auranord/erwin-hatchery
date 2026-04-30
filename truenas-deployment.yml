@@ -1,0 +1,85 @@
+# TrueNAS SCALE example based on a working deployment.
+#
+# IMPORTANT: Replace all BRANCH and other placeholders.
+
+name: erwin-hatchery-BRANCH
+
+services:
+  api:
+    image: ghcr.io/auranord/erwin-hatchery:BRANCH
+    container_name: erwin-hatchery-api-BRANCH
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      TZ: Europe/Berlin
+
+      # Choose postgres password
+      DATABASE_URL: "postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery"
+
+      # Choose domain for front and backend
+      PUBLIC_APP_URL: "https://hatchery.DOMAIN"
+      PUBLIC_API_URL: "https://hatchery.DOMAIN"
+      CORS_ORIGIN: "https://hatchery.DOMAIN"
+
+      TWITCH_CLIENT_ID: ""
+      TWITCH_CLIENT_SECRET: ""
+      TWITCH_BROADCASTER_ID: ""
+      TWITCH_CHANNEL_POINT_REWARD_ID: ""
+      TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
+      SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
+      OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
+
+    # Choose host port to use
+    ports:
+      - "30XX:3000"
+
+    networks:
+      - erwin_internal_BRANCH
+
+    # Choose dataset to mount for api
+    volumes:
+      - /MOUNT/erwin-hatchery/uploads:/app/uploads
+      - /MOUNT/erwin-hatchery/logs:/app/logs
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: erwin-hatchery-postgres-BRANCH
+    pull_policy: always
+    restart: unless-stopped
+
+    # Choose postgres password
+    environment:
+      POSTGRES_DB: erwin_hatchery
+      POSTGRES_USER: erwin_hatchery
+      POSTGRES_PASSWORD: "CHANGE_ME_LONG_PASSWORD"
+
+    # Choose dataset to mount for database
+    volumes:
+      - /MOUNT/erwin-hatchery/postgres:/var/lib/postgresql/data
+
+    networks:
+      - erwin_internal_BRANCH
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erwin_hatchery -d erwin_hatchery"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+networks:
+  erwin_internal_BRANCH:
+    name: erwin_internal_BRANCH
