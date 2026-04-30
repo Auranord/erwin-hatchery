@@ -28,13 +28,13 @@ No direct production deployment from CI in the MVP. GitHub Actions should build 
 ## Required docs to keep current
 When changing architecture, game rules, or deployment, update the relevant docs:
 
-- `README.md`
-- `MVP_SPEC.md`
-- `ARCHITECTURE.md`
-- `DATA_MODEL.md`
-- `SECURITY_AND_COMPLIANCE.md`
-- `DEPLOYMENT_TRUENAS.md`
-- `CODEX_TASKS.md`
+- `doc/README.md`
+- `doc/MVP_SPEC.md`
+- `doc/ARCHITECTURE.md`
+- `doc/DATA_MODEL.md`
+- `doc/SECURITY_AND_COMPLIANCE.md`
+- `doc/DEPLOYMENT_TRUENAS.md`
+- `doc/CODEX_TASKS.md`
 
 ## Recommended stack
 - Frontend: React + Vite + TypeScript, static mobile-first PWA.

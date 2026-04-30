@@ -1,87 +1,103 @@
 # Erwin Hatchery
 
-**Erwin Hatchery** is a mobile-first Twitch community minigame for NTKOH.
+Erwin Hatchery is a Twitch-connected community minigame for **NTKOH**.
 
-Viewers redeem Twitch Channel Points, called **eggs**, to receive mystery eggs in a web app. Eggs can become hidden pet eggs or crack into resources. Pets hatch over time, can later be trained/equipped/styled, and can participate in stream events such as a simple battle/leaderboard event.
+Viewers collect and hatch mystery eggs, discover pets, gather egg resources, and send their favorite pets into stream events. The project is designed as a mobile-first web app with Twitch login, Channel Point integration, stream overlays, and an admin-controlled event system.
 
-The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS SCALE behind Traefik, with containers built through GitHub Actions and published to GitHub Container Registry.
+## Links
 
-## Core MVP loop
+- Twitch: [NTKOH on Twitch](https://www.twitch.tv/notthatkindofheroes)
+- Stable app: [hatchery.auranord.net](https://hatchery.auranord.net)
+- Testing app: [test.hatchery.auranord.net](https://test.hatchery.auranord.net)
 
-1. Viewer redeems Twitch Channel Point reward: `1x Mystery Ei` for 500 channel points.
-2. Backend receives the EventSub redemption and creates one mystery egg for that Twitch user.
-3. Viewer can log in with Twitch to use the web UI.
-4. Viewer identifies eggs in the app.
-5. Identified eggs either:
-   - become cracked egg resources, or
-   - move into a hidden pet egg inventory.
-6. Viewer chooses hidden pet eggs to incubate.
-7. Incubation progresses over time and speeds up while the stream is live.
-8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
-9. Viewer selects one pet for the next admin-started stream event.
-10. Admin starts a battle event. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
-11. Winners receive leaderboard points. Event is logged and can be reverted.
+## Project status
 
-## Public vs authenticated access
+This project is currently in early MVP development.
 
-Public without Twitch login:
+The first version focuses on:
 
-- Leaderboard
-- Public event results
-- Maybe stream overlay pages, if route secret is configured
+- Twitch login
+- Channel Point reward handling
+- mystery egg inventory
+- egg identification
+- pet hatching
+- cracked egg resources
+- simple pet collection
+- admin-controlled stream events
+- leaderboard points
+- OBS browser overlays
 
-Requires Twitch login:
+## Twitch and safety rules
 
-- Inventory
-- Egg identification
-- Incubation
-- Pet selection
-- Consumables/upgrades
-- Account deletion
+Erwin Hatchery is designed to stay within a conservative interpretation of Twitch rules.
 
-Channel Point redemptions can be received before the viewer logs in. The backend creates a provisional player record using the Twitch user ID from the redemption. The first Twitch login links that player to the interactive account view.
+The project follows these boundaries:
 
-## Deployment target
+- Channel Points may be used for mystery eggs.
+- All rewards are stream-only digital items.
+- Pets, eggs, resources, upgrades, and cosmetics have no real-world monetary value.
+- Items cannot be traded, sold, transferred, cashed out, or redeemed for prizes.
+- The game does not award giveaway tickets, money, merch, game keys, or gift cards.
+- No betting or wagering is allowed.
+- Bits and subscriptions, must only trigger fixed and clearly described perks.
+- Bits and subscriptions must not trigger random eggs, random pets, mystery rewards, or prize chances.
 
-- Public host: `hatchery.auranord.net`
-- Backend container on TrueNAS SCALE
-- PostgreSQL container with mounted dataset
-- Existing Traefik reverse proxy with HTTPS
-- Container registry: `ghcr.io/auranord/erwin-hatchery`
+## Tech stack
 
-## Documentation map
+Planned stack:
 
-- `AGENTS.md`: Codex operating instructions
-- `MVP_SPEC.md`: game rules and MVP scope
-- `ARCHITECTURE.md`: system architecture and tech stack
-- `DATA_MODEL.md`: database/entity design
-- `SECURITY_AND_COMPLIANCE.md`: Twitch/Germany/legal/security guardrails
-- `DEPLOYMENT_TRUENAS.md`: TrueNAS + Traefik deployment guide
-- `CODEX_TASKS.md`: implementation checklist
-- `.github/workflows/docker.yml`: GHCR build workflow
-- `.env.example`: environment variables
+- TypeScript
+- React + Vite
+- Fastify API
+- PostgreSQL
+- Drizzle ORM
+- Docker
+- GitHub Container Registry
+- TrueNAS SCALE deployment
+- Traefik reverse proxy
+- Twitch OAuth
+- Twitch EventSub
 
-## Phase 1 implementation status
+## Branches
 
-The current repo implementation includes:
+This repository uses three main branches:
 
-- TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell
-- Fastify backend with `GET /api/health`
-- PostgreSQL client and Drizzle schema/migration scaffolding
-- Production Dockerfile for GHCR image builds
+- `dev`: active development
+- `testing`: test deployment
+- `main`: stable production deployment
 
-Not yet implemented in Phase 1:
+Container images are built through GitHub Actions and published to GitHub Container Registry.
 
-- Twitch OAuth/EventSub integration
-- Game economy and battle logic
+## Repository visibility and license
 
-## Local development commands
+This repository is public for transparency, collaboration, review, and issue tracking.
 
-```bash
-pnpm install
-pnpm dev
-pnpm db:migrate
-pnpm build
-```
+It is **source-available**, not open source.
 
+You may view the code and submit pull requests, but you may not deploy, redistribute, publish modified versions, or create derivative works without written permission.
+
+See [`LICENSE.md`](./LICENSE.md) and [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## Contributing
+
+Contributions are welcome only under the terms in `LICENSE.md` and `CONTRIBUTING.md`.
+
+Before opening a pull request, please read:
+
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- [`AGENTS.md`](./AGENTS.md)
+- [`SECURITY_AND_COMPLIANCE.md`](./SECURITY_AND_COMPLIANCE.md)
+
+By submitting a pull request, you agree that Auranord / NTKOH may use, modify, sublicense, and relicense your contribution as part of Erwin Hatchery or related NTKOH projects.
+
+## Security
+
+Please do not open public issues for security problems.
+
+Security-sensitive reports should be sent privately to the project maintainer.
+
+## Association
+
+Erwin Hatchery is an NTKOH community project.
+
+It is not an official Twitch product and is not endorsed by Twitch.
