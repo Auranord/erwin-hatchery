@@ -134,6 +134,8 @@ MVP deployment is manual:
 6. Restart app.
 7. Verify logs and health endpoint.
 
+Prerequisite: at least one active egg type must exist before API startup and admin operations. `GET /api/admin/health` returns `503` with `NO_ACTIVE_EGG_TYPES` when this is missing.
+
 ## Health endpoint
 
 Backend must expose:
@@ -146,6 +148,24 @@ Expected response:
 
 ```json
 {"ok":true,"database":"ok","version":"..."}
+```
+
+Admin/game-economy readiness check:
+
+```text
+GET /api/admin/health
+```
+
+Expected response when configured correctly:
+
+```json
+{"ok":true,"code":"OK"}
+```
+
+Expected response when seed prerequisite is missing:
+
+```json
+{"ok":false,"code":"NO_ACTIVE_EGG_TYPES","message":"No active egg types configured."}
 ```
 
 Traefik/monitoring can use this route.

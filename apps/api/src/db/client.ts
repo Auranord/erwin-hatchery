@@ -16,6 +16,11 @@ export async function checkDatabaseHealth(): Promise<boolean> {
   return result.rows[0]?.ok === 1;
 }
 
+export async function checkActiveEggTypesHealth(): Promise<boolean> {
+  const result = await pool.query('select exists(select 1 from egg_types where is_active = true) as ok');
+  return result.rows[0]?.ok === true;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const migrationsFolder = path.resolve(__dirname, '../../drizzle');

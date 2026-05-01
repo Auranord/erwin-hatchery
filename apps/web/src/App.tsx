@@ -34,6 +34,11 @@ type LedgerEntry = {
   createdAt: string;
 };
 
+type AdminHealthIssue = {
+  code: string;
+  message: string;
+};
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -41,6 +46,7 @@ export function App(): JSX.Element {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [inventoryJson, setInventoryJson] = useState<string>('');
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
   async function loadMe(): Promise<void> {
@@ -56,6 +62,18 @@ export function App(): JSX.Element {
     }
   }
 
+  async function loadAdminHealth(): Promise<void> {
+    const response = await fetch('/api/admin/health', { credentials: 'include' });
+    if (response.ok) {
+      setAdminHealthIssue(null);
+      return;
+    }
+    const payload = (await response.json().catch(() => null)) as AdminHealthIssue | null;
+    if (payload?.code) {
+      setAdminHealthIssue(payload);
+    }
+  }
+
   useEffect(() => {
     void loadMe();
   }, []);
@@ -63,6 +81,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (isAdminRoute && me?.authenticated) {
       void loadUsers(query);
+      void loadAdminHealth();
     }
   }, [isAdminRoute, me?.authenticated]);
 
@@ -129,6 +148,9 @@ export function App(): JSX.Element {
       <main className="container">
         <section className="card">
           <h2>Adminbereich</h2>
+          {adminHealthIssue?.code === 'NO_ACTIVE_EGG_TYPES' ? (
+            <p role="alert"><strong>⚠ Konfigurationsfehler:</strong> Keine aktiven Ei-Typen vorhanden. Bitte Migration + Seed ausführen.</p>
+          ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
           <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
