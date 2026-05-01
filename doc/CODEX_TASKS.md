@@ -2,12 +2,14 @@
 
 ## Progress status
 
-- ✅ Milestone 0 foundation created.
-- ✅ Milestone 1 completed and verified (Fastify server, config validation, PostgreSQL, Drizzle, migrations, seed data, health route, container baseline).
-- ✅ Milestone 2 completed (Twitch OAuth login, state validation, secure session cookie, `/api/me`, logout, owner bootstrap).
-- ✅ Milestone 3 completed (admin panel foundation: `/admin`, role hierarchy, owner role mutation, server-side protection, user search/detail shell, admin action logging).
-- ✅ Milestone 4 completed (economy ledger + inventory foundations: immutable ledger events, separated inventory views, admin test egg grant, admin ledger/inventory views, reversible admin test grants).
-- ⏳ Next milestones pending.
+- ✅ Milestone 0 completed (repo skeleton and workspace baseline).
+- ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
+- ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
+- ⏳ Milestone 3 not completed yet (EventSub webhook ingestion + idempotent Channel Point redemption processing still pending).
+- 🟨 Milestone 4 partially completed (authenticated web shell and inventory stream/admin-facing inventory visibility exist; full player loop egg -> identify -> incubate -> hatch -> select pet still pending).
+- ⏳ Milestone 5 not started (incubation engine and hatch resolution still pending).
+- 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grant + revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
+- ⏳ Milestones 7-10 not started.
 
 
 ## Milestone 0 - Repo skeleton
