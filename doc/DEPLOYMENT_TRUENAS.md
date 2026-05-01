@@ -67,6 +67,7 @@ Use `truenas-deployment.yml` as the single deployment template. Adjust datasets,
 
 Expected services:
 
+- `init`: one-shot migration+seed job (`db:migrate` then `db:seed`)
 - `api`: Erwin Hatchery backend container
 - `postgres`: PostgreSQL database
 
@@ -129,10 +130,9 @@ MVP deployment is manual:
 1. Push to `dev`.
 2. GitHub builds image.
 3. TrueNAS pulls the selected tag.
-4. Run database migrations in the deployed environment.
-5. For `dev` and `testing`, run seed data after migrations (`pnpm db:seed`) so active mystery egg types exist for admin test grants.
-6. Restart app.
-7. Verify logs and health endpoint.
+4. Start/update the stack; the `init` service runs migrations and seed data automatically, then exits successfully.
+5. API starts only after `init` completes successfully (plus Postgres health), so traffic is not routed before DB bootstrap finishes.
+6. Verify logs and health endpoint.
 
 Prerequisite: at least one active egg type must exist before API startup and admin operations. `GET /api/admin/health` returns `503` with `NO_ACTIVE_EGG_TYPES` when this is missing.
 
@@ -168,7 +168,7 @@ Expected response when seed prerequisite is missing:
 {"ok":false,"code":"NO_ACTIVE_EGG_TYPES","message":"No active egg types configured."}
 ```
 
-Traefik/monitoring can use this route.
+Use `GET /api/admin/health` as the container health/readiness probe so orchestrators wait for init completion and seed prerequisites before routing traffic.
 
 ## Backup plan
 

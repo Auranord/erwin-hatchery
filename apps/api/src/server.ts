@@ -1,13 +1,12 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
-import { checkActiveEggTypesHealth, ensureCoreSchema, runDatabaseMigrations } from './db/client.js';
+import { checkActiveEggTypesHealth, ensureCoreSchema } from './db/client.js';
 
 const app = buildApp();
 
 const start = async (): Promise<void> => {
   try {
     await ensureCoreSchema();
-    await runDatabaseMigrations();
     const hasActiveEggTypes = await checkActiveEggTypesHealth();
     if (!hasActiveEggTypes) {
       throw new Error('NO_ACTIVE_EGG_TYPES: At least one active egg type is required before startup. Run seed after migrations.');
