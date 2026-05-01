@@ -13,6 +13,10 @@ type PlayerInventory = {
   crackedEggResources: Array<{ resourceType: string; amount: number; updatedAt: string }>;
 };
 
+function toIsoTimestamp(value: Date | string): string {
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
 async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
   const [mysteryEggs, hiddenEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
     db.select({ eggTypeId: mysteryEggInventory.eggTypeId, amount: mysteryEggInventory.amount, updatedAt: mysteryEggInventory.updatedAt }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
@@ -23,11 +27,11 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
   ]);
 
   return {
-    mysteryEggs: mysteryEggs.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
+    mysteryEggs: mysteryEggs.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) })),
     hiddenPetEggs: hiddenEggRows,
-    hatchedPets: petRows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() })),
+    hatchedPets: petRows.map((row) => ({ ...row, createdAt: toIsoTimestamp(row.createdAt) })),
     consumables: consumableRows,
-    crackedEggResources: resourceRows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() }))
+    crackedEggResources: resourceRows.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) }))
   };
 }
 
@@ -37,7 +41,7 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     db.select({ updatedAt: sql<Date>`max(${resources.updatedAt})` }).from(resources).where(eq(resources.userId, userId)),
     db.select({ createdAt: sql<Date>`max(${pets.createdAt})` }).from(pets).where(eq(pets.ownerUserId, userId))
   ]);
-  const payload = `${invMax[0]?.updatedAt?.toISOString() ?? '0'}|${resourceMax[0]?.updatedAt?.toISOString() ?? '0'}|${petMax[0]?.createdAt?.toISOString() ?? '0'}`;
+  const payload = `${invMax[0]?.updatedAt ? toIsoTimestamp(invMax[0].updatedAt) : '0'}|${resourceMax[0]?.updatedAt ? toIsoTimestamp(resourceMax[0].updatedAt) : '0'}|${petMax[0]?.createdAt ? toIsoTimestamp(petMax[0].createdAt) : '0'}`;
   return createHash('sha1').update(payload).digest('hex');
 }
 
