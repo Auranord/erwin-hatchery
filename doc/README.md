@@ -61,21 +61,27 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 - `.github/workflows/docker.yml`: GHCR build workflow
 - `.env.example`: environment variables
 
-## Phase 1 implementation status
+## Implementation status snapshot
+
+Last reevaluated: **2026-05-01**.
 
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell
-- Fastify backend with `GET /api/health`
-- PostgreSQL client and Drizzle schema/migration scaffolding
-- Seed script for MVP egg types, pet types, and loot table
+- React + Vite frontend shell with authenticated player inventory view
+- Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
+- PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
+- Twitch OAuth login/logout and `/api/me` identity route
+- Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, and subscription auto-sync diagnostics
+- Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grant + revert
 - Production Dockerfile for GHCR image builds
 
-Not yet implemented in Phase 1:
+Still pending for later milestones:
 
-- Twitch OAuth/EventSub integration
-- Game economy and battle logic
+- Full player gameplay loop (identify -> incubate -> hatch -> select pet)
+- Incubation progression engine and hatch resolution
+- Battle events, overlays, and bits/sub feature foundation
+- Deployment hardening milestones beyond the current baseline
 
 ## Admin testing seed dependency
 
