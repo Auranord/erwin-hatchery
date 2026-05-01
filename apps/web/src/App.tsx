@@ -68,6 +68,7 @@ type PlayerInventory = {
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
+  incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string } | null }>;
 };
 
 const MYSTERY_EGG_LABELS: Record<string, string> = {
@@ -170,6 +171,19 @@ export function App(): JSX.Element {
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
       throw new Error(payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.');
+    }
+  }
+
+  async function startIncubation(unhatchedEggId: string, incubatorSlotId: string): Promise<void> {
+    const response = await fetch('/api/game/incubation/start', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unhatchedEggId, incubatorSlotId })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Inkubation konnte nicht gestartet werden.');
     }
   }
 
@@ -399,10 +413,29 @@ export function App(): JSX.Element {
                     </p>
                   ))}
                 <p><strong>Unausgebrütete Eier:</strong> {playerInventory.unhatchedEggs.length}</p>
+                <p><strong>Inkubator-Slots:</strong> {playerInventory.incubatorSlots.length}</p>
                 {playerInventory.unhatchedEggs.length > 0 ? (
                   <ul>
                     {playerInventory.unhatchedEggs.map((egg) => (
-                      <li key={egg.id}>{formatMysteryEggType(egg.eggTypeId)}</li>
+                      <li key={egg.id}>
+                        {formatMysteryEggType(egg.eggTypeId)} ({egg.state}){' '}
+                        {egg.state === 'ready_for_incubation'
+                          ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const freeSlot = playerInventory.incubatorSlots.find((slot) => slot.isAvailable && !slot.activeJob);
+                                if (freeSlot) {
+                                  void startIncubation(egg.id, freeSlot.id);
+                                }
+                              }}
+                              disabled={!playerInventory.incubatorSlots.some((slot) => slot.isAvailable && !slot.activeJob)}
+                            >
+                              In Inkubator legen
+                            </button>
+                            )
+                          : null}
+                      </li>
                     ))}
                   </ul>
                 ) : <p>Keine unausgebrüteten Eier vorhanden.</p>}
