@@ -1,4 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { config } from '../config.js';
 
@@ -11,6 +14,14 @@ export const db = drizzle(pool);
 export async function checkDatabaseHealth(): Promise<boolean> {
   const result = await pool.query('select 1 as ok');
   return result.rows[0]?.ok === 1;
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const migrationsFolder = path.resolve(__dirname, '../../drizzle');
+
+export async function runDatabaseMigrations(): Promise<void> {
+  await migrate(db, { migrationsFolder });
 }
 
 export async function ensureCoreSchema(): Promise<void> {
