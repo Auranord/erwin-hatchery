@@ -177,13 +177,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
           set: { amount: sql`${mysteryEggInventory.amount} + ${amount}`, updatedAt: sql`now()` }
         });
 
-      const [ledgerRow] = await tx.insert(economyLedger).values({
+      const insertedLedgerRows = await tx.insert(economyLedger).values({
         userId,
         actorUserId: identity.userId,
         eventType: 'admin_test_mystery_egg_grant',
         sourceType: 'admin_action',
         delta: { mysteryEggInventory: [{ eggTypeId, amountDelta: amount }] }
       }).returning({ id: economyLedger.id });
+      const ledgerRow = insertedLedgerRows[0];
+      if (!ledgerRow) throw new Error('Failed to create ledger entry for test mystery egg grant');
 
       await tx.insert(adminActionLogs).values({
         actorUserId: identity.userId,
