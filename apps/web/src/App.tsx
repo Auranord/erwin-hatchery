@@ -39,6 +39,14 @@ type AdminHealthIssue = {
   message: string;
 };
 
+type PlayerInventory = {
+  mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
+  hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
+  hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
+  consumables: Array<{ consumableTypeId: string; amount: number }>;
+  crackedEggResources: Array<{ resourceType: string; amount: number }>;
+};
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -47,6 +55,7 @@ export function App(): JSX.Element {
   const [inventoryJson, setInventoryJson] = useState<string>('');
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
+  const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
   async function loadMe(): Promise<void> {
@@ -83,6 +92,25 @@ export function App(): JSX.Element {
       void loadUsers(query);
       void loadAdminHealth();
     }
+  }, [isAdminRoute, me?.authenticated]);
+
+  useEffect(() => {
+    if (isAdminRoute || !me?.authenticated) {
+      setPlayerInventory(null);
+      return;
+    }
+
+    const source = new EventSource('/api/game/inventory/stream', { withCredentials: true });
+    source.addEventListener('inventory', (event) => {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as { inventory: PlayerInventory };
+      setPlayerInventory(payload.inventory);
+    });
+
+    source.onerror = () => {
+      source.close();
+    };
+
+    return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
 
   async function logout(): Promise<void> {
@@ -238,7 +266,17 @@ export function App(): JSX.Element {
       <section className="card">
         <h2>Spielbereich</h2>
         {me?.authenticated ? (
-          <p>Du bist eingeloggt. Der authentifizierte Spielbereich ist bereit (Milestone 2).</p>
+          <>
+            <p>Dein Inventar wird automatisch aktualisiert.</p>
+            {playerInventory ? (
+              <>
+                <p><strong>Mystery-Eier:</strong> {playerInventory.mysteryEggs.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                <p><strong>Versteckte Eier:</strong> {playerInventory.hiddenPetEggs.length}</p>
+                <p><strong>Geschlüpfte Pets:</strong> {playerInventory.hatchedPets.length}</p>
+                <p><strong>Ressourcen-Typen:</strong> {playerInventory.crackedEggResources.length}</p>
+              </>
+            ) : <p>Inventar wird geladen…</p>}
+          </>
         ) : (
           <p>Nach dem Login siehst du hier deinen Spielbereich.</p>
         )}
