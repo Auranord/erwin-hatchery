@@ -216,3 +216,11 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 ### Implemented in Milestone 3
 - `POST /api/twitch/eventsub` now validates EventSub signatures, handles challenge verification, persists raw webhook events, and processes eligible Channel Point redemptions idempotently.
 - Redemption processing creates/uses provisional users, resolves hidden mystery egg outcomes server-side, updates inventory, and writes economy ledger events in one database transaction.
+
+
+### EventSub subscription lifecycle
+
+- API startup runs an idempotent EventSub subscription sync against Twitch Helix for channel point redemption events.
+- If one correct subscription already exists, it is reused.
+- If duplicates are found, extras are cleaned up and a warning status is exposed.
+- Sync errors do not crash startup by default; status is exposed via admin debug API/UI for operator troubleshooting.
