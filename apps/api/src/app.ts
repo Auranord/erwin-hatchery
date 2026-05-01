@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import { config } from './config.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
@@ -11,7 +12,16 @@ const __dirname = path.dirname(__filename);
 const webDist = path.resolve(__dirname, '../apps/web/dist');
 
 export function buildApp() {
-  const app = fastify({ logger: true });
+  const app = fastify({
+    logger: true,
+    customLogLevel: (request) => {
+      if (!config.LOG_HEALTHCHECK_REQUESTS && request.url === '/api/health') {
+        return 'silent';
+      }
+
+      return 'info';
+    }
+  });
 
   app.register(registerHealthRoute);
   app.register(registerAuthRoutes);

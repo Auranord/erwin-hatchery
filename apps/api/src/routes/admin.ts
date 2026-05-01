@@ -172,16 +172,17 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
     if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
 
-    const eggTypeCandidates = requestedEggTypeId
-      ? [requestedEggTypeId]
-      : ['basic_mystery_egg', 'mystery_egg'];
+    const eggTypeCandidates = requestedEggTypeId ? [requestedEggTypeId] : ['basic_mystery_egg', 'mystery_egg'];
     const availableEggTypes = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes);
+    const activeEggTypes = availableEggTypes.filter((eggType) => eggType.isActive);
     const selectedEggType = eggTypeCandidates
-      .map((candidate) => availableEggTypes.find((eggType) => eggType.id === candidate && eggType.isActive))
-      .find((eggType) => eggType !== undefined);
+      .map((candidate) => activeEggTypes.find((eggType) => eggType.id === candidate))
+      .find((eggType) => eggType !== undefined)
+      ?? activeEggTypes[0];
+
     if (!selectedEggType) {
       return reply.code(400).send({
-        message: `Unknown or inactive eggTypeId. Tried: ${eggTypeCandidates.join(', ')}`
+        message: `No active egg types found. Tried: ${eggTypeCandidates.join(', ')}`
       });
     }
     const eggTypeId = selectedEggType.id;
