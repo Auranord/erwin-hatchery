@@ -13,7 +13,8 @@ const configSchema = z.object({
   TWITCH_CLIENT_SECRET: z.string().min(1),
   TWITCH_BROADCASTER_ID: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
-  OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback')
+  OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
+  LOG_HEALTHCHECK_REQUESTS: z.coerce.boolean().default(false)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
