@@ -7,7 +7,7 @@ import {
   consumableInventory,
   economyLedger,
   eggTypes,
-  hiddenPetEggs,
+  unhatchedEggs,
   mysteryEggInventory,
   pets,
   resources,
@@ -129,9 +129,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
     const userId = (request.params as { userId: string }).userId;
 
-    const [mysteryEggs, hiddenEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
+    const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
       db.select().from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
-      db.select({ id: hiddenPetEggs.id, eggTypeId: hiddenPetEggs.eggTypeId, state: hiddenPetEggs.state }).from(hiddenPetEggs).where(eq(hiddenPetEggs.ownerUserId, userId)),
+      db.select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
       db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
       db.select().from(consumableInventory).where(eq(consumableInventory.userId, userId)),
       db.select().from(resources).where(eq(resources.userId, userId))
@@ -140,7 +140,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     return {
       inventory: {
         mysteryEggs,
-        hiddenPetEggs: hiddenEggRows,
+        unhatchedEggs: unhatchedEggRows,
         hatchedPets: petRows,
         consumables: consumableRows,
         crackedEggResources: resourceRows

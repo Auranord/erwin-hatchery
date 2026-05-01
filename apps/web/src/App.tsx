@@ -64,7 +64,7 @@ type EventSubSubscriptionStatus = {
 
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
-  hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
+  unhatchedEggs: Array<{ id: string; eggTypeId: string; state: string }>;
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
@@ -355,7 +355,7 @@ export function App(): JSX.Element {
             {playerInventory ? (
               <>
                 <p><strong>Mystery-Eier:</strong> {playerInventory.mysteryEggs.reduce((sum, entry) => sum + entry.amount, 0)}</p>
-                <p><strong>Versteckte Eier:</strong> {playerInventory.hiddenPetEggs.length}</p>
+                <p><strong>Unausgebrütete Eier:</strong> {playerInventory.unhatchedEggs.length}</p>
                 <p><strong>Geschlüpfte Pets:</strong> {playerInventory.hatchedPets.length}</p>
                 <p><strong>Ressourcen-Typen:</strong> {playerInventory.crackedEggResources.length}</p>
               </>
