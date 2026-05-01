@@ -94,7 +94,7 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       throw new Error('Failed to persist channel point redemption');
     }
 
-    await tx.insert(mysteryEggInventory).values({ userId: user.id, eggTypeId: 'mystery_egg', amount: 1, updatedAt: now }).onConflictDoUpdate({
+    await tx.insert(mysteryEggInventory).values({ userId: user.id, eggTypeId: 'common_mystery_egg', amount: 1, updatedAt: now }).onConflictDoUpdate({
       target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
       set: { amount: sql`${mysteryEggInventory.amount} + 1`, updatedAt: now }
     });
@@ -105,7 +105,7 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       eventType: 'channel_point_redemption_granted_mystery_egg',
       sourceType: 'channel_point_redemption',
       sourceId: savedRedemption.id,
-      delta: { mysteryEggInventory: [{ eggTypeId: 'mystery_egg', amountDelta: 1 }] }
+      delta: { mysteryEggInventory: [{ eggTypeId: 'common_mystery_egg', amountDelta: 1 }] }
     });
   });
 }

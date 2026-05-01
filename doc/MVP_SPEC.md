@@ -149,7 +149,7 @@ Each hatched pet should get slight stat variance, for example ±10%, calculated 
 
 ## Egg loot table MVP
 
-The system must support multiple egg types later. MVP starts with one egg type: `basic_mystery_egg`.
+The system must support multiple egg types later. MVP initializes three mystery egg types: `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
 
 Suggested granular loot table:
 
