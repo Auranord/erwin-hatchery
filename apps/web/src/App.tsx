@@ -70,6 +70,24 @@ type PlayerInventory = {
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
 };
 
+const MYSTERY_EGG_LABELS: Record<string, string> = {
+  common_mystery_egg: 'Gewöhnliches Mystery-Ei',
+  uncommon_mystery_egg: 'Ungewöhnliches Mystery-Ei',
+  rare_mystery_egg: 'Seltenes Mystery-Ei'
+};
+
+const EGG_RESOURCE_LABELS: Record<string, string> = {
+  cracked_eggs: 'Aufgebrochene Eier'
+};
+
+function formatMysteryEggType(eggTypeId: string): string {
+  return MYSTERY_EGG_LABELS[eggTypeId] ?? eggTypeId;
+}
+
+function formatEggResourceType(resourceType: string): string {
+  return EGG_RESOURCE_LABELS[resourceType] ?? resourceType;
+}
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -357,9 +375,36 @@ export function App(): JSX.Element {
             {playerInventory ? (
               <>
                 <p><strong>Mystery-Eier:</strong> {playerInventory.mysteryEggs.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                {playerInventory.mysteryEggs
+                  .filter((entry) => entry.amount > 0)
+                  .map((entry) => (
+                    <p key={entry.eggTypeId}>
+                      <strong>{formatMysteryEggType(entry.eggTypeId)}:</strong> {entry.amount}{' '}
+                      <button type="button" disabled title="Bald verfügbar">Typ bestimmen</button>
+                    </p>
+                  ))}
                 <p><strong>Unausgebrütete Eier:</strong> {playerInventory.unhatchedEggs.length}</p>
+                {playerInventory.unhatchedEggs.length > 0 ? (
+                  <ul>
+                    {playerInventory.unhatchedEggs.map((egg) => (
+                      <li key={egg.id}>{formatMysteryEggType(egg.eggTypeId)}</li>
+                    ))}
+                  </ul>
+                ) : <p>Keine unausgebrüteten Eier vorhanden.</p>}
                 <p><strong>Geschlüpfte Pets:</strong> {playerInventory.hatchedPets.length}</p>
-                <p><strong>Ressourcen-Typen:</strong> {playerInventory.crackedEggResources.length}</p>
+                {playerInventory.hatchedPets.length > 0 ? (
+                  <ul>
+                    {playerInventory.hatchedPets.map((pet) => (
+                      <li key={pet.id}>{pet.petTypeId}</li>
+                    ))}
+                  </ul>
+                ) : <p>Noch keine geschlüpften Pets vorhanden.</p>}
+                <p><strong>Ei-Ressourcen:</strong> {playerInventory.crackedEggResources.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                {playerInventory.crackedEggResources
+                  .filter((entry) => entry.amount > 0)
+                  .map((entry) => (
+                    <p key={entry.resourceType}><strong>{formatEggResourceType(entry.resourceType)}:</strong> {entry.amount}</p>
+                  ))}
               </>
             ) : <p>Inventar wird geladen…</p>}
           </>
