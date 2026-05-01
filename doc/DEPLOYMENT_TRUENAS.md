@@ -129,12 +129,20 @@ MVP deployment is manual:
 1. Push to `dev`.
 2. GitHub builds image.
 3. TrueNAS pulls the selected tag.
-4. Run database migrations in the deployed environment.
-5. For `dev` and `testing`, run seed data after migrations (`pnpm db:seed`) so active mystery egg types exist for admin test grants.
-6. Restart app.
-7. Verify logs and health endpoint.
+4. Pull/restart the API container and let the startup sequence run automatically.
+5. Verify logs and health endpoint.
 
-Prerequisite: at least one active egg type must exist before API startup and admin operations. `GET /api/admin/health` returns `503` with `NO_ACTIVE_EGG_TYPES` when this is missing.
+API container startup order is enforced in-container:
+
+1. `pnpm db:migrate`
+2. `pnpm db:seed`
+3. `pnpm start`
+
+The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+
+Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
+
+Prerequisite: at least one active egg type must exist before API startup and admin operations. The startup seed step ensures this baseline exists; `GET /api/admin/health` still returns `503` with `NO_ACTIVE_EGG_TYPES` if seed is skipped or fails.
 
 ## Health endpoint
 
