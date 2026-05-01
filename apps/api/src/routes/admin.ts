@@ -5,6 +5,7 @@ import {
   adminActionLogs,
   consumableInventory,
   economyLedger,
+  eggTypes,
   hiddenPetEggs,
   mysteryEggInventory,
   pets,
@@ -162,13 +163,27 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const userId = (request.params as { userId: string }).userId;
     const body = (request.body ?? {}) as { requestId?: string; eggTypeId?: string; amount?: number };
     const requestId = body.requestId;
-    const eggTypeId = body.eggTypeId ?? 'mystery_egg';
+    const requestedEggTypeId = body.eggTypeId?.trim();
     const amount = Number(body.amount ?? 1);
     if (!requestId || !Number.isInteger(amount) || amount <= 0 || amount > 100) {
       return reply.code(400).send({ message: 'Invalid payload' });
     }
     const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
     if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    const eggTypeCandidates = requestedEggTypeId
+      ? [requestedEggTypeId]
+      : ['basic_mystery_egg', 'mystery_egg'];
+    const availableEggTypes = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes);
+    const selectedEggType = eggTypeCandidates
+      .map((candidate) => availableEggTypes.find((eggType) => eggType.id === candidate && eggType.isActive))
+      .find((eggType) => eggType !== undefined);
+    if (!selectedEggType) {
+      return reply.code(400).send({
+        message: `Unknown or inactive eggTypeId. Tried: ${eggTypeCandidates.join(', ')}`
+      });
+    }
+    const eggTypeId = selectedEggType.id;
 
     await db.transaction(async (tx) => {
       await tx.insert(mysteryEggInventory).values({ userId, eggTypeId, amount })
