@@ -203,6 +203,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       if (!eggType) return { kind: 'egg_type_missing' as const };
 
       const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: eggType.baseIncubationSeconds, progressSnapshot: { mode: 'timestamp_only' } }).returning({ id: incubationJobs.id });
+      if (!created) {
+        throw new Error('Failed to create incubation job');
+      }
       await tx.update(unhatchedEggs).set({ state: 'incubating' }).where(eq(unhatchedEggs.id, egg.id));
       await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'incubation_started', sourceType: 'player_action', sourceId: created.id, delta: { incubationJobs: [{ id: created.id, unhatchedEggId: egg.id, incubatorSlotId: slot.id }] } });
       return { kind: 'ok' as const };
