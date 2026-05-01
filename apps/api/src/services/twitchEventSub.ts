@@ -1,7 +1,4 @@
 import { config, getEventSubCallbackUrl } from '../config.js';
-import { db } from '../db/client.js';
-import { twitchUserTokens, users } from '../db/schema.js';
-import { eq } from 'drizzle-orm';
 
 const TARGET_SUBSCRIPTION_TYPE = 'channel.channel_points_custom_reward_redemption.add';
 const TARGET_SUBSCRIPTION_VERSION = '1';
@@ -62,69 +59,28 @@ let eventSubSyncState: EventSubSyncState = {
   error: null
 };
 
-async function refreshBroadcasterUserToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; expiresIn: number; scope: string[] }> {
+async function getAppAccessToken(): Promise<string> {
   const response = await fetch('https://id.twitch.tv/oauth2/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: config.TWITCH_CLIENT_ID,
       client_secret: config.TWITCH_CLIENT_SECRET,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken
+      grant_type: 'client_credentials'
     })
   });
 
   if (!response.ok) {
     const details = await readErrorDetails(response);
-    throw new Error(`Failed to refresh Twitch user token: ${response.status} (${details})`);
+    throw new Error(`Failed to get Twitch app token: ${response.status} (${details})`);
   }
 
-  const payload = (await response.json()) as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string[] };
-  if (!payload.access_token || !payload.refresh_token || !payload.expires_in) {
-    throw new Error('Refresh response missing access_token, refresh_token, or expires_in');
+  const payload = (await response.json()) as { access_token?: string };
+  if (!payload.access_token) {
+    throw new Error('Twitch app token response did not include access_token');
   }
 
-  return {
-    accessToken: payload.access_token,
-    refreshToken: payload.refresh_token,
-    expiresIn: payload.expires_in,
-    scope: payload.scope ?? []
-  };
-}
-
-async function getBroadcasterEventSubToken(): Promise<string> {
-  const [broadcaster] = await db.select({ id: users.id }).from(users).where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID)).limit(1);
-  if (!broadcaster) {
-    throw new Error('Broadcaster user not found locally. Please login once with broadcaster account.');
-  }
-
-  const [storedToken] = await db.select().from(twitchUserTokens).where(eq(twitchUserTokens.userId, broadcaster.id)).limit(1);
-  if (!storedToken) {
-    throw new Error('Broadcaster OAuth token not found. Please login once with broadcaster account.');
-  }
-
-  const requiredScope = 'channel:read:redemptions';
-  const hasScope = storedToken.scope.split(/\s+/).includes(requiredScope);
-  if (!hasScope) {
-    throw new Error(`Broadcaster token missing required scope: ${requiredScope}. Please logout/login broadcaster account.`);
-  }
-
-  const refreshBeforeMs = 60_000;
-  if (storedToken.expiresAt.getTime() - Date.now() > refreshBeforeMs) {
-    return storedToken.accessToken;
-  }
-
-  const refreshed = await refreshBroadcasterUserToken(storedToken.refreshToken);
-  const expiresAt = new Date(Date.now() + refreshed.expiresIn * 1000);
-  await db.update(twitchUserTokens).set({
-    accessToken: refreshed.accessToken,
-    refreshToken: refreshed.refreshToken,
-    scope: refreshed.scope.join(' '),
-    expiresAt,
-    updatedAt: new Date()
-  }).where(eq(twitchUserTokens.userId, broadcaster.id));
-
-  return refreshed.accessToken;
+  return payload.access_token;
 }
 
 async function twitchApi<T>(path: string, token: string, init?: RequestInit): Promise<T> {
@@ -164,7 +120,7 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
   }
 
   try {
-    const token = await getBroadcasterEventSubToken();
+    const token = await getAppAccessToken();
     const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token);
     const matching = list.data.filter((subscription) => (
       subscription.type === TARGET_SUBSCRIPTION_TYPE
