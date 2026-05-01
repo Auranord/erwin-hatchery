@@ -39,13 +39,54 @@ type AdminHealthIssue = {
   message: string;
 };
 
+type EventSubFeedItem = {
+  id: string;
+  twitchEventId: string;
+  type: string;
+  source: string;
+  processingStatus: string;
+  receivedAt: string;
+  processedAt: string | null;
+  error: string | null;
+};
+
+
+type EventSubSubscriptionStatus = {
+  enabled: boolean;
+  status: 'enabled' | 'missing' | 'error' | 'duplicate' | 'pending_verification';
+  subscriptionId: string | null;
+  type: string;
+  callback: string;
+  createdAt: string | null;
+  lastCheckedAt: string;
+  error: string | null;
+};
+
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
-  hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
+  unhatchedEggs: Array<{ id: string; eggTypeId: string; state: string }>;
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
 };
+
+const MYSTERY_EGG_LABELS: Record<string, string> = {
+  common_mystery_egg: 'Gewöhnliches Mystery-Ei',
+  uncommon_mystery_egg: 'Ungewöhnliches Mystery-Ei',
+  rare_mystery_egg: 'Seltenes Mystery-Ei'
+};
+
+const EGG_RESOURCE_LABELS: Record<string, string> = {
+  cracked_eggs: 'Aufgebrochene Eier'
+};
+
+function formatMysteryEggType(eggTypeId: string): string {
+  return MYSTERY_EGG_LABELS[eggTypeId] ?? eggTypeId;
+}
+
+function formatEggResourceType(resourceType: string): string {
+  return EGG_RESOURCE_LABELS[resourceType] ?? resourceType;
+}
 
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
@@ -56,6 +97,8 @@ export function App(): JSX.Element {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
+  const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
+  const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
   async function loadMe(): Promise<void> {
@@ -91,6 +134,8 @@ export function App(): JSX.Element {
     if (isAdminRoute && me?.authenticated) {
       void loadUsers(query);
       void loadAdminHealth();
+      void loadEventSubFeed();
+      void loadEventSubSubscriptionStatus();
     }
   }, [isAdminRoute, me?.authenticated]);
 
@@ -113,6 +158,21 @@ export function App(): JSX.Element {
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
 
+
+  async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
+    const response = await fetch('/api/game/mystery-eggs/identify', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eggTypeId })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.');
+    }
+  }
+
   async function logout(): Promise<void> {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     await loadMe();
@@ -128,12 +188,12 @@ export function App(): JSX.Element {
     await loadUsers(query);
   }
 
-  async function grantTestEgg(userId: string): Promise<void> {
+  async function grantTestEgg(userId: string, eggTypeId: 'common_mystery_egg' | 'uncommon_mystery_egg' | 'rare_mystery_egg'): Promise<void> {
     const response = await fetch(`/api/admin/users/${userId}/grant-test-mystery-egg`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: crypto.randomUUID(), amount: 1 })
+      body: JSON.stringify({ requestId: crypto.randomUUID(), eggTypeId, amount: 1 })
     });
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -148,6 +208,22 @@ export function App(): JSX.Element {
     if (!response.ok) return;
     const payload = (await response.json()) as { inventory: unknown };
     setInventoryJson(JSON.stringify(payload.inventory, null, 2));
+  }
+
+
+  async function loadEventSubFeed(): Promise<void> {
+    const response = await fetch('/api/admin/debug/eventsubs', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { events: EventSubFeedItem[] };
+    setEventSubFeed(payload.events);
+  }
+
+
+  async function loadEventSubSubscriptionStatus(refresh = false): Promise<void> {
+    const response = await fetch(`/api/admin/debug/eventsub-subscription${refresh ? '?refresh=true' : ''}`, { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as EventSubSubscriptionStatus;
+    setEventSubSubscriptionStatus(payload);
   }
 
   async function loadLedger(userId?: string): Promise<void> {
@@ -207,7 +283,9 @@ export function App(): JSX.Element {
                 </div>
               ) : <p>Nur Owner dürfen Rollen ändern.</p>}
               <div>
-                <button onClick={() => void grantTestEgg(selected.id)}>Test-Mystery-Ei vergeben</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'common_mystery_egg')}>Gewöhnliches Test-Mystery-Ei</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'uncommon_mystery_egg')}>Ungewöhnliches Test-Mystery-Ei</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'rare_mystery_egg')}>Seltenes Test-Mystery-Ei</button>
                 <button onClick={() => void loadInventory(selected.id)}>Inventar laden</button>
                 <button onClick={() => void loadLedger(selected.id)}>Ledger laden</button>
               </div>
@@ -218,6 +296,47 @@ export function App(): JSX.Element {
           <h2>Inventar (JSON)</h2>
           <pre>{inventoryJson || 'Kein Inventar geladen.'}</pre>
         </section>
+
+
+        <section className="card">
+          <h2>Debug: EventSub Subscription Status</h2>
+          <button onClick={() => void loadEventSubSubscriptionStatus(true)}>Status aktualisieren</button>
+          {eventSubSubscriptionStatus ? (
+            <>
+              <p>
+                Status:{' '}
+                {eventSubSubscriptionStatus.status === 'enabled'
+                  ? '✅ Aktiviert'
+                  : eventSubSubscriptionStatus.status === 'pending_verification' || eventSubSubscriptionStatus.status === 'duplicate'
+                    ? '⚠ Ausstehend / Mehrdeutig'
+                    : '❌ Nicht eingerichtet / Fehler'}
+              </p>
+              <p>Typ: {eventSubSubscriptionStatus.type}</p>
+              <p>Subscription ID: {eventSubSubscriptionStatus.subscriptionId ?? '—'}</p>
+              <p>Callback: {eventSubSubscriptionStatus.callback}</p>
+              <p>Erstellt: {eventSubSubscriptionStatus.createdAt ? new Date(eventSubSubscriptionStatus.createdAt).toLocaleString() : '—'}</p>
+              <p>Letzte Prüfung: {new Date(eventSubSubscriptionStatus.lastCheckedAt).toLocaleString()}</p>
+              {eventSubSubscriptionStatus.error ? <p>Fehler: {eventSubSubscriptionStatus.error}</p> : null}
+            </>
+          ) : <p>Kein Status geladen.</p>}
+        </section>
+
+        <section className="card">
+          <h2>Debug: Twitch EventSub Feed (letzte 25)</h2>
+          <button onClick={() => void loadEventSubFeed()}>Feed aktualisieren</button>
+          <ul>
+            {eventSubFeed.map((event) => (
+              <li key={event.id}>
+                <strong>{event.type}</strong> · {new Date(event.receivedAt).toLocaleString()} · Status: {event.processingStatus}
+                <div>Event ID: {event.twitchEventId}</div>
+                <div>Quelle: {event.source}</div>
+                {event.processedAt ? <div>Verarbeitet: {new Date(event.processedAt).toLocaleString()}</div> : null}
+                {event.error ? <div>Fehler: {event.error}</div> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="card">
           <h2>Economy Ledger</h2>
           <ul>
@@ -271,9 +390,36 @@ export function App(): JSX.Element {
             {playerInventory ? (
               <>
                 <p><strong>Mystery-Eier:</strong> {playerInventory.mysteryEggs.reduce((sum, entry) => sum + entry.amount, 0)}</p>
-                <p><strong>Versteckte Eier:</strong> {playerInventory.hiddenPetEggs.length}</p>
+                {playerInventory.mysteryEggs
+                  .filter((entry) => entry.amount > 0)
+                  .map((entry) => (
+                    <p key={entry.eggTypeId}>
+                      <strong>{formatMysteryEggType(entry.eggTypeId)}:</strong> {entry.amount}{' '}
+                      <button type="button" onClick={() => void identifyMysteryEgg(entry.eggTypeId)}>Typ bestimmen</button>
+                    </p>
+                  ))}
+                <p><strong>Unausgebrütete Eier:</strong> {playerInventory.unhatchedEggs.length}</p>
+                {playerInventory.unhatchedEggs.length > 0 ? (
+                  <ul>
+                    {playerInventory.unhatchedEggs.map((egg) => (
+                      <li key={egg.id}>{formatMysteryEggType(egg.eggTypeId)}</li>
+                    ))}
+                  </ul>
+                ) : <p>Keine unausgebrüteten Eier vorhanden.</p>}
                 <p><strong>Geschlüpfte Pets:</strong> {playerInventory.hatchedPets.length}</p>
-                <p><strong>Ressourcen-Typen:</strong> {playerInventory.crackedEggResources.length}</p>
+                {playerInventory.hatchedPets.length > 0 ? (
+                  <ul>
+                    {playerInventory.hatchedPets.map((pet) => (
+                      <li key={pet.id}>{pet.petTypeId}</li>
+                    ))}
+                  </ul>
+                ) : <p>Noch keine geschlüpften Pets vorhanden.</p>}
+                <p><strong>Ei-Ressourcen:</strong> {playerInventory.crackedEggResources.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                {playerInventory.crackedEggResources
+                  .filter((entry) => entry.amount > 0)
+                  .map((entry) => (
+                    <p key={entry.resourceType}><strong>{formatEggResourceType(entry.resourceType)}:</strong> {entry.amount}</p>
+                  ))}
               </>
             ) : <p>Inventar wird geladen…</p>}
           </>

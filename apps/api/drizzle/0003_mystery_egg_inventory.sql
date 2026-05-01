@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS mystery_egg_inventory (
   PRIMARY KEY(user_id, egg_type_id)
 );
 
-ALTER TABLE hidden_pet_eggs ADD COLUMN IF NOT EXISTS created_from_redemption_id uuid REFERENCES channel_point_redemptions(id);
+ALTER TABLE unhatched_eggs ADD COLUMN IF NOT EXISTS created_from_redemption_id uuid REFERENCES channel_point_redemptions(id);
 
 DO $$
 BEGIN
@@ -19,14 +19,14 @@ BEGIN
     ON CONFLICT (user_id, egg_type_id)
     DO UPDATE SET amount = mystery_egg_inventory.amount + EXCLUDED.amount, updated_at = now();
 
-    UPDATE hidden_pet_eggs h
+    UPDATE unhatched_eggs h
     SET created_from_redemption_id = m.created_from_redemption_id
     FROM mystery_eggs m
     WHERE h.created_from_mystery_egg_id = m.id
       AND h.created_from_redemption_id IS NULL;
 
-    ALTER TABLE hidden_pet_eggs DROP CONSTRAINT IF EXISTS hidden_pet_eggs_created_from_mystery_egg_id_mystery_eggs_id_fk;
-    ALTER TABLE hidden_pet_eggs DROP COLUMN IF EXISTS created_from_mystery_egg_id;
+    ALTER TABLE unhatched_eggs DROP CONSTRAINT IF EXISTS unhatched_eggs_created_from_mystery_egg_id_mystery_eggs_id_fk;
+    ALTER TABLE unhatched_eggs DROP COLUMN IF EXISTS created_from_mystery_egg_id;
 
     DROP TABLE IF EXISTS mystery_eggs;
   END IF;

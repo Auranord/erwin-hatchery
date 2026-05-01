@@ -7,6 +7,7 @@ import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerGameRoutes } from './routes/game.js';
+import { registerEventSubRoutes } from './routes/eventsub.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,10 +18,21 @@ export function buildApp() {
     logger: true
   });
 
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    const rawBody = typeof body === 'string' ? body : body.toString('utf8');
+    (request as typeof request & { rawBody?: string }).rawBody = rawBody;
+    try {
+      done(null, JSON.parse(rawBody));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   app.register(registerHealthRoute);
   app.register(registerAuthRoutes);
   app.register(registerAdminRoutes);
   app.register(registerGameRoutes);
+  app.register(registerEventSubRoutes);
 
   app.register(fastifyStatic, {
     root: webDist,

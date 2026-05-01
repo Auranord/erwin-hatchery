@@ -24,8 +24,13 @@ The reward is created manually in Twitch for the MVP. The Twitch reward ID is co
 
 ## Current MVP implementation status
 
-- ✅ Milestone 2 auth baseline is implemented: Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap from `TWITCH_BROADCASTER_ID`, and a basic authenticated shell UI.
-- ⏳ Channel Point processing and economy mutations are intentionally not part of this milestone.
+Last reevaluated: **2026-05-01**.
+
+- ✅ Milestones 0-3 are completed (repo/workspace foundation, backend baseline, Twitch OAuth auth flow, and idempotent EventSub Channel Point redemption ingestion with startup subscription auto-sync).
+- 🟨 Milestone 4 is partially completed (authenticated player shell and inventory visibility exist; the full player actions loop egg -> identify -> incubate -> hatch -> select pet is still pending).
+- ⏳ Milestone 5 is not started (incubation progression engine and hatch resolution flow are still pending).
+- 🟨 Milestone 6 is partially completed (admin route protection, user search/detail, role mutation, admin logs, ledger view, test mystery egg grant + revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
+- ⏳ Milestones 7-10 are not started.
 
 ## Player states
 
@@ -50,7 +55,7 @@ A Twitch user can exist in three practical states:
 Each player needs separate inventories for:
 
 - Mystery eggs (integer balance per egg type, not individual rows)
-- Hidden pet eggs
+- Unhatched eggs
 - Hatched pets
 - Consumables
 - Resources, starting with cracked eggs
@@ -76,11 +81,11 @@ Outcome B: egg contains a pet.
 
 - Pet type remains hidden.
 - Mystery egg is consumed.
-- A hidden pet egg is added to the pet egg inventory.
+- An unhatched egg is added to the pet egg inventory.
 
 ### 3. Pet egg incubated
 
-The player selects a hidden pet egg and places it in an incubator slot.
+The player selects an unhatched egg and places it in an incubator slot.
 
 ### 4. Pet egg hatches
 
@@ -149,7 +154,7 @@ Each hatched pet should get slight stat variance, for example ±10%, calculated 
 
 ## Egg loot table MVP
 
-The system must support multiple egg types later. MVP starts with one egg type: `basic_mystery_egg`.
+The system must support multiple egg types later. MVP initializes three mystery egg types: `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
 
 Suggested granular loot table:
 
@@ -159,11 +164,11 @@ Suggested granular loot table:
 | Resource medium | 22% | 20 cracked eggs |
 | Resource large | 12% | 35 cracked eggs |
 | Resource huge | 6% | 60 cracked eggs |
-| Pet | 8% | Waldwachtel hidden pet egg |
-| Pet | 8% | Glitzer-Spatz hidden pet egg |
-| Pet | 7% | Moorente hidden pet egg |
-| Pet | 7% | Turmeule hidden pet egg |
-| Rare pet | 2% | Goldener Erwin hidden pet egg |
+| Pet | 8% | Waldwachtel unhatched egg |
+| Pet | 8% | Glitzer-Spatz unhatched egg |
+| Pet | 7% | Moorente unhatched egg |
+| Pet | 7% | Turmeule unhatched egg |
+| Rare pet | 2% | Goldener Erwin unhatched egg |
 
 Total: 100%.
 
@@ -283,3 +288,8 @@ For MVP, deletion may:
 - preserve non-personal ledger rows only if needed for audit/revert integrity
 
 Implement this in a simple and transparent way.
+
+
+## Milestone 3 completion notes
+- Mystery egg outcome is now resolved when the Channel Point redemption webhook is processed, not at hatch time.
+- Webhook replay safety is enforced through EventSub event ID and redemption ID uniqueness.

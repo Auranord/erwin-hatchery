@@ -144,7 +144,7 @@ Battle resolution must be revertible in MVP.
 - Unique Twitch redemption IDs.
 - Idempotent processors.
 - Server-side rolls only.
-- Hidden egg outcomes never sent to client before reveal.
+- Unhatched egg outcomes never sent to client before reveal.
 - Rate limits for authenticated actions.
 - Overlay route token or signed route secret.
 - Admin API protected by role checks.
@@ -160,3 +160,9 @@ Use official/current Twitch docs when implementing:
 - Twitch OAuth docs
 - Twitch Channel Points Acceptable Use Policy
 - Twitch Extensions monetization / Bits-in-Extensions docs if Bits are ever used inside an Extension
+
+
+### Milestone 3 controls implemented
+- EventSub HMAC verification is enforced before request processing.
+- Channel Point webhook notifications are idempotent by Twitch event ID and redemption ID.
+- Economy mutations for eligible redemptions run inside a transaction and always create a ledger event.

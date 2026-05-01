@@ -2,10 +2,12 @@
 
 ## Progress status
 
+Last reevaluated: **2026-05-01**.
+
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
-- ⏳ Milestone 3 not completed yet (EventSub webhook ingestion + idempotent Channel Point redemption processing still pending).
+- ✅ Milestone 3 completed (EventSub webhook ingestion + idempotent Channel Point redemption processing + startup subscription auto-sync + admin status debug implemented).
 - 🟨 Milestone 4 partially completed (authenticated web shell and inventory stream/admin-facing inventory visibility exist; full player loop egg -> identify -> incubate -> hatch -> select pet still pending).
 - ⏳ Milestone 5 not started (incubation engine and hatch resolution still pending).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grant + revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
@@ -88,7 +90,7 @@ Acceptance:
 - Show resource balance.
 - Show mystery eggs.
 - Identify egg action.
-- Show hidden pet eggs.
+- Show unhatched eggs.
 - Show incubator slot(s).
 - Start incubation.
 - Show hatched pets.

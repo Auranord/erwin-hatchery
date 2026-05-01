@@ -124,7 +124,7 @@ primary key(user_id, resource_type)
 Config table for egg types.
 
 ```text
-id text primary key -- basic_mystery_egg
+id text primary key -- common_mystery_egg / uncommon_mystery_egg / rare_mystery_egg
 display_name text not null
 base_incubation_seconds integer not null
 is_active boolean not null default true
@@ -139,7 +139,7 @@ Granular loot table for each egg type.
 id uuid primary key
 egg_type_id text references egg_types(id)
 weight integer not null
-outcome_type text not null -- resource, hidden_pet_egg
+outcome_type text not null -- resource, unhatched_egg
 resource_type text nullable
 resource_amount integer nullable
 pet_type_id text nullable references pet_types(id)
@@ -163,7 +163,7 @@ primary key(user_id, egg_type_id)
 When a redemption grants a mystery egg, increment this balance and write an economy ledger row.
 When a player identifies a mystery egg, decrement this balance in the same transaction that resolves the outcome and writes ledger rows.
 
-### hidden_pet_eggs
+### unhatched_eggs
 
 Pet eggs that are known to contain a pet, but not which pet.
 
@@ -204,7 +204,7 @@ Tracks eggs in incubators.
 ```text
 id uuid primary key
 owner_user_id uuid references users(id)
-hidden_pet_egg_id uuid references hidden_pet_eggs(id)
+unhatched_egg_id uuid references unhatched_eggs(id)
 incubator_slot_id uuid references incubator_slots(id)
 state text not null -- active, completed, canceled
 started_at timestamp
@@ -246,7 +246,7 @@ attack integer not null
 defense integer not null
 speed integer not null
 stat_rolls jsonb not null
-source_hidden_pet_egg_id uuid references hidden_pet_eggs(id)
+source_unhatched_egg_id uuid references unhatched_eggs(id)
 is_favorite boolean not null default false
 selected_for_event boolean not null default false
 created_at timestamp
@@ -336,7 +336,9 @@ goldener_erwin   Goldener Erwin   rare    allrounder 110 13 10 13
 ### Egg type
 
 ```text
-basic_mystery_egg | 1x Mystery Ei | base incubation time configurable
+common_mystery_egg | 1x Gewöhnliches Mystery Ei | seeded
+uncommon_mystery_egg | 1x Ungewöhnliches Mystery Ei | seeded
+rare_mystery_egg | 1x Seltenes Mystery Ei | seeded
 ```
 
 ### Basic egg loot table weights
@@ -361,3 +363,9 @@ Use weights totaling 10000:
 - `admin_action_logs` stores immutable admin mutations.
 - Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
 - Role changes are the only economy-adjacent admin mutation in milestone 3.
+
+
+## Milestone 3 data flow
+- `twitch_events`: one row per unique Twitch EventSub event ID (`twitch_event_id` unique).
+- `channel_point_redemptions`: one row per unique Twitch redemption ID (`twitch_redemption_id` unique).
+- Valid configured reward redemptions currently create one `common_mystery_egg` inventory unit, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
