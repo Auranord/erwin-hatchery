@@ -211,3 +211,19 @@ pnpm db:seed
 ```
 
 Codex should add these scripts to `package.json` during implementation.
+
+
+## EventSub auto-sync operations
+
+Set and verify the following production env vars:
+
+- `TWITCH_BROADCASTER_USER_ID`
+- `TWITCH_EVENTSUB_CALLBACK_URL` (must be public HTTPS and end with `/api/twitch/eventsub`)
+- `TWITCH_EVENTSUB_SECRET`
+- `TWITCH_EVENTSUB_AUTO_SYNC=true` (set `false` to disable startup sync)
+
+Troubleshooting:
+
+1. Check API logs for `EventSub sync failed` and HTTP status hints.
+2. Call `GET /api/admin/debug/eventsub-subscription?refresh=true` as admin/owner.
+3. Verify callback URL reachability and Twitch app credentials.

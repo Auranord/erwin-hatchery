@@ -16,6 +16,7 @@ import {
   users
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
+import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
@@ -166,6 +167,19 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+
+
+  app.get('/api/admin/debug/eventsub-subscription', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const refresh = String((request.query as { refresh?: string }).refresh ?? '').toLowerCase();
+    if (refresh === '1' || refresh === 'true') {
+      await syncChannelPointRedemptionEventSub(request.log);
+    }
+
+    return getEventSubSubscriptionStatus();
+  });
 
   app.get('/api/admin/debug/eventsubs', async (request, reply) => {
     const identity = await getSessionIdentity(request);
