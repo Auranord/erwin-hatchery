@@ -99,6 +99,10 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       processedAt: now
     }).returning({ id: channelPointRedemptions.id });
 
+    if (!savedRedemption) {
+      throw new Error('Failed to persist channel point redemption');
+    }
+
     await tx.insert(hiddenPetEggs).values({
       ownerUserId: user.id,
       eggTypeId: 'mystery_egg',
@@ -118,7 +122,7 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       eventType: 'channel_point_redemption_granted_mystery_egg',
       sourceType: 'channel_point_redemption',
       sourceId: savedRedemption.id,
-      delta: { mysteryEggInventory: { mystery_egg: 1 } }
+      delta: { mysteryEggInventory: [{ eggTypeId: 'mystery_egg', amountDelta: 1 }] }
     });
   });
 }
