@@ -99,20 +99,12 @@ CREATE TABLE IF NOT EXISTS egg_loot_table_entries (
   is_active boolean NOT NULL DEFAULT true
 );
 
-CREATE TABLE IF NOT EXISTS mystery_eggs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_user_id uuid NOT NULL REFERENCES users(id),
+CREATE TABLE IF NOT EXISTS mystery_egg_inventory (
+  user_id uuid NOT NULL REFERENCES users(id),
   egg_type_id text NOT NULL REFERENCES egg_types(id),
-  state text NOT NULL,
-  hidden_outcome_type text NOT NULL,
-  hidden_resource_type text,
-  hidden_resource_amount integer,
-  hidden_pet_type_id text,
-  created_from_redemption_id uuid REFERENCES channel_point_redemptions(id),
-  roll_seed_hash text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  identified_at timestamptz,
-  consumed_at timestamptz
+  amount integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(user_id, egg_type_id)
 );
 
 CREATE TABLE IF NOT EXISTS hidden_pet_eggs (
@@ -121,7 +113,7 @@ CREATE TABLE IF NOT EXISTS hidden_pet_eggs (
   egg_type_id text NOT NULL REFERENCES egg_types(id),
   hidden_pet_type_id text NOT NULL REFERENCES pet_types(id),
   state text NOT NULL,
-  created_from_mystery_egg_id uuid NOT NULL REFERENCES mystery_eggs(id),
+  created_from_redemption_id uuid REFERENCES channel_point_redemptions(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
