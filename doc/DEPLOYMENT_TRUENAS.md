@@ -129,8 +129,10 @@ MVP deployment is manual:
 1. Push to `dev`.
 2. GitHub builds image.
 3. TrueNAS pulls the selected tag.
-4. Restart app.
-5. Verify logs and health endpoint.
+4. Run database migrations in the deployed environment.
+5. For `dev` and `testing`, run seed data after migrations (`pnpm db:seed`) so active mystery egg types exist for admin test grants.
+6. Restart app.
+7. Verify logs and health endpoint.
 
 ## Health endpoint
 
