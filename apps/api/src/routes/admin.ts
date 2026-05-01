@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
@@ -79,7 +80,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const body = (request.body ?? {}) as { role?: string; action?: string; requestId?: string };
     const role = body.role as AppRole;
     const action = body.action;
-    const requestId = body.requestId;
+    const requestId = body.requestId?.trim() || randomUUID();
 
     if (!ROLE_ORDER.includes(role) || !['grant', 'revoke'].includes(String(action)) || !requestId) {
       return reply.code(400).send({ message: 'Invalid role mutation payload' });
@@ -162,10 +163,10 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
     const userId = (request.params as { userId: string }).userId;
     const body = (request.body ?? {}) as { requestId?: string; eggTypeId?: string; amount?: number };
-    const requestId = body.requestId;
+    const requestId = body.requestId?.trim() || randomUUID();
     const requestedEggTypeId = body.eggTypeId?.trim();
     const amount = Number(body.amount ?? 1);
-    if (!requestId || !Number.isInteger(amount) || amount <= 0 || amount > 100) {
+    if (!Number.isInteger(amount) || amount <= 0 || amount > 100) {
       return reply.code(400).send({ message: 'Invalid payload' });
     }
     const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
