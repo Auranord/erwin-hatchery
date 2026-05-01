@@ -97,3 +97,16 @@ pnpm db:seed
 pnpm build
 ```
 
+
+
+## EventSub webhook processing (Milestone 3)
+
+- Endpoint: `POST /api/twitch/eventsub`
+- Verifies Twitch EventSub HMAC signature using `TWITCH_EVENTSUB_SECRET` and raw request body.
+- Supports webhook challenge verification requests and returns plain-text challenge.
+- Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
+- Processes only `channel.channel_points_custom_reward_redemption.add` notifications for configured `TWITCH_CHANNEL_POINT_REWARD_ID`.
+- Creates a provisional user by Twitch user ID when needed.
+- Resolves mystery egg outcome at redemption time and stores hidden pet egg immediately.
+- Increments `mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
+- Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.

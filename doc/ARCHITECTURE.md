@@ -211,3 +211,8 @@ pnpm db:seed
 ```
 
 Local stack should use Docker Compose for PostgreSQL and local API/web dev servers.
+
+
+### Implemented in Milestone 3
+- `POST /api/twitch/eventsub` now validates EventSub signatures, handles challenge verification, persists raw webhook events, and processes eligible Channel Point redemptions idempotently.
+- Redemption processing creates/uses provisional users, resolves hidden mystery egg outcomes server-side, updates inventory, and writes economy ledger events in one database transaction.

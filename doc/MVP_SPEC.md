@@ -283,3 +283,8 @@ For MVP, deletion may:
 - preserve non-personal ledger rows only if needed for audit/revert integrity
 
 Implement this in a simple and transparent way.
+
+
+## Milestone 3 completion notes
+- Mystery egg outcome is now resolved when the Channel Point redemption webhook is processed, not at hatch time.
+- Webhook replay safety is enforced through EventSub event ID and redemption ID uniqueness.
