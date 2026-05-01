@@ -131,7 +131,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
       db.select().from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
-      db.select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
+      db.select({
+        id: unhatchedEggs.id,
+        eggTypeId: unhatchedEggs.eggTypeId,
+        hiddenPetTypeId: unhatchedEggs.hiddenPetTypeId,
+        state: unhatchedEggs.state
+      }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
       db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
       db.select().from(consumableInventory).where(eq(consumableInventory.userId, userId)),
       db.select().from(resources).where(eq(resources.userId, userId))

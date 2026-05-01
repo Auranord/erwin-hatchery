@@ -172,7 +172,7 @@ Suggested granular loot table:
 
 Total: 100%.
 
-The content is determined when the Channel Point redemption is processed, not when the egg is later identified or hatched.
+The content is determined when the player identifies/opens the mystery egg, not when the Channel Point redemption is processed.
 
 ## Resources and consumables
 
@@ -291,5 +291,6 @@ Implement this in a simple and transparent way.
 
 
 ## Milestone 3 completion notes
-- Mystery egg outcome is now resolved when the Channel Point redemption webhook is processed, not at hatch time.
+- Channel Point redemption webhook processing is idempotent and only grants mystery egg inventory (no hatch outcome resolution yet).
+- Mystery egg outcome is resolved on identify/open in the player action flow.
 - Webhook replay safety is enforced through EventSub event ID and redemption ID uniqueness.
