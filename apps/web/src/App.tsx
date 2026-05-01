@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -68,7 +68,7 @@ type PlayerInventory = {
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
-  incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string } | null }>;
+  incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
 };
 
 const MYSTERY_EGG_LABELS: Record<string, string> = {
@@ -89,6 +89,14 @@ function formatEggResourceType(resourceType: string): string {
   return EGG_RESOURCE_LABELS[resourceType] ?? resourceType;
 }
 
+function formatRemainingDuration(totalSeconds: number): string {
+  const seconds = Math.max(0, totalSeconds);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -100,7 +108,20 @@ export function App(): JSX.Element {
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
+  const [nowMs, setNowMs] = useState<number>(Date.now());
   const isAdminRoute = window.location.pathname.startsWith('/admin');
+
+  const activeIncubationByEggId = useMemo(() => {
+    if (!playerInventory) return new Map<string, { startedAt: string; requiredProgressSeconds: number }>();
+    return new Map(
+      playerInventory.incubatorSlots
+        .filter((slot) => slot.activeJob)
+        .map((slot) => [
+          slot.activeJob!.unhatchedEggId,
+          { startedAt: slot.activeJob!.startedAt, requiredProgressSeconds: slot.activeJob!.requiredProgressSeconds }
+        ])
+    );
+  }, [playerInventory]);
 
   async function loadMe(): Promise<void> {
     const response = await fetch('/api/me', { credentials: 'include' });
@@ -139,6 +160,12 @@ export function App(): JSX.Element {
       void loadEventSubSubscriptionStatus();
     }
   }, [isAdminRoute, me?.authenticated]);
+
+  useEffect(() => {
+    if (isAdminRoute || !me?.authenticated || !playerInventory) return;
+    const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(intervalId);
+  }, [isAdminRoute, me?.authenticated, playerInventory]);
 
   useEffect(() => {
     if (isAdminRoute || !me?.authenticated) {
@@ -435,6 +462,14 @@ export function App(): JSX.Element {
                     {playerInventory.unhatchedEggs.map((egg) => (
                       <li key={egg.id}>
                         {formatMysteryEggType(egg.eggTypeId)} ({egg.state}){' '}
+                        {egg.state === 'incubating' && activeIncubationByEggId.has(egg.id)
+                          ? (() => {
+                              const activeIncubation = activeIncubationByEggId.get(egg.id)!;
+                              const hatchAtMs = new Date(activeIncubation.startedAt).getTime() + (activeIncubation.requiredProgressSeconds * 1000);
+                              const secondsRemaining = Math.ceil((hatchAtMs - nowMs) / 1000);
+                              return <strong>· Verbleibend: {formatRemainingDuration(secondsRemaining)}</strong>;
+                            })()
+                          : null}
                         {egg.state === 'ready_for_incubation'
                           ? (
                             <button
