@@ -32,6 +32,22 @@ type EventSubSyncState = {
   error: string | null;
 };
 
+
+async function readErrorDetails(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
+    const details = [payload?.error, payload?.message].filter((value): value is string => Boolean(value));
+    if (details.length > 0) {
+      return details.join(' - ');
+    }
+  }
+
+  const text = await response.text().catch(() => '');
+  const normalized = text.trim();
+  return normalized.length > 0 ? normalized.slice(0, 300) : 'no response body';
+}
+
 let eventSubSyncState: EventSubSyncState = {
   enabled: false,
   status: 'missing',
@@ -55,7 +71,8 @@ async function getAppAccessToken(): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get Twitch app token: ${response.status}`);
+    const details = await readErrorDetails(response);
+    throw new Error(`Failed to get Twitch app token: ${response.status} (${details})`);
   }
 
   const payload = (await response.json()) as { access_token?: string };
@@ -78,7 +95,12 @@ async function twitchApi<T>(path: string, token: string, init?: RequestInit): Pr
   });
 
   if (!response.ok) {
-    throw new Error(`Twitch API ${path} failed: ${response.status}`);
+    const details = await readErrorDetails(response);
+    throw new Error(`Twitch API ${path} failed: ${response.status} (${details})`);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
