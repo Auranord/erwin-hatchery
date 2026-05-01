@@ -78,7 +78,7 @@ The current repo implementation includes:
 
 Still pending for later milestones:
 
-- Full player gameplay loop (identify -> incubate -> hatch -> select pet)
+- Remaining player gameplay loop pieces (incubate -> hatch -> select pet) and public leaderboard
 - Incubation progression engine and hatch resolution
 - Battle events, overlays, and bits/sub feature foundation
 - Deployment hardening milestones beyond the current baseline

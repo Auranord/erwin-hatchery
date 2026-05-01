@@ -27,7 +27,7 @@ The reward is created manually in Twitch for the MVP. The Twitch reward ID is co
 Last reevaluated: **2026-05-01**.
 
 - ✅ Milestones 0-3 are completed (repo/workspace foundation, backend baseline, Twitch OAuth auth flow, and idempotent EventSub Channel Point redemption ingestion with startup subscription auto-sync).
-- 🟨 Milestone 4 is partially completed (authenticated player shell and inventory visibility exist; the full player actions loop egg -> identify -> incubate -> hatch -> select pet is still pending).
+- 🟨 Milestone 4 is partially completed (authenticated player shell, live inventory visibility, and mystery egg identify action are implemented; incubate -> hatch -> select pet and public leaderboard are still pending).
 - ⏳ Milestone 5 is not started (incubation progression engine and hatch resolution flow are still pending).
 - 🟨 Milestone 6 is partially completed (admin route protection, user search/detail, role mutation, admin logs, ledger view, test mystery egg grant + revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ⏳ Milestones 7-10 are not started.
