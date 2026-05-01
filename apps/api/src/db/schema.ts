@@ -73,6 +73,17 @@ export const twitchEvents = pgTable('twitch_events', {
   error: text('error')
 });
 
+
+export const twitchUserTokens = pgTable('twitch_user_tokens', {
+  userId: uuid('user_id').notNull().primaryKey().references(() => users.id),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  scope: text('scope').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const channelPointRedemptions = pgTable('channel_point_redemptions', {
   id: uuid('id').defaultRandom().primaryKey(),
   twitchRedemptionId: text('twitch_redemption_id').notNull().unique(),
