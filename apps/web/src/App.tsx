@@ -217,6 +217,21 @@ export function App(): JSX.Element {
     await loadLedger(userId);
   }
 
+  async function grantIncubatorSlot(userId: string): Promise<void> {
+    const response = await fetch(`/api/admin/users/${userId}/grant-incubator-slot`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: crypto.randomUUID() })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Inkubator-Slot konnte nicht vergeben werden.');
+    }
+    await loadInventory(userId);
+    await loadLedger(userId);
+  }
+
   async function loadInventory(userId: string): Promise<void> {
     const response = await fetch(`/api/admin/users/${userId}/inventory`, { credentials: 'include' });
     if (!response.ok) return;
@@ -300,6 +315,7 @@ export function App(): JSX.Element {
                 <button onClick={() => void grantTestEgg(selected.id, 'common_mystery_egg')}>Gewöhnliches Test-Mystery-Ei</button>
                 <button onClick={() => void grantTestEgg(selected.id, 'uncommon_mystery_egg')}>Ungewöhnliches Test-Mystery-Ei</button>
                 <button onClick={() => void grantTestEgg(selected.id, 'rare_mystery_egg')}>Seltenes Test-Mystery-Ei</button>
+                <button onClick={() => void grantIncubatorSlot(selected.id)}>Inkubator-Slot +1</button>
                 <button onClick={() => void loadInventory(selected.id)}>Inventar laden</button>
                 <button onClick={() => void loadLedger(selected.id)}>Ledger laden</button>
               </div>

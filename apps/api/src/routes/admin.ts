@@ -9,6 +9,7 @@ import {
   eggTypes,
   unhatchedEggs,
   mysteryEggInventory,
+  incubatorSlots,
   pets,
   resources,
   roles,
@@ -129,7 +130,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
     const userId = (request.params as { userId: string }).userId;
 
-    const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
+    const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows, incubatorSlotRows] = await Promise.all([
       db.select().from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
       db.select({
         id: unhatchedEggs.id,
@@ -139,7 +140,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
       db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
       db.select().from(consumableInventory).where(eq(consumableInventory.userId, userId)),
-      db.select().from(resources).where(eq(resources.userId, userId))
+      db.select().from(resources).where(eq(resources.userId, userId)),
+      db.select().from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId))
     ]);
 
     return {
@@ -148,7 +150,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         unhatchedEggs: unhatchedEggRows,
         hatchedPets: petRows,
         consumables: consumableRows,
-        crackedEggResources: resourceRows
+        crackedEggResources: resourceRows,
+        incubatorSlots: incubatorSlotRows
       }
     };
   });
@@ -274,6 +277,50 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         actionType: 'grant_test_mystery_egg',
         requestId,
         payload: { eggTypeId, amount, ledgerId: ledgerRow.id, reversible: true }
+      });
+    });
+
+    return { status: 'ok', idempotent: false };
+  });
+
+  app.post('/api/admin/users/:userId/grant-incubator-slot', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+    const userId = (request.params as { userId: string }).userId;
+    const body = (request.body ?? {}) as { requestId?: string };
+    const requestId = body.requestId?.trim() || randomUUID();
+
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
+    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    await db.transaction(async (tx) => {
+      const [targetUser] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+      if (!targetUser) throw new Error('User not found');
+
+      const [createdSlot] = await tx.insert(incubatorSlots).values({
+        ownerUserId: userId,
+        slotSource: 'admin_grant',
+        slotLevel: 1,
+        isAvailable: true,
+        removeWhenEmpty: false
+      }).returning({ id: incubatorSlots.id });
+      if (!createdSlot) throw new Error('Failed to create incubator slot');
+
+      const [ledgerRow] = await tx.insert(economyLedger).values({
+        userId,
+        actorUserId: identity.userId,
+        eventType: 'admin_incubator_slot_grant',
+        sourceType: 'admin_action',
+        delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'admin_grant' }] }
+      }).returning({ id: economyLedger.id });
+      if (!ledgerRow) throw new Error('Failed to create ledger entry for incubator slot grant');
+
+      await tx.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        targetUserId: userId,
+        actionType: 'grant_incubator_slot',
+        requestId,
+        payload: { incubatorSlotId: createdSlot.id, ledgerId: ledgerRow.id }
       });
     });
 
