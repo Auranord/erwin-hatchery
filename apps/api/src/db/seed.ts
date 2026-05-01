@@ -1,5 +1,5 @@
 import { db, pool } from './client.js';
-import { eq, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { eggLootTableEntries, eggTypes, petTypes } from './schema.js';
 
 async function seed(): Promise<void> {
@@ -75,7 +75,11 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, 'common_mystery_egg'));
+  await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [
+    'common_mystery_egg',
+    'uncommon_mystery_egg',
+    'rare_mystery_egg'
+  ]));
 
   await db.insert(eggLootTableEntries).values([
     {
@@ -98,10 +102,52 @@ async function seed(): Promise<void> {
       outcomeType: 'pet',
       petTypeId: 'aegis_turtle',
       isActive: true
+    },
+    {
+      eggTypeId: 'uncommon_mystery_egg',
+      weight: 45,
+      outcomeType: 'pet',
+      petTypeId: 'slime_scout',
+      isActive: true
+    },
+    {
+      eggTypeId: 'uncommon_mystery_egg',
+      weight: 35,
+      outcomeType: 'pet',
+      petTypeId: 'ember_fox',
+      isActive: true
+    },
+    {
+      eggTypeId: 'uncommon_mystery_egg',
+      weight: 20,
+      outcomeType: 'pet',
+      petTypeId: 'aegis_turtle',
+      isActive: true
+    },
+    {
+      eggTypeId: 'rare_mystery_egg',
+      weight: 20,
+      outcomeType: 'pet',
+      petTypeId: 'slime_scout',
+      isActive: true
+    },
+    {
+      eggTypeId: 'rare_mystery_egg',
+      weight: 35,
+      outcomeType: 'pet',
+      petTypeId: 'ember_fox',
+      isActive: true
+    },
+    {
+      eggTypeId: 'rare_mystery_egg',
+      weight: 45,
+      outcomeType: 'pet',
+      petTypeId: 'aegis_turtle',
+      isActive: true
     }
   ]);
 
-  console.info('Seed completed for egg types, pet types, and loot table.');
+  console.info('Seed completed for egg types, pet types, and loot tables.');
 }
 
 void seed()
