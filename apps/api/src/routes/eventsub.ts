@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { channelPointRedemptions, economyLedger, eggLootTableEntries, hiddenPetEggs, mysteryEggInventory, twitchEvents, users } from '../db/schema.js';
+import { channelPointRedemptions, economyLedger, mysteryEggInventory, twitchEvents, users } from '../db/schema.js';
 import { config } from '../config.js';
 
 type EventSubEnvelope = {
@@ -46,25 +46,6 @@ function verifyEventSubSignature(request: FastifyRequest): boolean {
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
-function resolveLootEntry(entries: Array<{ id: string; weight: number; petTypeId: string | null }>): { id: string; petTypeId: string } {
-  const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
-  const roll = Math.floor(Math.random() * totalWeight);
-  let cumulative = 0;
-  for (const entry of entries) {
-    cumulative += entry.weight;
-    if (roll < cumulative && entry.petTypeId) {
-      return { id: entry.id, petTypeId: entry.petTypeId };
-    }
-  }
-
-  const fallback = entries.find((entry) => entry.petTypeId);
-  if (!fallback?.petTypeId) {
-    throw new Error('No active mystery egg pet outcome configured');
-  }
-
-  return { id: fallback.id, petTypeId: fallback.petTypeId };
-}
-
 async function processRedemption(payload: EventSubEnvelope): Promise<void> {
   const redemption = payload.event;
   if (!redemption) return;
@@ -99,9 +80,6 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       throw new Error('Failed to upsert user for redemption');
     }
 
-    const allEntries = await tx.select({ id: eggLootTableEntries.id, weight: eggLootTableEntries.weight, petTypeId: eggLootTableEntries.petTypeId }).from(eggLootTableEntries).where(and(eq(eggLootTableEntries.eggTypeId, 'mystery_egg'), eq(eggLootTableEntries.outcomeType, 'pet'), eq(eggLootTableEntries.isActive, true)));
-    const resolved = resolveLootEntry(allEntries);
-
     const [savedRedemption] = await tx.insert(channelPointRedemptions).values({
       twitchRedemptionId: redemption.id,
       twitchRewardId: redemption.reward.id,
@@ -115,14 +93,6 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
     if (!savedRedemption) {
       throw new Error('Failed to persist channel point redemption');
     }
-
-    await tx.insert(hiddenPetEggs).values({
-      ownerUserId: user.id,
-      eggTypeId: 'mystery_egg',
-      hiddenPetTypeId: resolved.petTypeId,
-      state: 'hidden',
-      createdFromRedemptionId: savedRedemption.id
-    });
 
     await tx.insert(mysteryEggInventory).values({ userId: user.id, eggTypeId: 'mystery_egg', amount: 1, updatedAt: now }).onConflictDoUpdate({
       target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
