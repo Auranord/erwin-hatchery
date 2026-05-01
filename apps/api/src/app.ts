@@ -13,14 +13,7 @@ const webDist = path.resolve(__dirname, '../apps/web/dist');
 
 export function buildApp() {
   const app = fastify({
-    logger: true,
-    customLogLevel: (request) => {
-      if (!config.LOG_HEALTHCHECK_REQUESTS && request.url === '/api/health') {
-        return 'silent';
-      }
-
-      return 'info';
-    }
+    logger: true
   });
 
   app.register(registerHealthRoute);
