@@ -146,6 +146,25 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.get('/api/admin/egg-types/active', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const activeTypes = await db
+      .select({ id: eggTypes.id, displayName: eggTypes.displayName, isActive: eggTypes.isActive })
+      .from(eggTypes)
+      .where(eq(eggTypes.isActive, true))
+      .orderBy(eggTypes.id);
+
+    return {
+      activeEggTypes: activeTypes.map((eggType) => ({
+        ...eggType,
+        isMysteryEggType: eggType.id.includes('mystery_egg')
+      })),
+      hasActiveMysteryEggType: activeTypes.some((eggType) => eggType.id.includes('mystery_egg'))
+    };
+  });
+
   app.get('/api/admin/ledger', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
@@ -181,7 +200,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       ?? activeEggTypes[0];
 
     if (!selectedEggType) {
+      request.log.warn({ userId, requestedEggTypeId, eggTypeCandidates }, 'Admin test mystery egg grant blocked: no active egg types available');
       return reply.code(400).send({
+        code: 'NO_ACTIVE_EGG_TYPES',
         message: `No active egg types found. Tried: ${eggTypeCandidates.join(', ')}`
       });
     }
