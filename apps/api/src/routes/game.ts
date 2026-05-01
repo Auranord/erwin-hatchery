@@ -11,7 +11,7 @@ type PlayerInventory = {
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number; updatedAt: string }>;
-  incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string } | null }>;
+  incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
 };
 
 function toIsoTimestamp(value: Date | string): string {
@@ -44,7 +44,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     db.select({ consumableTypeId: consumableInventory.consumableTypeId, amount: consumableInventory.amount }).from(consumableInventory).where(eq(consumableInventory.userId, userId)),
     db.select({ resourceType: resources.resourceType, amount: resources.amount, updatedAt: resources.updatedAt }).from(resources).where(eq(resources.userId, userId)),
     db.select({ id: incubatorSlots.id, slotSource: incubatorSlots.slotSource, isAvailable: incubatorSlots.isAvailable }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId)),
-    db.select({ id: incubationJobs.id, incubatorSlotId: incubationJobs.incubatorSlotId, unhatchedEggId: incubationJobs.unhatchedEggId, state: incubationJobs.state, startedAt: incubationJobs.startedAt }).from(incubationJobs).where(and(eq(incubationJobs.ownerUserId, userId), eq(incubationJobs.state, 'running')))
+    db.select({ id: incubationJobs.id, incubatorSlotId: incubationJobs.incubatorSlotId, unhatchedEggId: incubationJobs.unhatchedEggId, state: incubationJobs.state, startedAt: incubationJobs.startedAt, requiredProgressSeconds: incubationJobs.requiredProgressSeconds }).from(incubationJobs).where(and(eq(incubationJobs.ownerUserId, userId), eq(incubationJobs.state, 'running')))
   ]);
   const jobsBySlot = new Map(jobRows.map((job) => [job.incubatorSlotId, job]));
 
@@ -58,7 +58,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       const activeJob = jobsBySlot.get(slot.id);
       return {
         ...slot,
-        activeJob: activeJob ? { id: activeJob.id, unhatchedEggId: activeJob.unhatchedEggId, state: activeJob.state, startedAt: toIsoTimestamp(activeJob.startedAt) } : null
+        activeJob: activeJob ? { id: activeJob.id, unhatchedEggId: activeJob.unhatchedEggId, state: activeJob.state, startedAt: toIsoTimestamp(activeJob.startedAt), requiredProgressSeconds: activeJob.requiredProgressSeconds } : null
       };
     })
   };
