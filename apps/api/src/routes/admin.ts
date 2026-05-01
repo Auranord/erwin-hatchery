@@ -151,14 +151,17 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
 
     const activeTypes = await db
-      .select({ id: eggTypes.id, name: eggTypes.name, isMysteryEgg: eggTypes.isMysteryEgg, isActive: eggTypes.isActive })
+      .select({ id: eggTypes.id, displayName: eggTypes.displayName, isActive: eggTypes.isActive })
       .from(eggTypes)
       .where(eq(eggTypes.isActive, true))
       .orderBy(eggTypes.id);
 
     return {
-      activeEggTypes: activeTypes,
-      hasActiveMysteryEggType: activeTypes.some((eggType) => eggType.isMysteryEgg)
+      activeEggTypes: activeTypes.map((eggType) => ({
+        ...eggType,
+        isMysteryEggType: eggType.id.includes('mystery_egg')
+      })),
+      hasActiveMysteryEggType: activeTypes.some((eggType) => eggType.id.includes('mystery_egg'))
     };
   });
 
