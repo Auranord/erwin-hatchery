@@ -19,9 +19,10 @@ export function buildApp() {
   });
 
   app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
-    (request as typeof request & { rawBody?: string }).rawBody = body;
+    const rawBody = typeof body === 'string' ? body : body.toString('utf8');
+    (request as typeof request & { rawBody?: string }).rawBody = rawBody;
     try {
-      done(null, JSON.parse(body));
+      done(null, JSON.parse(rawBody));
     } catch (error) {
       done(error as Error, undefined);
     }
