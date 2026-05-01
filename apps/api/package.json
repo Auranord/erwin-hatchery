@@ -11,8 +11,10 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo 'No tests for @erwin/api yet'",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:seed": "node dist/db/seed.js"
+    "db:migrate": "pnpm db:migrate:dev",
+    "db:seed": "node dist/db/seed.js",
+    "db:migrate:dev": "drizzle-kit migrate",
+    "db:migrate:runtime": "node dist/db/migrate.js"
   },
   "dependencies": {
     "@erwin/shared": "workspace:*",
