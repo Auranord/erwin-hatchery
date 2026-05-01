@@ -11,7 +11,9 @@ const __dirname = path.dirname(__filename);
 const webDist = path.resolve(__dirname, '../apps/web/dist');
 
 export function buildApp() {
-  const app = fastify({ logger: true });
+  const app = fastify({
+    logger: true
+  });
 
   app.register(registerHealthRoute);
   app.register(registerAuthRoutes);

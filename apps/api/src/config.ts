@@ -3,6 +3,25 @@ import { z } from 'zod';
 
 dotenv.config();
 
+const booleanFromEnv = z
+  .union([z.boolean(), z.string()])
+  .transform((value) => {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+      return true;
+    }
+
+    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+      return false;
+    }
+
+    throw new Error(`Invalid boolean value: ${value}`);
+  });
+
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
@@ -13,7 +32,8 @@ const configSchema = z.object({
   TWITCH_CLIENT_SECRET: z.string().min(1),
   TWITCH_BROADCASTER_ID: z.string().min(1),
   SESSION_SECRET: z.string().min(32),
-  OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback')
+  OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
+  LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
