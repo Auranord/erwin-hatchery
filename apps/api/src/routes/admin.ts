@@ -203,7 +203,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const ledgerId = (request.params as { ledgerId: string }).ledgerId;
     const body = (request.body ?? {}) as { requestId?: string };
     if (!body.requestId) return reply.code(400).send({ message: 'requestId is required' });
-    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, body.requestId)).limit(1);
+    const requestId = body.requestId;
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
     if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
 
     await db.transaction(async (tx) => {
@@ -234,7 +235,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         actorUserId: identity.userId,
         targetUserId: entry.userId,
         actionType: 'revert_ledger_entry',
-        requestId: body.requestId,
+        requestId,
         payload: { ledgerId }
       });
     });
