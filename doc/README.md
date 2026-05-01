@@ -77,6 +77,16 @@ Not yet implemented in Phase 1:
 - Twitch OAuth/EventSub integration
 - Game economy and battle logic
 
+## Admin testing seed dependency
+
+Admin test mystery egg grants require at least one active mystery egg type in `egg_types` (`is_active = true`). The expected seeded default is `mystery_egg` (legacy fallback `basic_mystery_egg` is also supported by the grant route).
+
+Operators should verify seed state with the admin active egg type endpoint before testing grants:
+
+```text
+GET /api/admin/egg-types/active
+```
+
 ## Local development commands
 
 ```bash
