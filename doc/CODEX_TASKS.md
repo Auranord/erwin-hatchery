@@ -2,6 +2,8 @@
 
 ## Progress status
 
+Last reevaluated: **2026-05-01**.
+
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
