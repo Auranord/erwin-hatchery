@@ -50,6 +50,18 @@ type EventSubFeedItem = {
   error: string | null;
 };
 
+
+type EventSubSubscriptionStatus = {
+  enabled: boolean;
+  status: 'enabled' | 'missing' | 'error' | 'duplicate' | 'pending_verification';
+  subscriptionId: string | null;
+  type: string;
+  callback: string;
+  createdAt: string | null;
+  lastCheckedAt: string;
+  error: string | null;
+};
+
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
@@ -68,6 +80,7 @@ export function App(): JSX.Element {
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
+  const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
   async function loadMe(): Promise<void> {
@@ -104,6 +117,7 @@ export function App(): JSX.Element {
       void loadUsers(query);
       void loadAdminHealth();
       void loadEventSubFeed();
+      void loadEventSubSubscriptionStatus();
     }
   }, [isAdminRoute, me?.authenticated]);
 
@@ -169,6 +183,14 @@ export function App(): JSX.Element {
     if (!response.ok) return;
     const payload = (await response.json()) as { events: EventSubFeedItem[] };
     setEventSubFeed(payload.events);
+  }
+
+
+  async function loadEventSubSubscriptionStatus(refresh = false): Promise<void> {
+    const response = await fetch(`/api/admin/debug/eventsub-subscription${refresh ? '?refresh=true' : ''}`, { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as EventSubSubscriptionStatus;
+    setEventSubSubscriptionStatus(payload);
   }
 
   async function loadLedger(userId?: string): Promise<void> {
@@ -238,6 +260,30 @@ export function App(): JSX.Element {
         <section className="card">
           <h2>Inventar (JSON)</h2>
           <pre>{inventoryJson || 'Kein Inventar geladen.'}</pre>
+        </section>
+
+
+        <section className="card">
+          <h2>Debug: EventSub Subscription Status</h2>
+          <button onClick={() => void loadEventSubSubscriptionStatus(true)}>Status aktualisieren</button>
+          {eventSubSubscriptionStatus ? (
+            <>
+              <p>
+                Status:{' '}
+                {eventSubSubscriptionStatus.status === 'enabled'
+                  ? '✅ Aktiviert'
+                  : eventSubSubscriptionStatus.status === 'pending_verification' || eventSubSubscriptionStatus.status === 'duplicate'
+                    ? '⚠ Ausstehend / Mehrdeutig'
+                    : '❌ Nicht eingerichtet / Fehler'}
+              </p>
+              <p>Typ: {eventSubSubscriptionStatus.type}</p>
+              <p>Subscription ID: {eventSubSubscriptionStatus.subscriptionId ?? '—'}</p>
+              <p>Callback: {eventSubSubscriptionStatus.callback}</p>
+              <p>Erstellt: {eventSubSubscriptionStatus.createdAt ? new Date(eventSubSubscriptionStatus.createdAt).toLocaleString() : '—'}</p>
+              <p>Letzte Prüfung: {new Date(eventSubSubscriptionStatus.lastCheckedAt).toLocaleString()}</p>
+              {eventSubSubscriptionStatus.error ? <p>Fehler: {eventSubSubscriptionStatus.error}</p> : null}
+            </>
+          ) : <p>Kein Status geladen.</p>}
         </section>
 
         <section className="card">

@@ -29,6 +29,13 @@
       "when": 1770000000000,
       "tag": "0003_mystery_egg_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780000000000,
+      "tag": "0004_twitch_authorization_tokens",
+      "breakpoints": true
     }
   ]
 }

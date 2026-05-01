@@ -211,3 +211,23 @@ pnpm db:seed
 ```
 
 Codex should add these scripts to `package.json` during implementation.
+
+
+## EventSub auto-sync operations
+
+Set and verify the following production env vars:
+
+- `TWITCH_BROADCASTER_ID`
+- `TWITCH_EVENTSUB_SECRET`
+- `PUBLIC_APP_URL` must be the public HTTPS origin so callback resolves to `${PUBLIC_APP_URL}/api/twitch/eventsub`.
+- `TWITCH_EVENTSUB_AUTO_SYNC=true` (set `false` to disable startup sync)
+
+Troubleshooting:
+
+1. Check API logs for `EventSub sync failed` and HTTP status hints.
+2. Call `GET /api/admin/debug/eventsub-subscription?refresh=true` as admin/owner.
+3. Verify callback URL reachability and Twitch app credentials.
+
+
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions`.
+- If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
