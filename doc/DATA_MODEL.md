@@ -361,3 +361,9 @@ Use weights totaling 10000:
 - `admin_action_logs` stores immutable admin mutations.
 - Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
 - Role changes are the only economy-adjacent admin mutation in milestone 3.
+
+
+## Milestone 3 data flow
+- `twitch_events`: one row per unique Twitch EventSub event ID (`twitch_event_id` unique).
+- `channel_point_redemptions`: one row per unique Twitch redemption ID (`twitch_redemption_id` unique).
+- Valid configured reward redemptions create one hidden pet egg, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
