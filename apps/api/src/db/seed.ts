@@ -1,27 +1,26 @@
 import { db, pool } from './client.js';
-import { eq, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { eggLootTableEntries, eggTypes, petTypes } from './schema.js';
+
+const SEEDED_EGG_TYPE_IDS = ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'] as const;
+
+const BASE_LOOT_ENTRIES = [
+  { weight: 2800, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 10 },
+  { weight: 2200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 20 },
+  { weight: 1200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 35 },
+  { weight: 600, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 60 },
+  { weight: 800, outcomeType: 'pet', petTypeId: 'waldwachtel' },
+  { weight: 800, outcomeType: 'pet', petTypeId: 'glitzer_spatz' },
+  { weight: 700, outcomeType: 'pet', petTypeId: 'moorente' },
+  { weight: 700, outcomeType: 'pet', petTypeId: 'turmeule' },
+  { weight: 200, outcomeType: 'pet', petTypeId: 'goldener_erwin' }
+] as const;
 
 async function seed(): Promise<void> {
   await db.insert(eggTypes).values([
-    {
-      id: 'common_mystery_egg',
-      displayName: 'Gewöhnliches Mystery Ei',
-      baseIncubationSeconds: 14400,
-      isActive: true
-    },
-    {
-      id: 'uncommon_mystery_egg',
-      displayName: 'Ungewöhnliches Mystery Ei',
-      baseIncubationSeconds: 21600,
-      isActive: true
-    },
-    {
-      id: 'rare_mystery_egg',
-      displayName: 'Seltenes Mystery Ei',
-      baseIncubationSeconds: 28800,
-      isActive: true
-    }
+    { id: 'common_mystery_egg', displayName: 'Gewöhnliches Mystery Ei', baseIncubationSeconds: 14400, isActive: true },
+    { id: 'uncommon_mystery_egg', displayName: 'Ungewöhnliches Mystery Ei', baseIncubationSeconds: 21600, isActive: true },
+    { id: 'rare_mystery_egg', displayName: 'Seltenes Mystery Ei', baseIncubationSeconds: 28800, isActive: true }
   ]).onConflictDoUpdate({
     target: eggTypes.id,
     set: {
@@ -32,76 +31,33 @@ async function seed(): Promise<void> {
   });
 
   await db.insert(petTypes).values([
-    {
-      id: 'slime_scout',
-      displayName: 'Schleim-Scout',
-      rarity: 'common',
-      role: 'scout',
-      baseHp: 60,
-      baseAttack: 12,
-      baseDefense: 8,
-      baseSpeed: 15,
-      assetKey: 'pet_slime_scout',
-      isActive: true
-    },
-    {
-      id: 'ember_fox',
-      displayName: 'Glutfuchs',
-      rarity: 'rare',
-      role: 'striker',
-      baseHp: 72,
-      baseAttack: 16,
-      baseDefense: 10,
-      baseSpeed: 17,
-      assetKey: 'pet_ember_fox',
-      isActive: true
-    },
-    {
-      id: 'aegis_turtle',
-      displayName: 'Aegis-Schildkröte',
-      rarity: 'epic',
-      role: 'tank',
-      baseHp: 95,
-      baseAttack: 10,
-      baseDefense: 20,
-      baseSpeed: 7,
-      assetKey: 'pet_aegis_turtle',
-      isActive: true
-    }
+    { id: 'waldwachtel', displayName: 'Waldwachtel', rarity: 'regular', role: 'balanced', baseHp: 100, baseAttack: 10, baseDefense: 8, baseSpeed: 12, assetKey: 'pet_waldwachtel', isActive: true },
+    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', rarity: 'regular', role: 'fast', baseHp: 80, baseAttack: 8, baseDefense: 5, baseSpeed: 18, assetKey: 'pet_glitzer_spatz', isActive: true },
+    { id: 'moorente', displayName: 'Moorente', rarity: 'regular', role: 'tank', baseHp: 120, baseAttack: 7, baseDefense: 12, baseSpeed: 7, assetKey: 'pet_moorente', isActive: true },
+    { id: 'turmeule', displayName: 'Turmeule', rarity: 'regular', role: 'striker', baseHp: 90, baseAttack: 14, baseDefense: 7, baseSpeed: 10, assetKey: 'pet_turmeule', isActive: true },
+    { id: 'goldener_erwin', displayName: 'Goldener Erwin', rarity: 'rare', role: 'allrounder', baseHp: 110, baseAttack: 13, baseDefense: 10, baseSpeed: 13, assetKey: 'pet_goldener_erwin', isActive: true }
   ]).onConflictDoUpdate({
     target: petTypes.id,
-    set: {
-      isActive: true
-    }
+    set: { isActive: true }
   });
 
-  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, 'common_mystery_egg'));
+  await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [...SEEDED_EGG_TYPE_IDS]));
 
-  await db.insert(eggLootTableEntries).values([
-    {
-      eggTypeId: 'common_mystery_egg',
-      weight: 70,
-      outcomeType: 'pet',
-      petTypeId: 'slime_scout',
-      isActive: true
-    },
-    {
-      eggTypeId: 'common_mystery_egg',
-      weight: 23,
-      outcomeType: 'pet',
-      petTypeId: 'ember_fox',
-      isActive: true
-    },
-    {
-      eggTypeId: 'common_mystery_egg',
-      weight: 7,
-      outcomeType: 'pet',
-      petTypeId: 'aegis_turtle',
-      isActive: true
-    }
-  ]);
+  await db.insert(eggLootTableEntries).values(
+    SEEDED_EGG_TYPE_IDS.flatMap((eggTypeId) =>
+      BASE_LOOT_ENTRIES.map((entry) => ({
+        eggTypeId,
+        weight: entry.weight,
+        outcomeType: entry.outcomeType,
+        resourceType: 'resourceType' in entry ? entry.resourceType : null,
+        resourceAmount: 'resourceAmount' in entry ? entry.resourceAmount : null,
+        petTypeId: 'petTypeId' in entry ? entry.petTypeId : null,
+        isActive: true
+      }))
+    )
+  );
 
-  console.info('Seed completed for egg types, pet types, and loot table.');
+  console.info('Seed completed for egg types, pet types, and loot tables.');
 }
 
 void seed()
