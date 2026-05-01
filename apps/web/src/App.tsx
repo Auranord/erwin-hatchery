@@ -39,6 +39,17 @@ type AdminHealthIssue = {
   message: string;
 };
 
+type EventSubFeedItem = {
+  id: string;
+  twitchEventId: string;
+  type: string;
+  source: string;
+  processingStatus: string;
+  receivedAt: string;
+  processedAt: string | null;
+  error: string | null;
+};
+
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
@@ -56,6 +67,7 @@ export function App(): JSX.Element {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
+  const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
   async function loadMe(): Promise<void> {
@@ -91,6 +103,7 @@ export function App(): JSX.Element {
     if (isAdminRoute && me?.authenticated) {
       void loadUsers(query);
       void loadAdminHealth();
+      void loadEventSubFeed();
     }
   }, [isAdminRoute, me?.authenticated]);
 
@@ -148,6 +161,14 @@ export function App(): JSX.Element {
     if (!response.ok) return;
     const payload = (await response.json()) as { inventory: unknown };
     setInventoryJson(JSON.stringify(payload.inventory, null, 2));
+  }
+
+
+  async function loadEventSubFeed(): Promise<void> {
+    const response = await fetch('/api/admin/debug/eventsubs', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { events: EventSubFeedItem[] };
+    setEventSubFeed(payload.events);
   }
 
   async function loadLedger(userId?: string): Promise<void> {
@@ -218,6 +239,23 @@ export function App(): JSX.Element {
           <h2>Inventar (JSON)</h2>
           <pre>{inventoryJson || 'Kein Inventar geladen.'}</pre>
         </section>
+
+        <section className="card">
+          <h2>Debug: Twitch EventSub Feed (letzte 25)</h2>
+          <button onClick={() => void loadEventSubFeed()}>Feed aktualisieren</button>
+          <ul>
+            {eventSubFeed.map((event) => (
+              <li key={event.id}>
+                <strong>{event.type}</strong> · {new Date(event.receivedAt).toLocaleString()} · Status: {event.processingStatus}
+                <div>Event ID: {event.twitchEventId}</div>
+                <div>Quelle: {event.source}</div>
+                {event.processedAt ? <div>Verarbeitet: {new Date(event.processedAt).toLocaleString()}</div> : null}
+                {event.error ? <div>Fehler: {event.error}</div> : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="card">
           <h2>Economy Ledger</h2>
           <ul>

@@ -12,6 +12,7 @@ import {
   pets,
   resources,
   roles,
+  twitchEvents,
   users
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
@@ -163,6 +164,29 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       })),
       hasActiveMysteryEggType: activeTypes.some((eggType) => eggType.id.includes('mystery_egg'))
     };
+  });
+
+
+  app.get('/api/admin/debug/eventsubs', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const events = await db
+      .select({
+        id: twitchEvents.id,
+        twitchEventId: twitchEvents.twitchEventId,
+        type: twitchEvents.type,
+        source: twitchEvents.source,
+        processingStatus: twitchEvents.processingStatus,
+        receivedAt: twitchEvents.receivedAt,
+        processedAt: twitchEvents.processedAt,
+        error: twitchEvents.error
+      })
+      .from(twitchEvents)
+      .orderBy(desc(twitchEvents.receivedAt))
+      .limit(25);
+
+    return { events };
   });
 
   app.get('/api/admin/ledger', async (request, reply) => {
