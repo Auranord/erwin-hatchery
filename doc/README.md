@@ -110,3 +110,12 @@ pnpm build
 - Resolves mystery egg outcome at redemption time and stores hidden pet egg immediately.
 - Increments `mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
+
+
+## EventSub subscription auto-sync (Milestone 3+)
+
+- On API startup, the backend can automatically ensure the required Twitch EventSub subscription exists for `channel.channel_points_custom_reward_redemption.add`.
+- Required env vars: `TWITCH_BROADCASTER_ID`, `TWITCH_EVENTSUB_SECRET`.
+- EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
+- `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
+- Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).

@@ -1,6 +1,7 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { checkActiveEggTypesHealth, ensureCoreSchema } from './db/client.js';
+import { syncChannelPointRedemptionEventSub } from './services/twitchEventSub.js';
 
 const app = buildApp();
 
@@ -11,6 +12,7 @@ const start = async (): Promise<void> => {
     if (!hasActiveEggTypes) {
       throw new Error('NO_ACTIVE_EGG_TYPES: At least one active egg type is required before startup. Run seed after migrations.');
     }
+    await syncChannelPointRedemptionEventSub(app.log);
     await app.listen({ port: config.PORT, host: config.HOST });
     app.log.info(`API listening on ${config.HOST}:${config.PORT}`);
   } catch (error) {
