@@ -1,7 +1,7 @@
 import type { FastifyInstance, RouteShorthandOptions } from 'fastify';
 import { healthResponseSchema } from '@erwin/shared';
 import { config } from '../config.js';
-import { checkDatabaseHealth } from '../db/client.js';
+import { checkActiveEggTypesHealth, checkDatabaseHealth } from '../db/client.js';
 
 export async function registerHealthRoute(app: FastifyInstance): Promise<void> {
   const healthRouteOptions: RouteShorthandOptions = {
@@ -20,4 +20,24 @@ export async function registerHealthRoute(app: FastifyInstance): Promise<void> {
       });
     }
   );
+
+  app.get('/api/admin/health', healthRouteOptions, async (_request, reply) => {
+    const [databaseHealthy, hasActiveEggTypes] = await Promise.all([
+      checkDatabaseHealth(),
+      checkActiveEggTypesHealth()
+    ]);
+
+    if (!databaseHealthy) {
+      return reply.code(503).send({ ok: false, code: 'DATABASE_UNAVAILABLE', message: 'Database health check failed.' });
+    }
+
+    if (!hasActiveEggTypes) {
+      return reply.code(503).send({ ok: false, code: 'NO_ACTIVE_EGG_TYPES', message: 'No active egg types configured.' });
+    }
+
+    return {
+      ok: true,
+      code: 'OK'
+    };
+  });
 }
