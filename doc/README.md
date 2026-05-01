@@ -119,3 +119,7 @@ pnpm build
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
+
+
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions`.
+- If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.

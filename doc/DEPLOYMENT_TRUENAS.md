@@ -227,3 +227,7 @@ Troubleshooting:
 1. Check API logs for `EventSub sync failed` and HTTP status hints.
 2. Call `GET /api/admin/debug/eventsub-subscription?refresh=true` as admin/owner.
 3. Verify callback URL reachability and Twitch app credentials.
+
+
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions`.
+- If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
