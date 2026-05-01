@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import { config } from './config.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
