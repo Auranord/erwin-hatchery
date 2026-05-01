@@ -158,6 +158,21 @@ export function App(): JSX.Element {
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
 
+
+  async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
+    const response = await fetch('/api/game/mystery-eggs/identify', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eggTypeId })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.');
+    }
+  }
+
   async function logout(): Promise<void> {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     await loadMe();
@@ -380,7 +395,7 @@ export function App(): JSX.Element {
                   .map((entry) => (
                     <p key={entry.eggTypeId}>
                       <strong>{formatMysteryEggType(entry.eggTypeId)}:</strong> {entry.amount}{' '}
-                      <button type="button" disabled title="Bald verfügbar">Typ bestimmen</button>
+                      <button type="button" onClick={() => void identifyMysteryEgg(entry.eggTypeId)}>Typ bestimmen</button>
                     </p>
                   ))}
                 <p><strong>Unausgebrütete Eier:</strong> {playerInventory.unhatchedEggs.length}</p>
