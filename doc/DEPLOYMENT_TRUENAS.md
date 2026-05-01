@@ -67,6 +67,7 @@ Use `truenas-deployment.yml` as the single deployment template. Adjust datasets,
 
 Expected services:
 
+- `init`: one-shot migration+seed job (`db:migrate` then `db:seed`)
 - `api`: Erwin Hatchery backend container
 - `postgres`: PostgreSQL database
 
@@ -129,8 +130,21 @@ MVP deployment is manual:
 1. Push to `dev`.
 2. GitHub builds image.
 3. TrueNAS pulls the selected tag.
-4. Restart app.
-5. Verify logs and health endpoint.
+4. Start/update the stack; the `init` service runs migrations and seed data automatically, then exits successfully.
+5. API starts only after `init` completes successfully (plus Postgres health), so traffic is not routed before DB bootstrap finishes.
+6. Verify logs and health endpoint.
+
+API container startup order is enforced in-container:
+
+1. `pnpm db:migrate`
+2. `pnpm db:seed`
+3. `pnpm start`
+
+The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+
+Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
+
+Prerequisite: at least one active egg type must exist before API startup and admin operations. The startup seed step ensures this baseline exists; `GET /api/admin/health` still returns `503` with `NO_ACTIVE_EGG_TYPES` if seed is skipped or fails.
 
 ## Health endpoint
 
@@ -146,7 +160,25 @@ Expected response:
 {"ok":true,"database":"ok","version":"..."}
 ```
 
-Traefik/monitoring can use this route.
+Admin/game-economy readiness check:
+
+```text
+GET /api/admin/health
+```
+
+Expected response when configured correctly:
+
+```json
+{"ok":true,"code":"OK"}
+```
+
+Expected response when seed prerequisite is missing:
+
+```json
+{"ok":false,"code":"NO_ACTIVE_EGG_TYPES","message":"No active egg types configured."}
+```
+
+Use `GET /api/admin/health` as the container health/readiness probe so orchestrators wait for init completion and seed prerequisites before routing traffic.
 
 ## Backup plan
 

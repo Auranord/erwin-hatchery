@@ -6,6 +6,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uniqueIndex,
   timestamp,
   uuid
 } from 'drizzle-orm/pg-core';
@@ -45,8 +46,20 @@ export const roles = pgTable('roles', {
   role: text('role').notNull(),
   createdByUserId: uuid('created_by_user_id').references(() => users.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  userRoleUnique: uniqueIndex('roles_user_id_role_idx').on(table.userId, table.role)
+}));
 
+
+export const adminActionLogs = pgTable('admin_action_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  actorUserId: uuid('actor_user_id').notNull().references(() => users.id),
+  targetUserId: uuid('target_user_id').references(() => users.id),
+  actionType: text('action_type').notNull(),
+  requestId: text('request_id').notNull().unique(),
+  payload: jsonb('payload').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
 export const twitchEvents = pgTable('twitch_events', {
   id: uuid('id').defaultRandom().primaryKey(),
   twitchEventId: text('twitch_event_id').notNull().unique(),
@@ -130,21 +143,18 @@ export const eggLootTableEntries = pgTable('egg_loot_table_entries', {
   isActive: boolean('is_active').notNull().default(true)
 });
 
-export const mysteryEggs = pgTable('mystery_eggs', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
-  eggTypeId: text('egg_type_id').notNull().references(() => eggTypes.id),
-  state: text('state').notNull(),
-  hiddenOutcomeType: text('hidden_outcome_type').notNull(),
-  hiddenResourceType: text('hidden_resource_type'),
-  hiddenResourceAmount: integer('hidden_resource_amount'),
-  hiddenPetTypeId: text('hidden_pet_type_id'),
-  createdFromRedemptionId: uuid('created_from_redemption_id').references(() => channelPointRedemptions.id),
-  rollSeedHash: text('roll_seed_hash'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  identifiedAt: timestamp('identified_at', { withTimezone: true }),
-  consumedAt: timestamp('consumed_at', { withTimezone: true })
-});
+export const mysteryEggInventory = pgTable(
+  'mystery_egg_inventory',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id),
+    eggTypeId: text('egg_type_id').notNull().references(() => eggTypes.id),
+    amount: integer('amount').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.eggTypeId] })
+  })
+);
 
 export const hiddenPetEggs = pgTable('hidden_pet_eggs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -152,7 +162,7 @@ export const hiddenPetEggs = pgTable('hidden_pet_eggs', {
   eggTypeId: text('egg_type_id').notNull().references(() => eggTypes.id),
   hiddenPetTypeId: text('hidden_pet_type_id').notNull().references(() => petTypes.id),
   state: text('state').notNull(),
-  createdFromMysteryEggId: uuid('created_from_mystery_egg_id').notNull().references(() => mysteryEggs.id),
+  createdFromRedemptionId: uuid('created_from_redemption_id').references(() => channelPointRedemptions.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 

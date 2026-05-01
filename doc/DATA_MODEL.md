@@ -6,7 +6,8 @@ This document describes the recommended database shape. Exact names can change, 
 
 - Twitch user ID is the canonical identity.
 - All economy mutations are server-side and ledgered.
-- Egg contents are determined at redemption time and hidden until later.
+- Mystery eggs are stored as per-user integer balances by egg type.
+- Egg contents are determined at identify/open time for mystery eggs and are ledgered.
 - Database should support future features: more egg types, fusion, training, items, buffs, battle formulas.
 - Events must be reversible where practical, especially admin-started battles.
 
@@ -147,27 +148,20 @@ is_active boolean not null default true
 
 Use integer weights, not floating percentages. Example: total weight 10000 for basis points.
 
-### mystery_eggs
+### mystery_egg_inventory
 
-Eggs created by Channel Point redemptions.
+Mystery eggs tracked as integer balances, not per-instance rows.
 
 ```text
-id uuid primary key
-owner_user_id uuid references users(id)
+user_id uuid references users(id)
 egg_type_id text references egg_types(id)
-state text not null -- unidentifed, identified, consumed, deleted
-hidden_outcome_type text not null -- resource, hidden_pet_egg
-hidden_resource_type text nullable
-hidden_resource_amount integer nullable
-hidden_pet_type_id text nullable
-created_from_redemption_id uuid nullable references channel_point_redemptions(id)
-roll_seed_hash text nullable
-created_at timestamp
-identified_at timestamp nullable
-consumed_at timestamp nullable
+amount integer not null default 0
+updated_at timestamp
+primary key(user_id, egg_type_id)
 ```
 
-The hidden outcome is determined at creation time. The client must not receive hidden fields until allowed.
+When a redemption grants a mystery egg, increment this balance and write an economy ledger row.
+When a player identifies a mystery egg, decrement this balance in the same transaction that resolves the outcome and writes ledger rows.
 
 ### hidden_pet_eggs
 
@@ -179,7 +173,7 @@ owner_user_id uuid references users(id)
 egg_type_id text references egg_types(id)
 hidden_pet_type_id text references pet_types(id)
 state text not null -- ready, incubating, hatched, deleted
-created_from_mystery_egg_id uuid references mystery_eggs(id)
+created_from_redemption_id uuid nullable references channel_point_redemptions(id)
 created_at timestamp
 ```
 
@@ -360,3 +354,10 @@ Use weights totaling 10000:
  700 pet turmeule
  200 pet goldener_erwin
 ```
+
+
+## Admin action log
+
+- `admin_action_logs` stores immutable admin mutations.
+- Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
+- Role changes are the only economy-adjacent admin mutation in milestone 3.

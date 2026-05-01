@@ -5,14 +5,53 @@
 name: erwin-hatchery-BRANCH
 
 services:
+  init:
+    image: ghcr.io/auranord/erwin-hatchery:BRANCH
+    container_name: erwin-hatchery-init-BRANCH
+    pull_policy: always
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      TZ: Europe/Berlin
+
+      # Choose postgres password
+      DATABASE_URL: "postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery"
+
+      # Choose domain for front and backend
+      PUBLIC_APP_URL: "https://hatchery.DOMAIN"
+      PUBLIC_API_URL: "https://hatchery.DOMAIN"
+      CORS_ORIGIN: "https://hatchery.DOMAIN"
+
+      TWITCH_CLIENT_ID: ""
+      TWITCH_CLIENT_SECRET: ""
+      TWITCH_BROADCASTER_ID: ""
+      TWITCH_CHANNEL_POINT_REWARD_ID: ""
+      TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
+      SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
+      OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
+
+    command: ["sh", "-c", "pnpm --filter @erwin/api db:migrate:runtime && pnpm --filter @erwin/api db:seed"]
+
+    networks:
+      - erwin_internal_BRANCH
+
   api:
     image: ghcr.io/auranord/erwin-hatchery:BRANCH
     container_name: erwin-hatchery-api-BRANCH
     pull_policy: always
     restart: unless-stopped
+    command: ["./scripts/container-start.sh"]
     depends_on:
       postgres:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
 
     environment:
       NODE_ENV: production
@@ -49,7 +88,7 @@ services:
       - /MOUNT/erwin-hatchery/logs:/app/logs
 
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/admin/health"]
       interval: 30s
       timeout: 5s
       retries: 3

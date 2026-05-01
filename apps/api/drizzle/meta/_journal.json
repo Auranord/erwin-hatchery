@@ -15,6 +15,20 @@
       "when": 1761000000000,
       "tag": "0001_auth_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762000000000,
+      "tag": "0002_admin_panel_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770000000000,
+      "tag": "0003_mystery_egg_inventory",
+      "breakpoints": true
     }
   ]
 }

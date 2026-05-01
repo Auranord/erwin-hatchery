@@ -13,6 +13,46 @@ permissions:
   packages: write
 
 jobs:
+  test-db-setup:
+    if: github.ref == 'refs/heads/testing'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: erwin_hatchery
+          POSTGRES_USER: erwin_hatchery
+          POSTGRES_PASSWORD: erwin_hatchery
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erwin_hatchery -d erwin_hatchery"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deterministic migration and seed (testing)
+        env:
+          DATABASE_URL: postgres://erwin_hatchery:erwin_hatchery@localhost:5432/erwin_hatchery
+        run: |
+          pnpm db:migrate
+          pnpm db:seed
+
   docker:
     runs-on: ubuntu-latest
     steps:

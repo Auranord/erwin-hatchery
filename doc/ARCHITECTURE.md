@@ -73,7 +73,8 @@ The backend owns:
 - provisional player creation
 - user account/session state
 - all inventory/economy mutations
-- egg content rolls
+- mystery egg balance increments/decrements
+- egg content rolls at identify/open time
 - incubation calculations
 - pet stat generation
 - admin panel API
