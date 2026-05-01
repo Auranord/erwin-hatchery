@@ -82,12 +82,16 @@ export function App(): JSX.Element {
   }
 
   async function grantTestEgg(userId: string): Promise<void> {
-    await fetch(`/api/admin/users/${userId}/grant-test-mystery-egg`, {
+    const response = await fetch(`/api/admin/users/${userId}/grant-test-mystery-egg`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: crypto.randomUUID(), eggTypeId: 'mystery_egg', amount: 1 })
+      body: JSON.stringify({ requestId: crypto.randomUUID(), amount: 1 })
     });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Test-Mystery-Ei konnte nicht vergeben werden.');
+    }
     await loadInventory(userId);
     await loadLedger(userId);
   }
