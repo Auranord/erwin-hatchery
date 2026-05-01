@@ -78,7 +78,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
 
     const body = (request.body ?? {}) as { eggTypeId?: string };
-    if (!body.eggTypeId) {
+    const eggTypeId = body.eggTypeId;
+    if (!eggTypeId) {
       return reply.code(400).send({ message: 'eggTypeId is required' });
     }
 
@@ -86,7 +87,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [inventoryRow] = await tx
         .select({ amount: mysteryEggInventory.amount })
         .from(mysteryEggInventory)
-        .where(and(eq(mysteryEggInventory.userId, identity.userId), eq(mysteryEggInventory.eggTypeId, body.eggTypeId!)))
+        .where(and(eq(mysteryEggInventory.userId, identity.userId), eq(mysteryEggInventory.eggTypeId, eggTypeId)))
         .limit(1);
 
       if (!inventoryRow || inventoryRow.amount < 1) {
@@ -102,10 +103,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           weight: eggLootTableEntries.weight
         })
         .from(eggLootTableEntries)
-        .where(and(eq(eggLootTableEntries.eggTypeId, body.eggTypeId), eq(eggLootTableEntries.isActive, true), sql`${eggLootTableEntries.weight} > 0`));
+        .where(and(eq(eggLootTableEntries.eggTypeId, eggTypeId), eq(eggLootTableEntries.isActive, true), sql`${eggLootTableEntries.weight} > 0`));
 
       if (entries.length === 0) {
-        throw new Error(`No active loot table entries for egg type ${body.eggTypeId}`);
+        throw new Error(`No active loot table entries for egg type ${eggTypeId}`);
       }
 
       const picked = pickWeightedOutcome(entries);
@@ -113,12 +114,12 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       await tx
         .update(mysteryEggInventory)
         .set({ amount: sql`greatest(${mysteryEggInventory.amount} - 1, 0)`, updatedAt: new Date() })
-        .where(and(eq(mysteryEggInventory.userId, identity.userId), eq(mysteryEggInventory.eggTypeId, body.eggTypeId!)));
+        .where(and(eq(mysteryEggInventory.userId, identity.userId), eq(mysteryEggInventory.eggTypeId, eggTypeId)));
 
       if (picked.outcomeType === 'pet' && picked.petTypeId) {
         const [egg] = await tx.insert(unhatchedEggs).values({
           ownerUserId: identity.userId,
-          eggTypeId: body.eggTypeId,
+          eggTypeId: eggTypeId,
           hiddenPetTypeId: picked.petTypeId,
           state: 'ready_for_incubation'
         }).returning({ id: unhatchedEggs.id });
@@ -129,7 +130,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           eventType: 'mystery_egg_identified_to_unhatched_egg',
           sourceType: 'player_action',
           sourceId: egg?.id ?? null,
-          delta: { mysteryEggInventory: [{ eggTypeId: body.eggTypeId, amountDelta: -1 }], unhatchedEggs: [{ eggTypeId: body.eggTypeId, amountDelta: 1 }] }
+          delta: { mysteryEggInventory: [{ eggTypeId: eggTypeId, amountDelta: -1 }], unhatchedEggs: [{ eggTypeId: eggTypeId, amountDelta: 1 }] }
         });
 
         return { kind: 'unhatched_egg' as const };
@@ -137,7 +138,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
       const resourceAmount = picked.resourceAmount ?? 0;
       if (!picked.resourceType || resourceAmount <= 0) {
-        throw new Error(`Loot table entry for ${body.eggTypeId} is invalid`);
+        throw new Error(`Loot table entry for ${eggTypeId} is invalid`);
       }
 
       await tx.insert(resources).values({
@@ -156,7 +157,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         eventType: 'mystery_egg_identified_to_egg_resources',
         sourceType: 'player_action',
         delta: {
-          mysteryEggInventory: [{ eggTypeId: body.eggTypeId, amountDelta: -1 }],
+          mysteryEggInventory: [{ eggTypeId: eggTypeId, amountDelta: -1 }],
           resources: [{ resourceType: picked.resourceType, amountDelta: resourceAmount }]
         }
       });
