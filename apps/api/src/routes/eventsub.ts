@@ -18,10 +18,23 @@ type EventSubEnvelope = {
   };
 };
 
+
+function headerValueToString(value: string | string[] | undefined): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value) && typeof value[0] === 'string') {
+    return value[0];
+  }
+
+  return null;
+}
+
 function verifyEventSubSignature(request: FastifyRequest): boolean {
-  const id = request.headers['twitch-eventsub-message-id'];
-  const timestamp = request.headers['twitch-eventsub-message-timestamp'];
-  const signature = request.headers['twitch-eventsub-message-signature'];
+  const id = headerValueToString(request.headers['twitch-eventsub-message-id']);
+  const timestamp = headerValueToString(request.headers['twitch-eventsub-message-timestamp']);
+  const signature = headerValueToString(request.headers['twitch-eventsub-message-signature']);
   const body = (request as FastifyRequest & { rawBody?: string }).rawBody;
 
   if (!id || !timestamp || !signature || !body) {
@@ -99,6 +112,10 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       processedAt: now
     }).returning({ id: channelPointRedemptions.id });
 
+    if (!savedRedemption) {
+      throw new Error('Failed to persist channel point redemption');
+    }
+
     await tx.insert(hiddenPetEggs).values({
       ownerUserId: user.id,
       eggTypeId: 'mystery_egg',
@@ -118,7 +135,7 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       eventType: 'channel_point_redemption_granted_mystery_egg',
       sourceType: 'channel_point_redemption',
       sourceId: savedRedemption.id,
-      delta: { mysteryEggInventory: { mystery_egg: 1 } }
+      delta: { mysteryEggInventory: [{ eggTypeId: 'mystery_egg', amountDelta: 1 }] }
     });
   });
 }
@@ -129,7 +146,7 @@ function badRequest(reply: FastifyReply): FastifyReply {
 
 export async function registerEventSubRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/twitch/eventsub', async (request, reply) => {
-    const messageType = request.headers['twitch-eventsub-message-type'];
+    const messageType = headerValueToString(request.headers['twitch-eventsub-message-type']);
     if (!messageType || !verifyEventSubSignature(request)) {
       return badRequest(reply);
     }
