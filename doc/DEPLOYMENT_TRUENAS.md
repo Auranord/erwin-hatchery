@@ -134,7 +134,17 @@ MVP deployment is manual:
 5. API starts only after `init` completes successfully (plus Postgres health), so traffic is not routed before DB bootstrap finishes.
 6. Verify logs and health endpoint.
 
-Prerequisite: at least one active egg type must exist before API startup and admin operations. `GET /api/admin/health` returns `503` with `NO_ACTIVE_EGG_TYPES` when this is missing.
+API container startup order is enforced in-container:
+
+1. `pnpm db:migrate`
+2. `pnpm db:seed`
+3. `pnpm start`
+
+The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+
+Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
+
+Prerequisite: at least one active egg type must exist before API startup and admin operations. The startup seed step ensures this baseline exists; `GET /api/admin/health` still returns `503` with `NO_ACTIVE_EGG_TYPES` if seed is skipped or fails.
 
 ## Health endpoint
 

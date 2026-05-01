@@ -46,6 +46,7 @@ services:
     container_name: erwin-hatchery-api-BRANCH
     pull_policy: always
     restart: unless-stopped
+    command: ["./scripts/container-start.sh"]
     depends_on:
       postgres:
         condition: service_healthy
