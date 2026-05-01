@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
+import { registerGameRoutes } from './routes/game.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,7 @@ export function buildApp() {
   app.register(registerHealthRoute);
   app.register(registerAuthRoutes);
   app.register(registerAdminRoutes);
+  app.register(registerGameRoutes);
 
   app.register(fastifyStatic, {
     root: webDist,
