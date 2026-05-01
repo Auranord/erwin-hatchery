@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { consumableInventory, hiddenPetEggs, mysteryEggInventory, pets, resources } from '../db/schema.js';
+import { consumableInventory, unhatchedEggs, mysteryEggInventory, pets, resources } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number; updatedAt: string }>;
-  hiddenPetEggs: Array<{ id: string; eggTypeId: string; state: string }>;
+  unhatchedEggs: Array<{ id: string; eggTypeId: string; state: string }>;
   hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number; updatedAt: string }>;
@@ -18,9 +18,9 @@ function toIsoTimestamp(value: Date | string): string {
 }
 
 async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
-  const [mysteryEggs, hiddenEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
+  const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows] = await Promise.all([
     db.select({ eggTypeId: mysteryEggInventory.eggTypeId, amount: mysteryEggInventory.amount, updatedAt: mysteryEggInventory.updatedAt }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
-    db.select({ id: hiddenPetEggs.id, eggTypeId: hiddenPetEggs.eggTypeId, state: hiddenPetEggs.state }).from(hiddenPetEggs).where(eq(hiddenPetEggs.ownerUserId, userId)),
+    db.select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
     db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
     db.select({ consumableTypeId: consumableInventory.consumableTypeId, amount: consumableInventory.amount }).from(consumableInventory).where(eq(consumableInventory.userId, userId)),
     db.select({ resourceType: resources.resourceType, amount: resources.amount, updatedAt: resources.updatedAt }).from(resources).where(eq(resources.userId, userId))
@@ -28,7 +28,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
 
   return {
     mysteryEggs: mysteryEggs.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) })),
-    hiddenPetEggs: hiddenEggRows,
+    unhatchedEggs: unhatchedEggRows,
     hatchedPets: petRows.map((row) => ({ ...row, createdAt: toIsoTimestamp(row.createdAt) })),
     consumables: consumableRows,
     crackedEggResources: resourceRows.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) }))

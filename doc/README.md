@@ -2,7 +2,7 @@
 
 **Erwin Hatchery** is a mobile-first Twitch community minigame for NTKOH.
 
-Viewers redeem Twitch Channel Points, called **eggs**, to receive mystery eggs in a web app. Eggs can become hidden pet eggs or crack into resources. Pets hatch over time, can later be trained/equipped/styled, and can participate in stream events such as a simple battle/leaderboard event.
+Viewers redeem Twitch Channel Points, called **eggs**, to receive mystery eggs in a web app. Eggs can become unhatched eggs or crack into resources. Pets hatch over time, can later be trained/equipped/styled, and can participate in stream events such as a simple battle/leaderboard event.
 
 The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS SCALE behind Traefik, with containers built through GitHub Actions and published to GitHub Container Registry.
 
@@ -14,8 +14,8 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 4. Viewer identifies eggs in the app.
 5. Identified eggs either:
    - become cracked egg resources, or
-   - move into a hidden pet egg inventory.
-6. Viewer chooses hidden pet eggs to incubate.
+   - move into an unhatched egg inventory.
+6. Viewer chooses unhatched eggs to incubate.
 7. Incubation progresses over time and speeds up while the stream is live.
 8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
 9. Viewer selects one pet for the next admin-started stream event.
@@ -107,7 +107,7 @@ pnpm build
 - Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for configured `TWITCH_CHANNEL_POINT_REWARD_ID`.
 - Creates a provisional user by Twitch user ID when needed.
-- Resolves mystery egg outcome at redemption time and stores hidden pet egg immediately.
+- Resolves mystery egg outcome at redemption time and stores unhatched egg immediately.
 - Increments `mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 

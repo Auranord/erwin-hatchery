@@ -144,7 +144,7 @@ Battle resolution must be revertible in MVP.
 - Unique Twitch redemption IDs.
 - Idempotent processors.
 - Server-side rolls only.
-- Hidden egg outcomes never sent to client before reveal.
+- Unhatched egg outcomes never sent to client before reveal.
 - Rate limits for authenticated actions.
 - Overlay route token or signed route secret.
 - Admin API protected by role checks.

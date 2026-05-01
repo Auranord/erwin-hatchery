@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS mystery_egg_inventory (
   PRIMARY KEY(user_id, egg_type_id)
 );
 
-CREATE TABLE IF NOT EXISTS hidden_pet_eggs (
+CREATE TABLE IF NOT EXISTS unhatched_eggs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
   egg_type_id text NOT NULL REFERENCES egg_types(id),
@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS incubator_slots (
 CREATE TABLE IF NOT EXISTS incubation_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
-  hidden_pet_egg_id uuid NOT NULL REFERENCES hidden_pet_eggs(id),
+  unhatched_egg_id uuid NOT NULL REFERENCES unhatched_eggs(id),
   incubator_slot_id uuid NOT NULL REFERENCES incubator_slots(id),
   state text NOT NULL,
   started_at timestamptz NOT NULL DEFAULT now(),
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS pets (
   defense integer NOT NULL,
   speed integer NOT NULL,
   stat_rolls jsonb NOT NULL,
-  source_hidden_pet_egg_id uuid NOT NULL REFERENCES hidden_pet_eggs(id),
+  source_unhatched_egg_id uuid NOT NULL REFERENCES unhatched_eggs(id),
   is_favorite boolean NOT NULL DEFAULT false,
   selected_for_event boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),

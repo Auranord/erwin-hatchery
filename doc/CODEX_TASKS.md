@@ -88,7 +88,7 @@ Acceptance:
 - Show resource balance.
 - Show mystery eggs.
 - Identify egg action.
-- Show hidden pet eggs.
+- Show unhatched eggs.
 - Show incubator slot(s).
 - Start incubation.
 - Show hatched pets.

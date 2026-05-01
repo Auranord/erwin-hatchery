@@ -50,7 +50,7 @@ A Twitch user can exist in three practical states:
 Each player needs separate inventories for:
 
 - Mystery eggs (integer balance per egg type, not individual rows)
-- Hidden pet eggs
+- Unhatched eggs
 - Hatched pets
 - Consumables
 - Resources, starting with cracked eggs
@@ -76,11 +76,11 @@ Outcome B: egg contains a pet.
 
 - Pet type remains hidden.
 - Mystery egg is consumed.
-- A hidden pet egg is added to the pet egg inventory.
+- An unhatched egg is added to the pet egg inventory.
 
 ### 3. Pet egg incubated
 
-The player selects a hidden pet egg and places it in an incubator slot.
+The player selects an unhatched egg and places it in an incubator slot.
 
 ### 4. Pet egg hatches
 
@@ -159,11 +159,11 @@ Suggested granular loot table:
 | Resource medium | 22% | 20 cracked eggs |
 | Resource large | 12% | 35 cracked eggs |
 | Resource huge | 6% | 60 cracked eggs |
-| Pet | 8% | Waldwachtel hidden pet egg |
-| Pet | 8% | Glitzer-Spatz hidden pet egg |
-| Pet | 7% | Moorente hidden pet egg |
-| Pet | 7% | Turmeule hidden pet egg |
-| Rare pet | 2% | Goldener Erwin hidden pet egg |
+| Pet | 8% | Waldwachtel unhatched egg |
+| Pet | 8% | Glitzer-Spatz unhatched egg |
+| Pet | 7% | Moorente unhatched egg |
+| Pet | 7% | Turmeule unhatched egg |
+| Rare pet | 2% | Goldener Erwin unhatched egg |
 
 Total: 100%.
 

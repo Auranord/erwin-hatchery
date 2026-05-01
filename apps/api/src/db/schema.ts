@@ -167,7 +167,7 @@ export const mysteryEggInventory = pgTable(
   })
 );
 
-export const hiddenPetEggs = pgTable('hidden_pet_eggs', {
+export const unhatchedEggs = pgTable('unhatched_eggs', {
   id: uuid('id').defaultRandom().primaryKey(),
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
   eggTypeId: text('egg_type_id').notNull().references(() => eggTypes.id),
@@ -191,7 +191,7 @@ export const incubatorSlots = pgTable('incubator_slots', {
 export const incubationJobs = pgTable('incubation_jobs', {
   id: uuid('id').defaultRandom().primaryKey(),
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
-  hiddenPetEggId: uuid('hidden_pet_egg_id').notNull().references(() => hiddenPetEggs.id),
+  unhatchedEggId: uuid('unhatched_egg_id').notNull().references(() => unhatchedEggs.id),
   incubatorSlotId: uuid('incubator_slot_id').notNull().references(() => incubatorSlots.id),
   state: text('state').notNull(),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
@@ -210,7 +210,7 @@ export const pets = pgTable('pets', {
   defense: integer('defense').notNull(),
   speed: integer('speed').notNull(),
   statRolls: jsonb('stat_rolls').notNull(),
-  sourceHiddenPetEggId: uuid('source_hidden_pet_egg_id').notNull().references(() => hiddenPetEggs.id),
+  sourceUnhatchedEggId: uuid('source_unhatched_egg_id').notNull().references(() => unhatchedEggs.id),
   isFavorite: boolean('is_favorite').notNull().default(false),
   selectedForEvent: boolean('selected_for_event').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
