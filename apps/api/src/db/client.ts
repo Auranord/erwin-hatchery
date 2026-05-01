@@ -1,7 +1,4 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { config } from '../config.js';
 
@@ -21,13 +18,6 @@ export async function checkActiveEggTypesHealth(): Promise<boolean> {
   return result.rows[0]?.ok === true;
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const migrationsFolder = path.resolve(__dirname, '../../drizzle');
-
-export async function runDatabaseMigrations(): Promise<void> {
-  await migrate(db, { migrationsFolder });
-}
 
 export async function ensureCoreSchema(): Promise<void> {
   await pool.query(`

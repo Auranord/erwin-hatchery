@@ -19,6 +19,6 @@ run_step() {
   fi
 }
 
-run_step "db:migrate" pnpm db:migrate
+run_step "db:migrate:runtime" pnpm db:migrate:runtime
 run_step "db:seed" pnpm db:seed
 run_step "start" pnpm start
