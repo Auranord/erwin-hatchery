@@ -1,20 +1,32 @@
 import { db, pool } from './client.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { eggLootTableEntries, eggTypes, petTypes } from './schema.js';
 
 async function seed(): Promise<void> {
   await db.insert(eggTypes).values([
     {
-      id: 'mystery_egg',
-      displayName: 'Mystery Ei',
+      id: 'common_mystery_egg',
+      displayName: 'Gewöhnliches Mystery Ei',
       baseIncubationSeconds: 14400,
+      isActive: true
+    },
+    {
+      id: 'uncommon_mystery_egg',
+      displayName: 'Ungewöhnliches Mystery Ei',
+      baseIncubationSeconds: 21600,
+      isActive: true
+    },
+    {
+      id: 'rare_mystery_egg',
+      displayName: 'Seltenes Mystery Ei',
+      baseIncubationSeconds: 28800,
       isActive: true
     }
   ]).onConflictDoUpdate({
     target: eggTypes.id,
     set: {
-      displayName: 'Mystery Ei',
-      baseIncubationSeconds: 14400,
+      displayName: sql`excluded.display_name`,
+      baseIncubationSeconds: sql`excluded.base_incubation_seconds`,
       isActive: true
     }
   });
@@ -63,25 +75,25 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, 'mystery_egg'));
+  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, 'common_mystery_egg'));
 
   await db.insert(eggLootTableEntries).values([
     {
-      eggTypeId: 'mystery_egg',
+      eggTypeId: 'common_mystery_egg',
       weight: 70,
       outcomeType: 'pet',
       petTypeId: 'slime_scout',
       isActive: true
     },
     {
-      eggTypeId: 'mystery_egg',
+      eggTypeId: 'common_mystery_egg',
       weight: 23,
       outcomeType: 'pet',
       petTypeId: 'ember_fox',
       isActive: true
     },
     {
-      eggTypeId: 'mystery_egg',
+      eggTypeId: 'common_mystery_egg',
       weight: 7,
       outcomeType: 'pet',
       petTypeId: 'aegis_turtle',

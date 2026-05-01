@@ -155,12 +155,12 @@ export function App(): JSX.Element {
     await loadUsers(query);
   }
 
-  async function grantTestEgg(userId: string): Promise<void> {
+  async function grantTestEgg(userId: string, eggTypeId: 'common_mystery_egg' | 'uncommon_mystery_egg' | 'rare_mystery_egg'): Promise<void> {
     const response = await fetch(`/api/admin/users/${userId}/grant-test-mystery-egg`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: crypto.randomUUID(), amount: 1 })
+      body: JSON.stringify({ requestId: crypto.randomUUID(), eggTypeId, amount: 1 })
     });
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -250,7 +250,9 @@ export function App(): JSX.Element {
                 </div>
               ) : <p>Nur Owner dürfen Rollen ändern.</p>}
               <div>
-                <button onClick={() => void grantTestEgg(selected.id)}>Test-Mystery-Ei vergeben</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'common_mystery_egg')}>Gewöhnliches Test-Mystery-Ei</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'uncommon_mystery_egg')}>Ungewöhnliches Test-Mystery-Ei</button>
+                <button onClick={() => void grantTestEgg(selected.id, 'rare_mystery_egg')}>Seltenes Test-Mystery-Ei</button>
                 <button onClick={() => void loadInventory(selected.id)}>Inventar laden</button>
                 <button onClick={() => void loadLedger(selected.id)}>Ledger laden</button>
               </div>

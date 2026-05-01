@@ -79,7 +79,7 @@ Not yet implemented in Phase 1:
 
 ## Admin testing seed dependency
 
-Admin test mystery egg grants require at least one active mystery egg type in `egg_types` (`is_active = true`). The expected seeded default is `mystery_egg` (legacy fallback `basic_mystery_egg` is also supported by the grant route).
+Admin test mystery egg grants require at least one active mystery egg type in `egg_types` (`is_active = true`). The expected seeded defaults are `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
 
 Operators should verify seed state with the admin active egg type endpoint before testing grants:
 
@@ -108,7 +108,7 @@ pnpm build
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for configured `TWITCH_CHANNEL_POINT_REWARD_ID`.
 - Creates a provisional user by Twitch user ID when needed.
 - Resolves mystery egg outcome at redemption time and stores unhatched egg immediately.
-- Increments `mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
+- Increments `common_mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
 

@@ -124,7 +124,7 @@ primary key(user_id, resource_type)
 Config table for egg types.
 
 ```text
-id text primary key -- basic_mystery_egg
+id text primary key -- common_mystery_egg / uncommon_mystery_egg / rare_mystery_egg
 display_name text not null
 base_incubation_seconds integer not null
 is_active boolean not null default true
@@ -336,7 +336,9 @@ goldener_erwin   Goldener Erwin   rare    allrounder 110 13 10 13
 ### Egg type
 
 ```text
-basic_mystery_egg | 1x Mystery Ei | base incubation time configurable
+common_mystery_egg | 1x Gewöhnliches Mystery Ei | seeded
+uncommon_mystery_egg | 1x Ungewöhnliches Mystery Ei | seeded
+rare_mystery_egg | 1x Seltenes Mystery Ei | seeded
 ```
 
 ### Basic egg loot table weights
@@ -366,4 +368,4 @@ Use weights totaling 10000:
 ## Milestone 3 data flow
 - `twitch_events`: one row per unique Twitch EventSub event ID (`twitch_event_id` unique).
 - `channel_point_redemptions`: one row per unique Twitch redemption ID (`twitch_redemption_id` unique).
-- Valid configured reward redemptions create one unhatched egg, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
+- Valid configured reward redemptions currently create one `common_mystery_egg` inventory unit, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.

@@ -229,7 +229,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
     if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
 
-    const eggTypeCandidates = requestedEggTypeId ? [requestedEggTypeId] : ['basic_mystery_egg', 'mystery_egg'];
+    const eggTypeCandidates = requestedEggTypeId ? [requestedEggTypeId] : ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'];
     const availableEggTypes = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes);
     const activeEggTypes = availableEggTypes.filter((eggType) => eggType.isActive);
     const selectedEggType = eggTypeCandidates
