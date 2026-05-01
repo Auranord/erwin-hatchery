@@ -49,7 +49,7 @@ A Twitch user can exist in three practical states:
 
 Each player needs separate inventories for:
 
-- Mystery eggs
+- Mystery eggs (integer balance per egg type, not individual rows)
 - Hidden pet eggs
 - Hatched pets
 - Consumables
@@ -59,9 +59,9 @@ Each player needs separate inventories for:
 
 ### 1. Mystery egg created
 
-A Twitch Channel Point redemption creates a mystery egg.
+A Twitch Channel Point redemption increments the player's mystery egg balance for that egg type by +1.
 
-The egg contents are determined immediately at redemption time and stored server-side, but not shown to the user yet.
+The exact outcome is rolled when the player identifies/opens an egg, in a server transaction with ledger rows.
 
 ### 2. Egg identified
 
