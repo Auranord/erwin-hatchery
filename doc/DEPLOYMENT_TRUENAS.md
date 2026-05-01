@@ -217,9 +217,9 @@ Codex should add these scripts to `package.json` during implementation.
 
 Set and verify the following production env vars:
 
-- `TWITCH_BROADCASTER_USER_ID`
-- `TWITCH_EVENTSUB_CALLBACK_URL` (must be public HTTPS and end with `/api/twitch/eventsub`)
+- `TWITCH_BROADCASTER_ID`
 - `TWITCH_EVENTSUB_SECRET`
+- `PUBLIC_APP_URL` must be the public HTTPS origin so callback resolves to `${PUBLIC_APP_URL}/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (set `false` to disable startup sync)
 
 Troubleshooting:

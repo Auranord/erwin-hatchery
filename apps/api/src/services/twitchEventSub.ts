@@ -1,4 +1,4 @@
-import { config } from '../config.js';
+import { config, getEventSubCallbackUrl } from '../config.js';
 
 const TARGET_SUBSCRIPTION_TYPE = 'channel.channel_points_custom_reward_redemption.add';
 const TARGET_SUBSCRIPTION_VERSION = '1';
@@ -37,7 +37,7 @@ let eventSubSyncState: EventSubSyncState = {
   status: 'missing',
   subscriptionId: null,
   type: TARGET_SUBSCRIPTION_TYPE,
-  callback: config.TWITCH_EVENTSUB_CALLBACK_URL,
+  callback: getEventSubCallbackUrl(),
   createdAt: null,
   lastCheckedAt: new Date(0).toISOString(),
   error: null
@@ -103,9 +103,9 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
     const matching = list.data.filter((subscription) => (
       subscription.type === TARGET_SUBSCRIPTION_TYPE
       && subscription.version === TARGET_SUBSCRIPTION_VERSION
-      && subscription.condition.broadcaster_user_id === config.TWITCH_BROADCASTER_USER_ID
+      && subscription.condition.broadcaster_user_id === config.TWITCH_BROADCASTER_ID
       && subscription.transport.method === 'webhook'
-      && subscription.transport.callback === config.TWITCH_EVENTSUB_CALLBACK_URL
+      && subscription.transport.callback === getEventSubCallbackUrl()
     ));
 
     const active = matching.find((subscription) => subscription.status === 'enabled' || subscription.status === 'webhook_callback_verification_pending');
@@ -138,10 +138,10 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
       body: JSON.stringify({
         type: TARGET_SUBSCRIPTION_TYPE,
         version: TARGET_SUBSCRIPTION_VERSION,
-        condition: { broadcaster_user_id: config.TWITCH_BROADCASTER_USER_ID },
+        condition: { broadcaster_user_id: config.TWITCH_BROADCASTER_ID },
         transport: {
           method: 'webhook',
-          callback: config.TWITCH_EVENTSUB_CALLBACK_URL,
+          callback: getEventSubCallbackUrl(),
           secret: config.TWITCH_EVENTSUB_SECRET
         }
       })

@@ -115,6 +115,7 @@ pnpm build
 ## EventSub subscription auto-sync (Milestone 3+)
 
 - On API startup, the backend can automatically ensure the required Twitch EventSub subscription exists for `channel.channel_points_custom_reward_redemption.add`.
-- Required env vars: `TWITCH_BROADCASTER_USER_ID`, `TWITCH_EVENTSUB_CALLBACK_URL`, `TWITCH_EVENTSUB_SECRET`.
+- Required env vars: `TWITCH_BROADCASTER_ID`, `TWITCH_EVENTSUB_SECRET`.
+- EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
