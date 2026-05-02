@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { config } from '../config.js';
-import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes } from '../db/schema.js';
+import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 
 type PlayerInventory = {
@@ -213,6 +212,87 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       }
       await tx.update(unhatchedEggs).set({ state: 'incubating' }).where(eq(unhatchedEggs.id, egg.id));
       await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'incubation_started', sourceType: 'player_action', sourceId: created.id, delta: { incubationJobs: [{ id: created.id, unhatchedEggId: egg.id, incubatorSlotId: slot.id }] } });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok') {
+      return reply.code(409).send({ message: result.kind });
+    }
+    return { ok: true };
+  });
+
+  app.post('/api/game/incubation/finish', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { unhatchedEggId?: string };
+    if (!body.unhatchedEggId) {
+      return reply.code(400).send({ message: 'unhatchedEggId is required' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [egg] = await tx
+        .select({ id: unhatchedEggs.id, hiddenPetTypeId: unhatchedEggs.hiddenPetTypeId, state: unhatchedEggs.state })
+        .from(unhatchedEggs)
+        .where(and(eq(unhatchedEggs.id, body.unhatchedEggId!), eq(unhatchedEggs.ownerUserId, identity.userId)))
+        .limit(1);
+      if (!egg || egg.state !== 'incubating') return { kind: 'egg_missing' as const };
+
+      const [job] = await tx
+        .select({
+          id: incubationJobs.id,
+          incubatorSlotId: incubationJobs.incubatorSlotId,
+          startedAt: incubationJobs.startedAt,
+          requiredProgressSeconds: incubationJobs.requiredProgressSeconds
+        })
+        .from(incubationJobs)
+        .where(
+          and(
+            eq(incubationJobs.ownerUserId, identity.userId),
+            eq(incubationJobs.unhatchedEggId, egg.id),
+            eq(incubationJobs.state, 'running')
+          )
+        )
+        .limit(1);
+      if (!job) return { kind: 'job_missing' as const };
+
+      const hatchAtMs = new Date(job.startedAt).getTime() + (job.requiredProgressSeconds * 1000);
+      if (Date.now() < hatchAtMs) return { kind: 'too_early' as const };
+
+      const [petType] = await tx
+        .select({
+          id: petTypes.id,
+          baseHp: petTypes.baseHp,
+          baseAttack: petTypes.baseAttack,
+          baseDefense: petTypes.baseDefense,
+          baseSpeed: petTypes.baseSpeed
+        })
+        .from(petTypes)
+        .where(eq(petTypes.id, egg.hiddenPetTypeId))
+        .limit(1);
+      if (!petType) return { kind: 'pet_type_missing' as const };
+
+      const [newPet] = await tx.insert(pets).values({
+        ownerUserId: identity.userId,
+        petTypeId: petType.id,
+        hp: petType.baseHp,
+        attack: petType.baseAttack,
+        defense: petType.baseDefense,
+        speed: petType.baseSpeed,
+        statRolls: { hp: 0, attack: 0, defense: 0, speed: 0 },
+        sourceUnhatchedEggId: egg.id
+      }).returning({ id: pets.id });
+
+      await tx.update(incubationJobs).set({ state: 'completed', completedAt: new Date() }).where(eq(incubationJobs.id, job.id));
+      await tx.update(unhatchedEggs).set({ state: 'hatched' }).where(eq(unhatchedEggs.id, egg.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'incubation_finished',
+        sourceType: 'player_action',
+        sourceId: job.id,
+        delta: { hatchedPets: [{ id: newPet?.id ?? null, petTypeId: petType.id }], unhatchedEggs: [{ id: egg.id, state: 'hatched' }] }
+      });
+
       return { kind: 'ok' as const };
     });
 
