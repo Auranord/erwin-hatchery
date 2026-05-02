@@ -19,8 +19,8 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 7. Incubation progresses over time and speeds up while the stream is live.
 8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
 9. Viewer selects one pet for the next admin-started stream event.
-10. Admin starts a battle event. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
-11. Winners receive leaderboard points. Event is logged and can be reverted.
+10. Admin starts a battle event from the admin panel. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
+11. Winners receive leaderboard points (3/2/1). Event is logged and selected pets are deselected after resolution.
 
 ## Public vs authenticated access
 

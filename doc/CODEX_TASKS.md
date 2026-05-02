@@ -132,11 +132,11 @@ Acceptance:
 
 ## Milestone 7 - Battle event MVP
 
-- Admin can start battle event any time.
+- ✅ Admin can start a battle event from admin UI (`POST /api/admin/events/start`) any time.
 - Collect all selected pets.
 - Randomly choose 1st/2nd/3rd from selected pets.
-- Award leaderboard points 3/2/1.
-- Deselect participating selected pets after event.
+- ✅ Start flow awards leaderboard points 3/2/1 to random winners from selected pets.
+- ✅ Event start flow deselects all pets marked for event participation after resolution.
 - Store event participants/result JSON.
 - Ledger all point awards.
 - Add revert battle action.
