@@ -347,6 +347,18 @@ export function App(): JSX.Element {
       window.alert(payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.');
       return;
     }
+
+    setPlayerInventory((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        hatchedPets: current.hatchedPets.map((pet) => (
+          pet.id === petId
+            ? { ...pet, selectedForEvent }
+            : pet
+        ))
+      };
+    });
   }
 
 
@@ -597,12 +609,13 @@ export function App(): JSX.Element {
                 {playerInventory.hatchedPets.length > 0 ? (
                   <ul>
                     {playerInventory.hatchedPets.map((pet) => (
-                      <li key={pet.id}>
+                      <li key={pet.id} className={pet.selectedForEvent ? 'selected-pet' : undefined}>
                         <strong>{pet.petTypeDisplayName}</strong> ({pet.rarity} · {pet.role})
                         <br />
                         HP {pet.hp} · ATK {pet.attack} · DEF {pet.defense} · SPD {pet.speed}
                         <br />
                         <button
+                          className={pet.selectedForEvent ? 'selected-pet-button' : undefined}
                           type="button"
                           onClick={() => {
                             const shouldSelect = !pet.selectedForEvent;
