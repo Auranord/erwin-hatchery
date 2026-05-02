@@ -318,14 +318,14 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       }).returning({ id: pets.id });
 
       await tx.update(incubationJobs).set({ state: 'completed', completedAt: new Date() }).where(eq(incubationJobs.id, job.id));
-      await tx.update(unhatchedEggs).set({ state: 'hatched' }).where(eq(unhatchedEggs.id, egg.id));
+      await tx.delete(unhatchedEggs).where(eq(unhatchedEggs.id, egg.id));
       await tx.insert(economyLedger).values({
         userId: identity.userId,
         actorUserId: identity.userId,
         eventType: 'incubation_finished',
         sourceType: 'player_action',
         sourceId: job.id,
-        delta: { hatchedPets: [{ id: newPet?.id ?? null, petTypeId: petType.id }], unhatchedEggs: [{ id: egg.id, state: 'hatched' }] }
+        delta: { hatchedPets: [{ id: newPet?.id ?? null, petTypeId: petType.id }], unhatchedEggs: [{ id: egg.id, change: -1 }] }
       });
 
       return { kind: 'ok' as const };
