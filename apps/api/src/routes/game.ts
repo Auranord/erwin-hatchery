@@ -122,6 +122,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/mystery-eggs/identify', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    await ensureDefaultIncubatorSlot(identity.userId);
 
     const body = (request.body ?? {}) as { eggTypeId?: string };
     const eggTypeId = body.eggTypeId;
@@ -223,6 +224,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/incubation/start', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    await ensureDefaultIncubatorSlot(identity.userId);
     const body = (request.body ?? {}) as { unhatchedEggId?: string; incubatorSlotId?: string };
     if (!body.unhatchedEggId || !body.incubatorSlotId) {
       return reply.code(400).send({ message: 'unhatchedEggId and incubatorSlotId are required' });
@@ -259,6 +261,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/incubation/finish', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    await ensureDefaultIncubatorSlot(identity.userId);
     const body = (request.body ?? {}) as { unhatchedEggId?: string };
     if (!body.unhatchedEggId) {
       return reply.code(400).send({ message: 'unhatchedEggId is required' });
@@ -340,6 +343,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/inventory/stream', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    await ensureDefaultIncubatorSlot(identity.userId);
 
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
