@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
+import { config } from '../config.js';
 import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 
@@ -153,14 +154,16 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         throw new Error(`Loot table entry for ${eggTypeId} is invalid`);
       }
 
+      const effectiveResourceAmount = Math.max(1, Math.floor(resourceAmount * config.DEBUG_EGG_RESOURCE_MULTIPLIER));
+
       await tx.insert(resources).values({
         userId: identity.userId,
         resourceType: picked.resourceType,
-        amount: resourceAmount,
+        amount: effectiveResourceAmount,
         updatedAt: new Date()
       }).onConflictDoUpdate({
         target: [resources.userId, resources.resourceType],
-        set: { amount: sql`${resources.amount} + ${resourceAmount}`, updatedAt: new Date() }
+        set: { amount: sql`${resources.amount} + ${effectiveResourceAmount}`, updatedAt: new Date() }
       });
 
       await tx.insert(economyLedger).values({
@@ -170,7 +173,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         sourceType: 'player_action',
         delta: {
           mysteryEggInventory: [{ eggTypeId: eggTypeId, amountDelta: -1 }],
-          resources: [{ resourceType: picked.resourceType, amountDelta: resourceAmount }]
+          resources: [{ resourceType: picked.resourceType, amountDelta: effectiveResourceAmount }]
         }
       });
 
@@ -202,7 +205,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [eggType] = await tx.select({ baseIncubationSeconds: eggTypes.baseIncubationSeconds }).from(eggTypes).where(eq(eggTypes.id, egg.eggTypeId)).limit(1);
       if (!eggType) return { kind: 'egg_type_missing' as const };
 
-      const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: eggType.baseIncubationSeconds, progressSnapshot: { mode: 'timestamp_only' } }).returning({ id: incubationJobs.id });
+      const debugAdjustedIncubationSeconds = Math.max(1, Math.ceil(eggType.baseIncubationSeconds / config.DEBUG_INCUBATION_TIME_FACTOR));
+
+      const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: debugAdjustedIncubationSeconds, progressSnapshot: { mode: 'timestamp_only' } }).returning({ id: incubationJobs.id });
       if (!created) {
         throw new Error('Failed to create incubation job');
       }

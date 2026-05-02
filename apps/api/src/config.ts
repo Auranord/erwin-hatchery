@@ -36,7 +36,10 @@ const configSchema = z.object({
   TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv.default(true),
   SESSION_SECRET: z.string().min(32),
   OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
-  LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false)
+  LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false),
+  DEBUG_MODE: booleanFromEnv.default(false),
+  DEBUG_INCUBATION_TIME_FACTOR: z.coerce.number().min(1).default(1),
+  DEBUG_EGG_RESOURCE_MULTIPLIER: z.coerce.number().int().min(1).default(1)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
