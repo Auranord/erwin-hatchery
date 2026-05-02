@@ -14,7 +14,10 @@ import {
   resources,
   roles,
   twitchEvents,
-  users
+  users,
+  gameEvents,
+  gameEventParticipants,
+  leaderboardScores
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
@@ -325,6 +328,106 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { status: 'ok', idempotent: false };
+  });
+
+
+
+  app.post('/api/admin/events/start', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const body = (request.body ?? {}) as { requestId?: string };
+    const requestId = body.requestId?.trim() || randomUUID();
+
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
+    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    const result = await db.transaction(async (tx) => {
+      const selectedPets = await tx
+        .select({ id: pets.id, ownerUserId: pets.ownerUserId })
+        .from(pets)
+        .where(eq(pets.selectedForEvent, true))
+        .orderBy(sql`random()`)
+        .limit(3);
+
+      if (selectedPets.length < 3) {
+        return { kind: 'not_enough_pets' as const, selectedCount: selectedPets.length };
+      }
+
+      const [createdEvent] = await tx.insert(gameEvents).values({
+        eventType: 'battle',
+        status: 'resolved',
+        startedByUserId: identity.userId,
+        resolvedAt: new Date()
+      }).returning({ id: gameEvents.id });
+      if (!createdEvent) throw new Error('Failed to create game event');
+
+      const placements = [
+        { placement: 1, pointsAwarded: 3 },
+        { placement: 2, pointsAwarded: 2 },
+        { placement: 3, pointsAwarded: 1 }
+      ] as const;
+
+      for (let i = 0; i < selectedPets.length; i += 1) {
+        const pet = selectedPets[i]!;
+        const score = placements[i]!;
+
+        await tx.insert(gameEventParticipants).values({
+          gameEventId: createdEvent.id,
+          userId: pet.ownerUserId,
+          petId: pet.id,
+          placement: score.placement,
+          pointsAwarded: score.pointsAwarded
+        });
+
+        await tx.insert(leaderboardScores).values({
+          userId: pet.ownerUserId,
+          leaderboardType: 'battle_points',
+          score: score.pointsAwarded,
+          updatedAt: new Date()
+        }).onConflictDoUpdate({
+          target: [leaderboardScores.userId, leaderboardScores.leaderboardType],
+          set: { score: sql`${leaderboardScores.score} + ${score.pointsAwarded}`, updatedAt: sql`now()` }
+        });
+
+        await tx.insert(economyLedger).values({
+          userId: pet.ownerUserId,
+          actorUserId: identity.userId,
+          eventType: 'battle_points_awarded',
+          sourceType: 'battle_event',
+          sourceId: createdEvent.id,
+          delta: { leaderboard: [{ leaderboardType: 'battle_points', pointsDelta: score.pointsAwarded, placement: score.placement, petId: pet.id }] }
+        });
+      }
+
+      await tx.update(pets).set({ selectedForEvent: false }).where(eq(pets.selectedForEvent, true));
+
+      await tx.update(gameEvents).set({
+        resultJson: {
+          winners: selectedPets.map((pet, index) => ({
+            petId: pet.id,
+            userId: pet.ownerUserId,
+            placement: placements[index]!.placement,
+            pointsAwarded: placements[index]!.pointsAwarded
+          }))
+        }
+      }).where(eq(gameEvents.id, createdEvent.id));
+
+      await tx.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'start_battle_event',
+        requestId,
+        payload: { gameEventId: createdEvent.id }
+      });
+
+      return { kind: 'ok' as const, gameEventId: createdEvent.id };
+    });
+
+    if (result.kind === 'not_enough_pets') {
+      return reply.code(400).send({ message: `At least 3 selected pets are required. Found: ${result.selectedCount}` });
+    }
+
+    return { status: 'ok', idempotent: false, gameEventId: result.gameEventId };
   });
 
   app.post('/api/admin/ledger/:ledgerId/revert', async (request, reply) => {

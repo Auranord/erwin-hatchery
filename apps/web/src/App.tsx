@@ -326,6 +326,21 @@ export function App(): JSX.Element {
     setLedgerEntries(payload.entries);
   }
 
+
+  async function startBattleEvent(): Promise<void> {
+    const response = await fetch('/api/admin/events/start', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: crypto.randomUUID() })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Event konnte nicht gestartet werden.');
+    }
+    await loadLedger();
+  }
+
   async function revertLedger(ledgerId: string, userId: string | null): Promise<void> {
     await fetch(`/api/admin/ledger/${ledgerId}/revert`, {
       method: 'POST',
@@ -349,6 +364,7 @@ export function App(): JSX.Element {
             <p role="alert"><strong>⚠ Konfigurationsfehler:</strong> Keine aktiven Ei-Typen vorhanden. Bitte Migration + Seed ausführen.</p>
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
+          <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
           <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
           <button onClick={() => void loadUsers(query)}>Suchen</button>
