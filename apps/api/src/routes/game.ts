@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
@@ -72,7 +72,15 @@ function pickWeightedOutcome<T extends { weight: number }>(entries: T[]): T {
 async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
   const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows, slotRows, jobRows] = await Promise.all([
     db.select({ eggTypeId: mysteryEggInventory.eggTypeId, amount: mysteryEggInventory.amount, updatedAt: mysteryEggInventory.updatedAt }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
-    db.select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
+    db
+      .select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state })
+      .from(unhatchedEggs)
+      .where(
+        and(
+          eq(unhatchedEggs.ownerUserId, userId),
+          inArray(unhatchedEggs.state, ['ready_for_incubation', 'incubating'])
+        )
+      ),
     db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
     db.select({ consumableTypeId: consumableInventory.consumableTypeId, amount: consumableInventory.amount }).from(consumableInventory).where(eq(consumableInventory.userId, userId)),
     db.select({ resourceType: resources.resourceType, amount: resources.amount, updatedAt: resources.updatedAt }).from(resources).where(eq(resources.userId, userId)),
@@ -98,13 +106,41 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
 }
 
 async function computeInventoryRevision(userId: string): Promise<string> {
-  const [invMax, resourceMax, petMax, jobMax] = await Promise.all([
+  const [invMax, resourceMax, petMax, eggStats, jobStats] = await Promise.all([
     db.select({ updatedAt: sql<Date>`max(${mysteryEggInventory.updatedAt})` }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
     db.select({ updatedAt: sql<Date>`max(${resources.updatedAt})` }).from(resources).where(eq(resources.userId, userId)),
     db.select({ createdAt: sql<Date>`max(${pets.createdAt})` }).from(pets).where(eq(pets.ownerUserId, userId)),
-    db.select({ startedAt: sql<Date>`max(${incubationJobs.startedAt})` }).from(incubationJobs).where(eq(incubationJobs.ownerUserId, userId))
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        newestCreatedAt: sql<Date>`max(${unhatchedEggs.createdAt})`
+      })
+      .from(unhatchedEggs)
+      .where(
+        and(
+          eq(unhatchedEggs.ownerUserId, userId),
+          inArray(unhatchedEggs.state, ['ready_for_incubation', 'incubating'])
+        )
+      ),
+    db
+      .select({
+        newestStartedAt: sql<Date>`max(${incubationJobs.startedAt})`,
+        newestCompletedAt: sql<Date>`max(${incubationJobs.completedAt})`
+      })
+      .from(incubationJobs)
+      .where(eq(incubationJobs.ownerUserId, userId))
   ]);
-  const payload = `${invMax[0]?.updatedAt ? toIsoTimestamp(invMax[0].updatedAt) : '0'}|${resourceMax[0]?.updatedAt ? toIsoTimestamp(resourceMax[0].updatedAt) : '0'}|${petMax[0]?.createdAt ? toIsoTimestamp(petMax[0].createdAt) : '0'}|${jobMax[0]?.startedAt ? toIsoTimestamp(jobMax[0].startedAt) : '0'}`;
+
+  const payload = [
+    invMax[0]?.updatedAt ? toIsoTimestamp(invMax[0].updatedAt) : '0',
+    resourceMax[0]?.updatedAt ? toIsoTimestamp(resourceMax[0].updatedAt) : '0',
+    petMax[0]?.createdAt ? toIsoTimestamp(petMax[0].createdAt) : '0',
+    eggStats[0]?.count ?? 0,
+    eggStats[0]?.newestCreatedAt ? toIsoTimestamp(eggStats[0].newestCreatedAt) : '0',
+    jobStats[0]?.newestStartedAt ? toIsoTimestamp(jobStats[0].newestStartedAt) : '0',
+    jobStats[0]?.newestCompletedAt ? toIsoTimestamp(jobStats[0].newestCompletedAt) : '0'
+  ].join('|');
+
   return createHash('sha1').update(payload).digest('hex');
 }
 
@@ -321,7 +357,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       }).returning({ id: pets.id });
 
       await tx.update(incubationJobs).set({ state: 'completed', completedAt: new Date() }).where(eq(incubationJobs.id, job.id));
-      await tx.delete(unhatchedEggs).where(eq(unhatchedEggs.id, egg.id));
+      await tx.update(unhatchedEggs).set({ state: 'hatched' }).where(eq(unhatchedEggs.id, egg.id));
       await tx.insert(economyLedger).values({
         userId: identity.userId,
         actorUserId: identity.userId,
