@@ -238,7 +238,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [eggType] = await tx.select({ baseIncubationSeconds: eggTypes.baseIncubationSeconds }).from(eggTypes).where(eq(eggTypes.id, egg.eggTypeId)).limit(1);
       if (!eggType) return { kind: 'egg_type_missing' as const };
 
-      const debugAdjustedIncubationSeconds = Math.max(1, Math.ceil(eggType.baseIncubationSeconds / config.DEBUG_INCUBATION_TIME_FACTOR));
+      const debugShortenerDivisor = 1 / config.DEBUG_INCUBATION_TIME_FACTOR;
+      const debugAdjustedIncubationSeconds = Math.max(1, Math.ceil(eggType.baseIncubationSeconds / debugShortenerDivisor));
 
       const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: debugAdjustedIncubationSeconds, progressSnapshot: { mode: 'timestamp_only' } }).returning({ id: incubationJobs.id });
       if (!created) {
