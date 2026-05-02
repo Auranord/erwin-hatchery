@@ -82,6 +82,14 @@ type PlayerInventory = {
   incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
 };
 
+type LeaderboardEntry = {
+  rank: number;
+  userId: string;
+  displayName: string | null;
+  login: string | null;
+  score: number;
+};
+
 const MYSTERY_EGG_LABELS: Record<string, string> = {
   common_mystery_egg: 'Gewöhnliches Mystery-Ei',
   uncommon_mystery_egg: 'Ungewöhnliches Mystery-Ei',
@@ -120,6 +128,7 @@ export function App(): JSX.Element {
   const [selectedEventPetId, setSelectedEventPetId] = useState<string | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const isAdminRoute = window.location.pathname.startsWith('/admin');
 
@@ -160,8 +169,16 @@ export function App(): JSX.Element {
     }
   }
 
+  async function loadLeaderboard(): Promise<void> {
+    const response = await fetch('/api/game/leaderboard', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { entries?: LeaderboardEntry[] };
+    setLeaderboardEntries(payload.entries ?? []);
+  }
+
   useEffect(() => {
     void loadMe();
+    void loadLeaderboard();
   }, []);
 
   useEffect(() => {
@@ -489,6 +506,22 @@ export function App(): JSX.Element {
             <p>Bitte melde dich mit Twitch an.</p>
             <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>
           </>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Globales Leaderboard</h2>
+        <p>Top 10 Spieler nach Event-Punkten.</p>
+        {leaderboardEntries.length > 0 ? (
+          <ol>
+            {leaderboardEntries.map((entry) => (
+              <li key={entry.userId}>
+                <strong>{entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}</strong> · {entry.score} Punkte
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>Noch keine Event-Punkte vorhanden.</p>
         )}
       </section>
 

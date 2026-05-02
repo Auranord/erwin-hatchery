@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes } from '../db/schema.js';
+import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes, leaderboardScores, users } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
 
@@ -171,6 +171,32 @@ async function computeInventoryRevision(userId: string): Promise<string> {
 }
 
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/api/game/leaderboard', async () => {
+    const rows = await db
+      .select({
+        userId: leaderboardScores.userId,
+        displayName: users.displayName,
+        login: users.twitchLogin,
+        score: leaderboardScores.score
+      })
+      .from(leaderboardScores)
+      .innerJoin(users, eq(leaderboardScores.userId, users.id))
+      .where(and(eq(leaderboardScores.leaderboardType, 'battle_points'), eq(users.isDeleted, false)))
+      .orderBy(sql`${leaderboardScores.score} desc`, sql`coalesce(${users.displayName}, ${users.twitchLogin}, ${users.twitchUserId}) asc`)
+      .limit(10);
+
+    return {
+      leaderboardType: 'battle_points',
+      entries: rows.map((row, index) => ({
+        rank: index + 1,
+        userId: row.userId,
+        displayName: row.displayName,
+        login: row.login,
+        score: row.score
+      }))
+    };
+  });
+
   app.get('/api/game/inventory', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
