@@ -103,6 +103,14 @@ pnpm db:seed
 pnpm build
 ```
 
+## Incubation countdown quirk (known behavior)
+
+- The player UI computes remaining incubation time from the browser clock (`Date.now()`) to reduce polling and keep traffic lower.
+- If a player's system clock is wrong (ahead/behind), the shown remaining timer can be significantly incorrect.
+- API hatch validation remains server-authoritative. The backend decides whether finish is too early based on server time.
+- Operational symptom: an egg may still appear as `incubating` in the UI even when enough real time has passed, until the client-side countdown reaches zero and the finish action is triggered.
+- Troubleshooting: first verify/correct the device system clock (including automatic time sync) before investigating backend incubation logic.
+
 
 
 ## EventSub webhook processing (Milestone 3)
