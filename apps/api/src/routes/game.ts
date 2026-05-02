@@ -98,13 +98,36 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
 }
 
 async function computeInventoryRevision(userId: string): Promise<string> {
-  const [invMax, resourceMax, petMax, jobMax] = await Promise.all([
+  const [invMax, resourceMax, petMax, eggStats, jobStats] = await Promise.all([
     db.select({ updatedAt: sql<Date>`max(${mysteryEggInventory.updatedAt})` }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
     db.select({ updatedAt: sql<Date>`max(${resources.updatedAt})` }).from(resources).where(eq(resources.userId, userId)),
     db.select({ createdAt: sql<Date>`max(${pets.createdAt})` }).from(pets).where(eq(pets.ownerUserId, userId)),
-    db.select({ startedAt: sql<Date>`max(${incubationJobs.startedAt})` }).from(incubationJobs).where(eq(incubationJobs.ownerUserId, userId))
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        newestCreatedAt: sql<Date>`max(${unhatchedEggs.createdAt})`
+      })
+      .from(unhatchedEggs)
+      .where(eq(unhatchedEggs.ownerUserId, userId)),
+    db
+      .select({
+        newestStartedAt: sql<Date>`max(${incubationJobs.startedAt})`,
+        newestCompletedAt: sql<Date>`max(${incubationJobs.completedAt})`
+      })
+      .from(incubationJobs)
+      .where(eq(incubationJobs.ownerUserId, userId))
   ]);
-  const payload = `${invMax[0]?.updatedAt ? toIsoTimestamp(invMax[0].updatedAt) : '0'}|${resourceMax[0]?.updatedAt ? toIsoTimestamp(resourceMax[0].updatedAt) : '0'}|${petMax[0]?.createdAt ? toIsoTimestamp(petMax[0].createdAt) : '0'}|${jobMax[0]?.startedAt ? toIsoTimestamp(jobMax[0].startedAt) : '0'}`;
+
+  const payload = [
+    invMax[0]?.updatedAt ? toIsoTimestamp(invMax[0].updatedAt) : '0',
+    resourceMax[0]?.updatedAt ? toIsoTimestamp(resourceMax[0].updatedAt) : '0',
+    petMax[0]?.createdAt ? toIsoTimestamp(petMax[0].createdAt) : '0',
+    eggStats[0]?.count ?? 0,
+    eggStats[0]?.newestCreatedAt ? toIsoTimestamp(eggStats[0].newestCreatedAt) : '0',
+    jobStats[0]?.newestStartedAt ? toIsoTimestamp(jobStats[0].newestStartedAt) : '0',
+    jobStats[0]?.newestCompletedAt ? toIsoTimestamp(jobStats[0].newestCompletedAt) : '0'
+  ].join('|');
+
   return createHash('sha1').update(payload).digest('hex');
 }
 
