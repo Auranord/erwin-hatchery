@@ -117,6 +117,7 @@ export function App(): JSX.Element {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
+  const [selectedEventPetId, setSelectedEventPetId] = useState<string | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
@@ -181,6 +182,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (isAdminRoute || !me?.authenticated) {
       setPlayerInventory(null);
+      setSelectedEventPetId(null);
       return;
     }
 
@@ -196,6 +198,17 @@ export function App(): JSX.Element {
 
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
+
+  useEffect(() => {
+    if (!playerInventory) {
+      setSelectedEventPetId(null);
+      return;
+    }
+
+    if (selectedEventPetId && !playerInventory.hatchedPets.some((pet) => pet.id === selectedEventPetId)) {
+      setSelectedEventPetId(null);
+    }
+  }, [playerInventory, selectedEventPetId]);
 
 
   async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
@@ -531,10 +544,25 @@ export function App(): JSX.Element {
                         <strong>{pet.petTypeDisplayName}</strong> ({pet.rarity} · {pet.role})
                         <br />
                         HP {pet.hp} · ATK {pet.attack} · DEF {pet.defense} · SPD {pet.speed}
+                        <br />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedEventPetId((currentSelectedPetId) => (currentSelectedPetId === pet.id ? null : pet.id));
+                          }}
+                        >
+                          {selectedEventPetId === pet.id ? 'Für Event ausgewählt' : 'Für Event auswählen'}
+                        </button>
                       </li>
                     ))}
                   </ul>
                 ) : <p>Noch keine geschlüpften Pets vorhanden.</p>}
+                <p>
+                  <strong>Event-Pet:</strong>{' '}
+                  {selectedEventPetId
+                    ? (playerInventory.hatchedPets.find((pet) => pet.id === selectedEventPetId)?.petTypeDisplayName ?? 'Ausgewählt')
+                    : 'Kein Pet ausgewählt'}
+                </p>
                 <p><strong>Ei-Ressourcen:</strong> {playerInventory.crackedEggResources.reduce((sum, entry) => sum + entry.amount, 0)}</p>
                 {playerInventory.crackedEggResources
                   .filter((entry) => entry.amount > 0)
