@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
+import { config } from '../config.js';
 
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number; updatedAt: string }>;
