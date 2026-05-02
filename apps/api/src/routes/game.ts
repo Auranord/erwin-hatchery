@@ -220,14 +220,39 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ message: 'selectedForEvent must be a boolean' });
     }
 
-    const [updatedPet] = await db
-      .update(pets)
-      .set({ selectedForEvent: body.selectedForEvent })
-      .where(and(eq(pets.id, petId), eq(pets.ownerUserId, identity.userId)))
-      .returning({ id: pets.id, selectedForEvent: pets.selectedForEvent });
+    const result = await db.transaction(async (tx) => {
+      const [ownedPet] = await tx
+        .select({ id: pets.id })
+        .from(pets)
+        .where(and(eq(pets.id, petId), eq(pets.ownerUserId, identity.userId)))
+        .limit(1);
 
-    if (!updatedPet) return reply.code(404).send({ message: 'Pet not found' });
-    return { status: 'ok', petId: updatedPet.id, selectedForEvent: updatedPet.selectedForEvent };
+      if (!ownedPet) {
+        return { kind: 'not_found' as const };
+      }
+
+      if (body.selectedForEvent) {
+        await tx
+          .update(pets)
+          .set({ selectedForEvent: false })
+          .where(and(eq(pets.ownerUserId, identity.userId), eq(pets.selectedForEvent, true)));
+      }
+
+      const [updatedPet] = await tx
+        .update(pets)
+        .set({ selectedForEvent: body.selectedForEvent })
+        .where(eq(pets.id, ownedPet.id))
+        .returning({ id: pets.id, selectedForEvent: pets.selectedForEvent });
+
+      if (!updatedPet) {
+        throw new Error('Failed to update pet selection');
+      }
+
+      return { kind: 'ok' as const, pet: updatedPet };
+    });
+
+    if (result.kind === 'not_found') return reply.code(404).send({ message: 'Pet not found' });
+    return { status: 'ok', petId: result.pet.id, selectedForEvent: result.pet.selectedForEvent };
   });
 
   app.post('/api/game/mystery-eggs/identify', async (request, reply) => {
