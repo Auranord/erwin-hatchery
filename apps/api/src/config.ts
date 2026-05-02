@@ -38,7 +38,7 @@ const configSchema = z.object({
   OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
   LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false),
   DEBUG_MODE: booleanFromEnv.default(false),
-  DEBUG_INCUBATION_TIME_FACTOR: z.coerce.number().min(1).default(1),
+  DEBUG_INCUBATION_TIME_FACTOR: z.coerce.number().default(1).transform((value) => (value < 1 ? 1 : value)),
   DEBUG_EGG_RESOURCE_MULTIPLIER: z.coerce.number().int().min(1).default(1)
 });
 
