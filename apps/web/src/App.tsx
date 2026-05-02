@@ -214,6 +214,19 @@ export function App(): JSX.Element {
     }
   }
 
+  async function finishIncubation(unhatchedEggId: string): Promise<void> {
+    const response = await fetch('/api/game/incubation/finish', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unhatchedEggId })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      throw new Error(payload?.message ?? 'Inkubation konnte nicht abgeschlossen werden.');
+    }
+  }
+
   async function logout(): Promise<void> {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
     await loadMe();
@@ -467,7 +480,16 @@ export function App(): JSX.Element {
                               const activeIncubation = activeIncubationByEggId.get(egg.id)!;
                               const hatchAtMs = new Date(activeIncubation.startedAt).getTime() + (activeIncubation.requiredProgressSeconds * 1000);
                               const secondsRemaining = Math.ceil((hatchAtMs - nowMs) / 1000);
-                              return <strong>· Verbleibend: {formatRemainingDuration(secondsRemaining)}</strong>;
+                              return (
+                                <>
+                                  <strong>· Verbleibend: {formatRemainingDuration(secondsRemaining)}</strong>{' '}
+                                  {secondsRemaining <= 0 ? (
+                                    <button type="button" onClick={() => void finishIncubation(egg.id)}>
+                                      Ausbrüten abschließen
+                                    </button>
+                                  ) : null}
+                                </>
+                              );
                             })()
                           : null}
                         {egg.state === 'ready_for_incubation'
