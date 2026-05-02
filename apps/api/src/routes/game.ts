@@ -19,6 +19,7 @@ type PlayerInventory = {
     attack: number;
     defense: number;
     speed: number;
+    selectedForEvent: boolean;
     createdAt: string;
   }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
@@ -103,6 +104,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         attack: pets.attack,
         defense: pets.defense,
         speed: pets.speed,
+        selectedForEvent: pets.selectedForEvent,
         createdAt: pets.createdAt
       })
       .from(pets)
@@ -206,6 +208,27 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { revision, inventory };
   });
 
+
+
+  app.post('/api/game/pets/:petId/selection', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const { petId } = request.params as { petId: string };
+    const body = (request.body ?? {}) as { selectedForEvent?: boolean };
+    if (typeof body.selectedForEvent !== 'boolean') {
+      return reply.code(400).send({ message: 'selectedForEvent must be a boolean' });
+    }
+
+    const [updatedPet] = await db
+      .update(pets)
+      .set({ selectedForEvent: body.selectedForEvent })
+      .where(and(eq(pets.id, petId), eq(pets.ownerUserId, identity.userId)))
+      .returning({ id: pets.id, selectedForEvent: pets.selectedForEvent });
+
+    if (!updatedPet) return reply.code(404).send({ message: 'Pet not found' });
+    return { status: 'ok', petId: updatedPet.id, selectedForEvent: updatedPet.selectedForEvent };
+  });
 
   app.post('/api/game/mystery-eggs/identify', async (request, reply) => {
     const identity = await getSessionIdentity(request);

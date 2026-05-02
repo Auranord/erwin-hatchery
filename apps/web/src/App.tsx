@@ -75,6 +75,7 @@ type PlayerInventory = {
     attack: number;
     defense: number;
     speed: number;
+    selectedForEvent: boolean;
     createdAt: string;
   }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
@@ -125,7 +126,6 @@ export function App(): JSX.Element {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
-  const [selectedEventPetId, setSelectedEventPetId] = useState<string | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
@@ -199,7 +199,6 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (isAdminRoute || !me?.authenticated) {
       setPlayerInventory(null);
-      setSelectedEventPetId(null);
       return;
     }
 
@@ -216,16 +215,7 @@ export function App(): JSX.Element {
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
 
-  useEffect(() => {
-    if (!playerInventory) {
-      setSelectedEventPetId(null);
-      return;
-    }
 
-    if (selectedEventPetId && !playerInventory.hatchedPets.some((pet) => pet.id === selectedEventPetId)) {
-      setSelectedEventPetId(null);
-    }
-  }, [playerInventory, selectedEventPetId]);
 
 
   async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
@@ -344,6 +334,22 @@ export function App(): JSX.Element {
   }
 
 
+  async function toggleEventPetSelection(petId: string, selectedForEvent: boolean): Promise<void> {
+    const response = await fetch(`/api/game/pets/${petId}/selection`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selectedForEvent })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      window.alert(payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.');
+      return;
+    }
+  }
+
+
   async function startBattleEvent(): Promise<void> {
     const response = await fetch('/api/admin/events/start', {
       method: 'POST',
@@ -353,9 +359,11 @@ export function App(): JSX.Element {
     });
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Event konnte nicht gestartet werden.');
+      window.alert(payload?.message ?? 'Event konnte nicht gestartet werden.');
+      return;
     }
     await loadLedger();
+    window.alert('Event erfolgreich gestartet.');
   }
 
   async function revertLedger(ledgerId: string, userId: string | null): Promise<void> {
@@ -597,10 +605,11 @@ export function App(): JSX.Element {
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedEventPetId((currentSelectedPetId) => (currentSelectedPetId === pet.id ? null : pet.id));
+                            const shouldSelect = !pet.selectedForEvent;
+                            void toggleEventPetSelection(pet.id, shouldSelect);
                           }}
                         >
-                          {selectedEventPetId === pet.id ? 'Für Event ausgewählt' : 'Für Event auswählen'}
+                          {pet.selectedForEvent ? 'Für Event ausgewählt' : 'Für Event auswählen'}
                         </button>
                       </li>
                     ))}
@@ -608,9 +617,7 @@ export function App(): JSX.Element {
                 ) : <p>Noch keine geschlüpften Pets vorhanden.</p>}
                 <p>
                   <strong>Event-Pet:</strong>{' '}
-                  {selectedEventPetId
-                    ? (playerInventory.hatchedPets.find((pet) => pet.id === selectedEventPetId)?.petTypeDisplayName ?? 'Ausgewählt')
-                    : 'Kein Pet ausgewählt'}
+                  {playerInventory.hatchedPets.filter((pet) => pet.selectedForEvent).map((pet) => pet.petTypeDisplayName).join(', ') || 'Kein Pet ausgewählt'}
                 </p>
                 <p><strong>Ei-Ressourcen:</strong> {playerInventory.crackedEggResources.reduce((sum, entry) => sum + entry.amount, 0)}</p>
                 {playerInventory.crackedEggResources
