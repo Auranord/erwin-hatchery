@@ -18,6 +18,38 @@ function toIsoTimestamp(value: Date | string): string {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
+async function ensureDefaultIncubatorSlot(userId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [existingDefaultSlot] = await tx
+      .select({ id: incubatorSlots.id })
+      .from(incubatorSlots)
+      .where(and(eq(incubatorSlots.ownerUserId, userId), eq(incubatorSlots.slotSource, 'default')))
+      .limit(1);
+
+    if (existingDefaultSlot) {
+      return;
+    }
+
+    const [createdSlot] = await tx.insert(incubatorSlots).values({
+      ownerUserId: userId,
+      slotSource: 'default'
+    }).returning({ id: incubatorSlots.id });
+
+    if (!createdSlot) {
+      throw new Error('Failed to create default incubator slot');
+    }
+
+    await tx.insert(economyLedger).values({
+      userId,
+      actorUserId: null,
+      eventType: 'default_incubator_slot_granted',
+      sourceType: 'system',
+      sourceId: createdSlot.id,
+      delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'default' }] }
+    });
+  });
+}
+
 
 function pickWeightedOutcome<T extends { weight: number }>(entries: T[]): T {
   const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
@@ -79,6 +111,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/inventory', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    await ensureDefaultIncubatorSlot(identity.userId);
     const revision = await computeInventoryRevision(identity.userId);
     const inventory = await loadPlayerInventory(identity.userId);
     return { revision, inventory };
