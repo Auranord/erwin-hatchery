@@ -597,12 +597,13 @@ export function App(): JSX.Element {
                 {playerInventory.hatchedPets.length > 0 ? (
                   <ul>
                     {playerInventory.hatchedPets.map((pet) => (
-                      <li key={pet.id}>
+                      <li key={pet.id} className={pet.selectedForEvent ? 'selected-pet' : undefined}>
                         <strong>{pet.petTypeDisplayName}</strong> ({pet.rarity} · {pet.role})
                         <br />
                         HP {pet.hp} · ATK {pet.attack} · DEF {pet.defense} · SPD {pet.speed}
                         <br />
                         <button
+                          className={pet.selectedForEvent ? 'selected-pet-button' : undefined}
                           type="button"
                           onClick={() => {
                             const shouldSelect = !pet.selectedForEvent;

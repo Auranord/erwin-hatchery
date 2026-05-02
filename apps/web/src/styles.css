@@ -50,3 +50,15 @@ ul {
   margin: 0;
   padding-left: 1.2rem;
 }
+
+.selected-pet {
+  background: rgba(120, 220, 160, 0.12);
+  border-radius: 8px;
+  padding: 0.4rem 0.5rem;
+}
+
+.selected-pet-button {
+  background: #245f3b;
+  color: #eafff0;
+  border-color: #3f9b65;
+}
