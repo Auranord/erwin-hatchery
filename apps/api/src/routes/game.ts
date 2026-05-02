@@ -9,7 +9,18 @@ import { config } from '../config.js';
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number; updatedAt: string }>;
   unhatchedEggs: Array<{ id: string; eggTypeId: string; state: string }>;
-  hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
+  hatchedPets: Array<{
+    id: string;
+    petTypeId: string;
+    petTypeDisplayName: string;
+    rarity: string;
+    role: string;
+    hp: number;
+    attack: number;
+    defense: number;
+    speed: number;
+    createdAt: string;
+  }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number; updatedAt: string }>;
   incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
@@ -81,7 +92,22 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
           inArray(unhatchedEggs.state, ['ready_for_incubation', 'incubating'])
         )
       ),
-    db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
+    db
+      .select({
+        id: pets.id,
+        petTypeId: pets.petTypeId,
+        petTypeDisplayName: petTypes.displayName,
+        rarity: petTypes.rarity,
+        role: petTypes.role,
+        hp: pets.hp,
+        attack: pets.attack,
+        defense: pets.defense,
+        speed: pets.speed,
+        createdAt: pets.createdAt
+      })
+      .from(pets)
+      .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+      .where(eq(pets.ownerUserId, userId)),
     db.select({ consumableTypeId: consumableInventory.consumableTypeId, amount: consumableInventory.amount }).from(consumableInventory).where(eq(consumableInventory.userId, userId)),
     db.select({ resourceType: resources.resourceType, amount: resources.amount, updatedAt: resources.updatedAt }).from(resources).where(eq(resources.userId, userId)),
     db.select({ id: incubatorSlots.id, slotSource: incubatorSlots.slotSource, isAvailable: incubatorSlots.isAvailable }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId)),

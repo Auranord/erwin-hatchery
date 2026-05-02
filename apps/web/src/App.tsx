@@ -65,7 +65,18 @@ type EventSubSubscriptionStatus = {
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   unhatchedEggs: Array<{ id: string; eggTypeId: string; state: string }>;
-  hatchedPets: Array<{ id: string; petTypeId: string; createdAt: string }>;
+  hatchedPets: Array<{
+    id: string;
+    petTypeId: string;
+    petTypeDisplayName: string;
+    rarity: string;
+    role: string;
+    hp: number;
+    attack: number;
+    defense: number;
+    speed: number;
+    createdAt: string;
+  }>;
   consumables: Array<{ consumableTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
   incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
@@ -516,7 +527,11 @@ export function App(): JSX.Element {
                 {playerInventory.hatchedPets.length > 0 ? (
                   <ul>
                     {playerInventory.hatchedPets.map((pet) => (
-                      <li key={pet.id}>{pet.petTypeId}</li>
+                      <li key={pet.id}>
+                        <strong>{pet.petTypeDisplayName}</strong> ({pet.rarity} · {pet.role})
+                        <br />
+                        HP {pet.hp} · ATK {pet.attack} · DEF {pet.defense} · SPD {pet.speed}
+                      </li>
                     ))}
                   </ul>
                 ) : <p>Noch keine geschlüpften Pets vorhanden.</p>}
