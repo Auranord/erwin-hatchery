@@ -85,7 +85,7 @@ Still pending for later milestones:
 
 ## Admin testing seed dependency
 
-Admin test mystery egg grants require at least one active mystery egg type in `egg_types` (`is_active = true`). The expected seeded defaults are `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
+Admin test mystery egg grants allow active or inactive mystery egg types in `egg_types`; inactivity is informational only for admin grants. The expected seeded defaults are `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
 
 Operators should verify seed state with the admin active egg type endpoint before testing grants:
 
@@ -133,7 +133,7 @@ pnpm build
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
-- Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types.
+- Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
 
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions`.
