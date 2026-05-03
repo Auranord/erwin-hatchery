@@ -118,7 +118,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false };
+    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
   });
 
   app.get('/api/admin/logs', async (request, reply) => {
@@ -281,17 +281,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     const eggTypeCandidates = requestedEggTypeId ? [requestedEggTypeId] : ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'];
     const availableEggTypes = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes);
-    const activeEggTypes = availableEggTypes.filter((eggType) => eggType.isActive);
     const selectedEggType = eggTypeCandidates
-      .map((candidate) => activeEggTypes.find((eggType) => eggType.id === candidate))
+      .map((candidate) => availableEggTypes.find((eggType) => eggType.id === candidate))
       .find((eggType) => eggType !== undefined)
-      ?? activeEggTypes[0];
+      ?? availableEggTypes[0];
 
     if (!selectedEggType) {
-      request.log.warn({ userId, requestedEggTypeId, eggTypeCandidates }, 'Admin test mystery egg grant blocked: no active egg types available');
+      request.log.warn({ userId, requestedEggTypeId, eggTypeCandidates }, 'Admin test mystery egg grant blocked: no egg types available');
       return reply.code(400).send({
-        code: 'NO_ACTIVE_EGG_TYPES',
-        message: `No active egg types found. Tried: ${eggTypeCandidates.join(', ')}`
+        code: 'NO_EGG_TYPES',
+        message: `No egg types found. Tried: ${eggTypeCandidates.join(', ')}`
       });
     }
     const eggTypeId = selectedEggType.id;
@@ -322,7 +321,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false };
+    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
   });
 
   app.post('/api/admin/users/:userId/grant-incubator-slot', async (request, reply) => {
@@ -366,7 +365,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false };
+    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
   });
 
 
@@ -511,6 +510,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         payload: { ledgerId }
       });
     });
-    return { status: 'ok', idempotent: false };
+    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
   });
 }
