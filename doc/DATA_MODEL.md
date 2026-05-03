@@ -143,7 +143,6 @@ outcome_type text not null -- resource, unhatched_egg
 resource_type text nullable
 resource_amount integer nullable
 pet_type_id text nullable references pet_types(id)
-is_active boolean not null default true
 ```
 
 Use integer weights, not floating percentages. Example: total weight 10000 for basis points.

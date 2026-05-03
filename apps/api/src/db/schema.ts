@@ -158,8 +158,7 @@ export const eggLootTableEntries = pgTable('egg_loot_table_entries', {
   outcomeType: text('outcome_type').notNull(),
   resourceType: text('resource_type'),
   resourceAmount: integer('resource_amount'),
-  petTypeId: text('pet_type_id').references(() => petTypes.id),
-  isActive: boolean('is_active').notNull().default(true)
+  petTypeId: text('pet_type_id').references(() => petTypes.id)
 });
 
 export const mysteryEggInventory = pgTable(
