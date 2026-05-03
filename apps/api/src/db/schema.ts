@@ -126,6 +126,14 @@ export const eggTypes = pgTable('egg_types', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),
   baseIncubationSeconds: integer('base_incubation_seconds').notNull(),
+  twitchRewardId: text('twitch_reward_id'),
+  twitchRewardTitle: text('twitch_reward_title'),
+  twitchRewardPrompt: text('twitch_reward_prompt'),
+  twitchRewardCost: integer('twitch_reward_cost'),
+  twitchRewardBackgroundColor: text('twitch_reward_background_color'),
+  twitchRewardGlobalCooldownMinutes: integer('twitch_reward_global_cooldown_minutes'),
+  twitchRewardMaxPerStream: integer('twitch_reward_max_per_stream'),
+  twitchRewardMaxPerUserPerStream: integer('twitch_reward_max_per_user_per_stream'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { channelPointRedemptions, economyLedger, mysteryEggInventory, twitchEvents, users } from '../db/schema.js';
+import { channelPointRedemptions, economyLedger, eggTypes, mysteryEggInventory, twitchEvents, users } from '../db/schema.js';
 import { config } from '../config.js';
 
 type EventSubEnvelope = {
@@ -50,7 +50,17 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
   const redemption = payload.event;
   if (!redemption) return;
 
-  if (redemption.reward.id !== config.TWITCH_CHANNEL_POINT_REWARD_ID || redemption.status !== 'fulfilled') {
+  if (redemption.status !== 'fulfilled') {
+    return;
+  }
+
+  const matchingEggTypes = await db
+    .select({ id: eggTypes.id })
+    .from(eggTypes)
+    .where(and(eq(eggTypes.twitchRewardId, redemption.reward.id), eq(eggTypes.isActive, true)))
+    .limit(1);
+  const matchedEggTypeId = matchingEggTypes[0]?.id;
+  if (!matchedEggTypeId) {
     return;
   }
 
@@ -94,7 +104,7 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
       throw new Error('Failed to persist channel point redemption');
     }
 
-    await tx.insert(mysteryEggInventory).values({ userId: user.id, eggTypeId: 'common_mystery_egg', amount: 1, updatedAt: now }).onConflictDoUpdate({
+    await tx.insert(mysteryEggInventory).values({ userId: user.id, eggTypeId: matchedEggTypeId, amount: 1, updatedAt: now }).onConflictDoUpdate({
       target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
       set: { amount: sql`${mysteryEggInventory.amount} + 1`, updatedAt: now }
     });
@@ -102,10 +112,10 @@ async function processRedemption(payload: EventSubEnvelope): Promise<void> {
     await tx.insert(economyLedger).values({
       userId: user.id,
       actorUserId: null,
-      eventType: 'channel_point_redemption_granted_mystery_egg',
+      eventType: 'channel_point_redemption_granted_egg',
       sourceType: 'channel_point_redemption',
       sourceId: savedRedemption.id,
-      delta: { mysteryEggInventory: [{ eggTypeId: 'common_mystery_egg', amountDelta: 1 }] }
+      delta: { mysteryEggInventory: [{ eggTypeId: matchedEggTypeId, amountDelta: 1 }] }
     });
   });
 }
