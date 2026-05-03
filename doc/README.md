@@ -133,7 +133,8 @@ pnpm build
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
+- Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types.
 
 
-- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions`.
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.

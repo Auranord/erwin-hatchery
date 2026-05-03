@@ -35,7 +35,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     authUrl.searchParams.set('client_id', config.TWITCH_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', getOAuthRedirectUri());
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'user:read:email channel:read:redemptions');
+    authUrl.searchParams.set('scope', 'user:read:email channel:read:redemptions channel:manage:redemptions');
     authUrl.searchParams.set('state', state);
     return reply.redirect(authUrl.toString());
   });
