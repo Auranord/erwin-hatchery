@@ -119,7 +119,7 @@ pnpm build
 - Verifies Twitch EventSub HMAC signature using `TWITCH_EVENTSUB_SECRET` and raw request body.
 - Supports webhook challenge verification requests and returns plain-text challenge.
 - Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
-- Processes only `channel.channel_points_custom_reward_redemption.add` notifications for configured `TWITCH_CHANNEL_POINT_REWARD_ID`.
+- Processes only `channel.channel_points_custom_reward_redemption.add` notifications for reward IDs that are mapped to active egg types in the database.
 - Creates a provisional user by Twitch user ID when needed.
 - Resolves mystery egg outcome at redemption time and stores unhatched egg immediately.
 - Increments `common_mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
