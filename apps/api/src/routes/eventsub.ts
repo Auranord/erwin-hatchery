@@ -46,11 +46,16 @@ function verifyEventSubSignature(request: FastifyRequest): boolean {
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
+function shouldGrantRedemption(status: string | undefined): boolean {
+  if (!status) return false;
+  return status === 'unfulfilled' || status === 'fulfilled';
+}
+
 async function processRedemption(payload: EventSubEnvelope): Promise<void> {
   const redemption = payload.event;
   if (!redemption) return;
 
-  if (redemption.status !== 'fulfilled') {
+  if (!shouldGrantRedemption(redemption.status)) {
     return;
   }
 
@@ -127,6 +132,7 @@ function badRequest(reply: FastifyReply): FastifyReply {
 export async function registerEventSubRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/twitch/eventsub', async (request, reply) => {
     const messageType = headerValueToString(request.headers['twitch-eventsub-message-type']);
+    const messageId = headerValueToString(request.headers['twitch-eventsub-message-id']);
     if (!messageType || !verifyEventSubSignature(request)) {
       return badRequest(reply);
     }
@@ -144,12 +150,12 @@ export async function registerEventSubRoutes(app: FastifyInstance): Promise<void
       return reply.code(204).send();
     }
 
-    if (!payload.event?.id) {
+    if (!payload.event?.id || !messageId) {
       return badRequest(reply);
     }
 
     const [eventRow] = await db.insert(twitchEvents).values({
-      twitchEventId: payload.event.id,
+      twitchEventId: messageId,
       type: payload.subscription.type,
       source: 'eventsub',
       rawPayload: payload,
