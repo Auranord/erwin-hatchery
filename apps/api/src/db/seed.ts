@@ -18,14 +18,19 @@ const BASE_LOOT_ENTRIES = [
 
 async function seed(): Promise<void> {
   await db.insert(eggTypes).values([
-    { id: 'common_mystery_egg', displayName: 'Gewöhnliches Mystery Ei', baseIncubationSeconds: 14400, isActive: true },
-    { id: 'uncommon_mystery_egg', displayName: 'Ungewöhnliches Mystery Ei', baseIncubationSeconds: 21600, isActive: true },
-    { id: 'rare_mystery_egg', displayName: 'Seltenes Mystery Ei', baseIncubationSeconds: 28800, isActive: true }
+    { id: 'common_mystery_egg', displayName: 'Gewöhnliches Mystery Ei', baseIncubationSeconds: 14400, twitchRewardCost: 1000, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true },
+    { id: 'uncommon_mystery_egg', displayName: 'Ungewöhnliches Mystery Ei', baseIncubationSeconds: 21600, twitchRewardCost: 2500, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true },
+    { id: 'rare_mystery_egg', displayName: 'Seltenes Mystery Ei', baseIncubationSeconds: 28800, twitchRewardCost: 5000, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true }
   ]).onConflictDoUpdate({
     target: eggTypes.id,
     set: {
       displayName: sql`excluded.display_name`,
       baseIncubationSeconds: sql`excluded.base_incubation_seconds`,
+      twitchRewardCost: sql`coalesce(excluded.twitch_reward_cost, ${eggTypes.twitchRewardCost})`,
+      twitchRewardBackgroundColor: sql`coalesce(excluded.twitch_reward_background_color, ${eggTypes.twitchRewardBackgroundColor})`,
+      twitchRewardGlobalCooldownMinutes: sql`coalesce(excluded.twitch_reward_global_cooldown_minutes, ${eggTypes.twitchRewardGlobalCooldownMinutes})`,
+      twitchRewardMaxPerStream: sql`coalesce(excluded.twitch_reward_max_per_stream, ${eggTypes.twitchRewardMaxPerStream})`,
+      twitchRewardMaxPerUserPerStream: sql`coalesce(excluded.twitch_reward_max_per_user_per_stream, ${eggTypes.twitchRewardMaxPerUserPerStream})`,
       isActive: true
     }
   });
