@@ -326,6 +326,23 @@ export function App(): JSX.Element {
     setEventSubSubscriptionStatus(payload);
   }
 
+
+
+  async function syncTwitchCustomRewards(): Promise<void> {
+    const response = await fetch('/api/admin/twitch/custom-rewards/sync', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: crypto.randomUUID() })
+    });
+    const payload = (await response.json().catch(() => null)) as { message?: string; created?: number; updated?: number; total?: number } | null;
+    if (!response.ok) {
+      window.alert(payload?.message ?? 'Twitch-Reward-Sync fehlgeschlagen.');
+      return;
+    }
+    window.alert(`Twitch-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`);
+  }
+
   async function loadLedger(userId?: string): Promise<void> {
     const response = await fetch(`/api/admin/ledger${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`, { credentials: 'include' });
     if (!response.ok) return;
@@ -402,6 +419,7 @@ export function App(): JSX.Element {
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
           <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
+          <button onClick={() => void syncTwitchCustomRewards()}>Twitch Custom Rewards mit Ei-Typen synchronisieren</button>
           <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
           <button onClick={() => void loadUsers(query)}>Suchen</button>

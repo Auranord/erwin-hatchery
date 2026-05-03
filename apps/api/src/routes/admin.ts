@@ -21,6 +21,7 @@ import {
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
+import { syncEggTypeCustomRewards } from '../services/twitchRewards.js';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
@@ -179,6 +180,28 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
 
+
+
+  app.post('/api/admin/twitch/custom-rewards/sync', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const body = (request.body ?? {}) as { requestId?: string };
+    const requestId = body.requestId?.trim() || randomUUID();
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
+    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    const result = await syncEggTypeCustomRewards();
+
+    await db.insert(adminActionLogs).values({
+      actorUserId: identity.userId,
+      actionType: 'twitch_custom_rewards_sync',
+      requestId,
+      payload: result
+    });
+
+    return { status: 'ok', idempotent: false, ...result };
+  });
 
   app.get('/api/admin/debug/eventsub-subscription', async (request, reply) => {
     const identity = await getSessionIdentity(request);
