@@ -18,6 +18,11 @@ export async function checkEggTypeCatalogHealth(): Promise<boolean> {
   return result.rows[0]?.ok === true;
 }
 
+export async function checkActiveEggTypesHealth(): Promise<boolean> {
+  const result = await pool.query('select exists(select 1 from egg_types where is_active = true) as ok');
+  return result.rows[0]?.ok === true;
+}
+
 
 export async function ensureCoreSchema(): Promise<void> {
   await pool.query(`
