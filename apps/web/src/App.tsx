@@ -51,6 +51,13 @@ type EventSubFeedItem = {
 };
 
 
+type TwitchCustomReward = {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+};
+
 type EventSubSubscriptionStatus = {
   enabled: boolean;
   status: 'enabled' | 'missing' | 'error' | 'duplicate' | 'pending_verification';
@@ -128,6 +135,7 @@ export function App(): JSX.Element {
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
+  const [twitchCustomRewards, setTwitchCustomRewards] = useState<TwitchCustomReward[]>([]);
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const isAdminRoute = window.location.pathname.startsWith('/admin');
@@ -328,6 +336,17 @@ export function App(): JSX.Element {
 
 
 
+
+  async function loadTwitchCustomRewards(): Promise<void> {
+    const response = await fetch('/api/admin/twitch/custom-rewards', { credentials: 'include' });
+    const payload = (await response.json().catch(() => null)) as { rewards?: TwitchCustomReward[]; message?: string } | null;
+    if (!response.ok) {
+      window.alert(payload?.message ?? 'Twitch Custom Rewards konnten nicht geladen werden.');
+      return;
+    }
+    setTwitchCustomRewards(payload?.rewards ?? []);
+  }
+
   async function syncTwitchCustomRewards(): Promise<void> {
     const response = await fetch('/api/admin/twitch/custom-rewards/sync', {
       method: 'POST',
@@ -419,7 +438,6 @@ export function App(): JSX.Element {
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
           <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
-          <button onClick={() => void syncTwitchCustomRewards()}>Twitch Custom Rewards mit Ei-Typen synchronisieren</button>
           <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
           <button onClick={() => void loadUsers(query)}>Suchen</button>
@@ -430,6 +448,30 @@ export function App(): JSX.Element {
               </li>
             ))}
           </ul>
+        </section>
+
+
+        <section className="card">
+          <h2>Redemption-Verwaltung</h2>
+          <p>Verwaltung und Übersicht der Twitch Custom Rewards.</p>
+          <div>
+            <button onClick={() => void syncTwitchCustomRewards()}>Twitch Custom Rewards mit Ei-Typen synchronisieren</button>
+            <button onClick={() => void loadTwitchCustomRewards()}>Alle Custom Rewards laden</button>
+          </div>
+          {twitchCustomRewards.length > 0 ? (
+            <ul>
+              {twitchCustomRewards.map((reward) => (
+                <li key={reward.id}>
+                  <strong>{reward.name}</strong>
+                  <div>ID: {reward.id}</div>
+                  <div>Beschreibung: {reward.description || '—'}</div>
+                  <div>Kosten: {reward.cost}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Noch keine Rewards geladen.</p>
+          )}
         </section>
 
         <section className="card">

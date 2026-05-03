@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { db } from '../db/client.js';
 import { eggTypes, twitchUserTokens, users } from '../db/schema.js';
 
-type TwitchReward = {
+export type TwitchReward = {
   id: string;
   title: string;
   cost: number;
@@ -43,6 +43,24 @@ async function twitchApi<T>(path: string, userToken: string, init?: RequestInit)
   }
 
   return (await response.json()) as T;
+}
+
+
+export async function listManagedCustomRewards(): Promise<TwitchReward[]> {
+  const broadcaster = await db
+    .select({ accessToken: twitchUserTokens.accessToken, scope: twitchUserTokens.scope })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+  const tokenRow = broadcaster[0];
+  if (!tokenRow?.accessToken) throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
+  if (!tokenRow.scope.includes('channel:manage:redemptions')) {
+    throw new Error('Broadcaster token missing scope channel:manage:redemptions. Login again to refresh scopes.');
+  }
+
+  const existing = await twitchApi<{ data: TwitchReward[] }>(`/channel_points/custom_rewards?broadcaster_id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}&only_manageable_rewards=true`, tokenRow.accessToken);
+  return existing.data;
 }
 
 export async function syncEggTypeCustomRewards(): Promise<{ created: number; updated: number; total: number }> {
