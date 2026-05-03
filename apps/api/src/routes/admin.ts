@@ -21,7 +21,7 @@ import {
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
-import { syncEggTypeCustomRewards } from '../services/twitchRewards.js';
+import { listManagedCustomRewards, syncEggTypeCustomRewards } from '../services/twitchRewards.js';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
@@ -180,6 +180,22 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
 
+
+
+  app.get('/api/admin/twitch/custom-rewards', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const rewards = await listManagedCustomRewards();
+    return {
+      rewards: rewards.map((reward) => ({
+        id: reward.id,
+        name: reward.title,
+        description: reward.prompt,
+        cost: reward.cost
+      }))
+    };
+  });
 
 
   app.post('/api/admin/twitch/custom-rewards/sync', async (request, reply) => {
