@@ -118,7 +118,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
+    return { status: 'ok', idempotent: false };
   });
 
   app.get('/api/admin/logs', async (request, reply) => {
@@ -321,7 +321,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
+    return { status: 'ok', idempotent: false };
   });
 
   app.post('/api/admin/users/:userId/grant-incubator-slot', async (request, reply) => {
@@ -365,7 +365,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       });
     });
 
-    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
+    return { status: 'ok', idempotent: false };
   });
 
 
@@ -510,6 +510,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         payload: { ledgerId }
       });
     });
-    return { status: 'ok', idempotent: false, warning: selectedEggType.isActive ? undefined : 'Granted inactive egg type' };
+    return { status: 'ok', idempotent: false };
   });
 }
