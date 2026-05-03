@@ -63,24 +63,24 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 
 ## Implementation status snapshot
 
-Last reevaluated: **2026-05-01**.
+Last reevaluated: **2026-05-03**.
 
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated player inventory view
+- React + Vite frontend shell with authenticated player inventory, incubate/finish hatch actions, pet event selection, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route
 - Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, and subscription auto-sync diagnostics
-- Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grant + revert
+- Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg/incubator grants, and ledger revert
 - Production Dockerfile for GHCR image builds
 
 Still pending for later milestones:
 
-- Remaining player gameplay loop pieces (incubate -> hatch -> select pet) and public leaderboard
-- Incubation progression engine and hatch resolution
-- Battle events, overlays, and bits/sub feature foundation
+- Stream-state incubation multipliers (live/viewer-based acceleration)
+- Admin lifecycle controls (freeze/reset/delete progress and fuller role lifecycle)
+- Battle event persistence/revert completeness, overlays, and bits/sub feature foundation
 - Deployment hardening milestones beyond the current baseline
 
 ## Admin testing seed dependency
