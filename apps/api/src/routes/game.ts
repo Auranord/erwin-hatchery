@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes, leaderboardScores, users } from '../db/schema.js';
+import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes, leaderboardScores, users, gameEvents } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
 
@@ -173,6 +173,71 @@ async function computeInventoryRevision(userId: string): Promise<string> {
 }
 
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/api/events/overlay/alerts/stream', async (request, reply) => {
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.hijack();
+
+    const sendEvent = (event: string, data: unknown): void => {
+      reply.raw.write(`event: ${event}\n`);
+      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let lastSeen = new Date(Date.now() - 20_000);
+    const intervalId = setInterval(async () => {
+      try {
+        const rows = await db.select({ id: economyLedger.id, userId: economyLedger.userId, delta: economyLedger.delta, createdAt: economyLedger.createdAt })
+          .from(economyLedger)
+          .where(and(eq(economyLedger.eventType, 'incubation_finished'), sql`${economyLedger.createdAt} > ${lastSeen}`))
+          .orderBy(sql`${economyLedger.createdAt} asc`)
+          .limit(25);
+
+        for (const row of rows) {
+          const hatchedPetId = (row.delta as { hatchedPets?: Array<{ id?: string | null }> } | null)?.hatchedPets?.[0]?.id;
+          if (!hatchedPetId || !row.userId) continue;
+          const [details] = await db.select({ displayName: users.displayName, login: users.twitchLogin, petName: petTypes.displayName })
+            .from(pets)
+            .innerJoin(users, eq(pets.ownerUserId, users.id))
+            .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+            .where(eq(pets.id, hatchedPetId))
+            .limit(1);
+          if (!details) continue;
+          sendEvent('hatch_alert', { userName: details.displayName ?? details.login ?? 'Unbekannt', petName: details.petName, createdAt: row.createdAt });
+          lastSeen = row.createdAt;
+        }
+        sendEvent('heartbeat', { t: Date.now() });
+      } catch (error) {
+        request.log.error({ err: error }, 'alerts overlay stream update failed');
+      }
+    }, 2000);
+
+    request.raw.on('close', () => {
+      clearInterval(intervalId);
+      reply.raw.end();
+    });
+  });
+
+  app.get('/api/events/overlay/battle', async () => {
+    const [eventRow] = await db.select({ id: gameEvents.id, resolvedAt: gameEvents.resolvedAt, resultJson: gameEvents.resultJson })
+      .from(gameEvents)
+      .where(and(eq(gameEvents.eventType, 'battle'), eq(gameEvents.status, 'resolved')))
+      .orderBy(sql`${gameEvents.createdAt} desc`)
+      .limit(1);
+    if (!eventRow) return { winners: [] };
+    const winners = ((eventRow.resultJson as { winners?: Array<{ userId: string; petId: string; placement: number; pointsAwarded: number }> } | null)?.winners ?? []);
+    const winnersWithNames = await Promise.all(winners.map(async (winner) => {
+      const [details] = await db.select({ displayName: users.displayName, login: users.twitchLogin, petName: petTypes.displayName })
+        .from(pets)
+        .innerJoin(users, eq(pets.ownerUserId, users.id))
+        .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+        .where(eq(pets.id, winner.petId))
+        .limit(1);
+      return { ...winner, userName: details?.displayName ?? details?.login ?? 'Unbekannt', petName: details?.petName ?? 'Unbekannt' };
+    }));
+    return { resolvedAt: eventRow.resolvedAt, winners: winnersWithNames.sort((a, b) => a.placement - b.placement) };
+  });
+
   app.get('/api/game/leaderboard', async () => {
     const rows = await db
       .select({

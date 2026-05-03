@@ -90,6 +90,10 @@ type PlayerInventory = {
   incubatorSlots: Array<{ id: string; slotSource: string; isAvailable: boolean; activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number } | null }>;
 };
 
+
+type OverlayHatchAlert = { userName: string; petName: string; createdAt: string };
+type OverlayBattleWinner = { placement: number; userName: string; petName: string; pointsAwarded: number };
+
 type LeaderboardEntry = {
   rank: number;
   userId: string;
@@ -139,6 +143,10 @@ export function App(): JSX.Element {
   const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const isAdminRoute = window.location.pathname.startsWith('/admin');
+  const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
+  const isBattleOverlayRoute = window.location.pathname === '/overlay/battle';
+  const [overlayAlerts, setOverlayAlerts] = useState<OverlayHatchAlert[]>([]);
+  const [battleWinners, setBattleWinners] = useState<OverlayBattleWinner[]>([]);
 
   const activeIncubationByEggId = useMemo(() => {
     if (!playerInventory) return new Map<string, { startedAt: string; requiredProgressSeconds: number }>();
@@ -425,6 +433,47 @@ export function App(): JSX.Element {
     if (userId) await loadInventory(userId);
   }
 
+  async function copyOverlaySource(type: 'alerts' | 'battle'): Promise<void> {
+    const path = type === 'alerts' ? '/overlay/alerts' : '/overlay/battle';
+    const sourceUrl = `${window.location.origin}${path}`;
+
+    try {
+      await navigator.clipboard.writeText(sourceUrl);
+      window.alert(`OBS-Overlay-Link kopiert: ${sourceUrl}`);
+    } catch {
+      window.alert(`Kopieren fehlgeschlagen. Bitte manuell kopieren:\n${sourceUrl}`);
+    }
+  }
+
+
+  useEffect(() => {
+    if (!isAlertOverlayRoute) return;
+    const source = new EventSource('/api/events/overlay/alerts/stream');
+    source.addEventListener('hatch_alert', (event) => {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as OverlayHatchAlert;
+      setOverlayAlerts((current) => [payload, ...current].slice(0, 5));
+    });
+    source.onerror = () => source.close();
+    return () => source.close();
+  }, [isAlertOverlayRoute]);
+
+  useEffect(() => {
+    if (!isBattleOverlayRoute) return;
+    fetch('/api/events/overlay/battle').then(async (response) => {
+      if (!response.ok) return;
+      const payload = (await response.json()) as { winners: OverlayBattleWinner[] };
+      setBattleWinners(payload.winners ?? []);
+    }).catch(() => undefined);
+  }, [isBattleOverlayRoute]);
+
+  if (isAlertOverlayRoute) {
+    return <main className="container"><section className="card"><h2>🐣 Hatch Alerts</h2><ul>{overlayAlerts.map((alert) => <li key={`${alert.createdAt}-${alert.userName}-${alert.petName}`}><strong>{alert.userName}</strong> hat <strong>{alert.petName}</strong> ausgebrütet!</li>)}</ul></section></main>;
+  }
+
+  if (isBattleOverlayRoute) {
+    return <main className="container"><section className="card"><h2>🏆 Event Top 3</h2><ol>{battleWinners.map((winner) => <li key={`${winner.placement}-${winner.userName}-${winner.petName}`}>Platz {winner.placement}: <strong>{winner.userName}</strong> mit <strong>{winner.petName}</strong> (+{winner.pointsAwarded})</li>)}</ol></section></main>;
+  }
+
   if (isAdminRoute) {
     if (!me?.authenticated || !me.isAdmin) return <main className="container"><section className="card"><h2>Adminbereich</h2><p>Zugriff verweigert.</p></section></main>;
     const selected = users.find((x) => x.id === selectedUserId) ?? null;
@@ -438,6 +487,10 @@ export function App(): JSX.Element {
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
           <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
+          <div>
+            <button onClick={() => void copyOverlaySource('alerts')}>OBS-Link kopieren: Hatch Alerts</button>
+            <button onClick={() => void copyOverlaySource('battle')}>OBS-Link kopieren: Battle Top 3</button>
+          </div>
           <p><a href="/">Zurück zur Startseite</a></p>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
           <button onClick={() => void loadUsers(query)}>Suchen</button>
