@@ -286,10 +286,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           weight: eggLootTableEntries.weight
         })
         .from(eggLootTableEntries)
-        .where(and(eq(eggLootTableEntries.eggTypeId, eggTypeId), eq(eggLootTableEntries.isActive, true), sql`${eggLootTableEntries.weight} > 0`));
+        .where(and(eq(eggLootTableEntries.eggTypeId, eggTypeId), sql`${eggLootTableEntries.weight} > 0`));
 
       if (entries.length === 0) {
-        throw new Error(`No active loot table entries for egg type ${eggTypeId}`);
+        throw new Error(`No loot table entries for egg type ${eggTypeId}`);
       }
 
       const picked = pickWeightedOutcome(entries);

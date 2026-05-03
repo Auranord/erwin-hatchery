@@ -50,6 +50,13 @@
       "when": 1782000000000,
       "tag": "0006_egg_type_twitch_reward_config",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783000000000,
+      "tag": "0007_drop_egg_loot_table_entries_is_active",
+      "breakpoints": true
     }
   ]
 }
