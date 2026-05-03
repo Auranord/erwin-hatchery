@@ -222,7 +222,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const [eventRow] = await db.select({ id: gameEvents.id, resolvedAt: gameEvents.resolvedAt, resultJson: gameEvents.resultJson })
       .from(gameEvents)
       .where(and(eq(gameEvents.eventType, 'battle'), eq(gameEvents.status, 'resolved')))
-      .orderBy(sql`${gameEvents.createdAt} desc`)
+      .orderBy(sql`coalesce(${gameEvents.resolvedAt}, ${gameEvents.startedAt}) desc`)
       .limit(1);
     if (!eventRow) return { winners: [] };
     const winners = ((eventRow.resultJson as { winners?: Array<{ userId: string; petId: string; placement: number; pointsAwarded: number }> } | null)?.winners ?? []);
