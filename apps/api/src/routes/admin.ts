@@ -473,7 +473,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
 
-    const events = await db.select().from(gameEvents).where(eq(gameEvents.eventType, 'battle')).orderBy(desc(gameEvents.createdAt)).limit(25);
+    const events = await db.select().from(gameEvents).where(eq(gameEvents.eventType, 'battle')).orderBy(desc(gameEvents.startedAt)).limit(25);
     return { events };
   });
 
