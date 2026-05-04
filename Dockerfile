@@ -7,9 +7,7 @@ COPY . .
 RUN pnpm install --no-frozen-lockfile
 
 FROM deps AS build
-RUN pnpm --filter @erwin/shared build \
-  && pnpm --filter @erwin/api build \
-  && pnpm --filter @erwin/web build
+RUN pnpm -r --filter "./packages/*" --filter "./apps/*" build
 
 FROM build AS deploy
 RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
