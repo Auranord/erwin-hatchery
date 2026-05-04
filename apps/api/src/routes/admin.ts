@@ -469,6 +469,73 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     return { status: 'ok', idempotent: false, gameEventId: result.gameEventId };
   });
 
+  app.get('/api/admin/events', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const events = await db.select().from(gameEvents).where(eq(gameEvents.eventType, 'battle')).orderBy(desc(gameEvents.createdAt)).limit(25);
+    return { events };
+  });
+
+  app.post('/api/admin/events/:eventId/revert', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+    const eventId = (request.params as { eventId: string }).eventId;
+    const body = (request.body ?? {}) as { requestId?: string };
+    if (!body.requestId) return reply.code(400).send({ message: 'requestId is required' });
+
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, body.requestId)).limit(1);
+    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    await db.transaction(async (tx) => {
+      const [eventRow] = await tx.select().from(gameEvents).where(eq(gameEvents.id, eventId)).limit(1);
+      if (!eventRow) throw new Error('Game event not found');
+      if (eventRow.eventType !== 'battle') throw new Error('Only battle events are reversible');
+      if (eventRow.status === 'reverted') throw new Error('Game event already reverted');
+
+      const participantRows = await tx.select().from(gameEventParticipants).where(eq(gameEventParticipants.gameEventId, eventId));
+      if (participantRows.length === 0) throw new Error('No participants found for game event');
+
+      for (const participant of participantRows) {
+        await tx.insert(leaderboardScores).values({
+          userId: participant.userId,
+          leaderboardType: 'battle_points',
+          score: 0
+        }).onConflictDoNothing();
+
+        await tx.update(leaderboardScores)
+          .set({
+            score: sql`GREATEST(${leaderboardScores.score} - ${participant.pointsAwarded}, 0)`,
+            updatedAt: sql`now()`
+          })
+          .where(and(eq(leaderboardScores.userId, participant.userId), eq(leaderboardScores.leaderboardType, 'battle_points')));
+
+        await tx.insert(economyLedger).values({
+          userId: participant.userId,
+          actorUserId: identity.userId,
+          eventType: 'admin_revert_battle_points_award',
+          sourceType: 'admin_revert',
+          sourceId: eventId,
+          delta: { leaderboard: [{ leaderboardType: 'battle_points', pointsDelta: -Math.abs(participant.pointsAwarded), placement: participant.placement, petId: participant.petId }] }
+        });
+      }
+
+      await tx.update(gameEvents).set({
+        status: 'reverted',
+        revertedAt: new Date()
+      }).where(eq(gameEvents.id, eventId));
+
+      await tx.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'revert_battle_event',
+        requestId: body.requestId,
+        payload: { eventId }
+      });
+    });
+
+    return { status: 'ok', idempotent: false };
+  });
+
 
   app.get('/api/admin/stream-state', async (request, reply) => {
     const identity = await getSessionIdentity(request);
