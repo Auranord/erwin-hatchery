@@ -100,6 +100,7 @@ type PlayerInventory = {
 
 type OverlayHatchAlert = { userName: string; petName: string; createdAt: string };
 type OverlayBattleWinner = { placement: number; userName: string; petName: string; pointsAwarded: number };
+type OverlayEventLeader = { rank: number; userName: string; points: number };
 
 type LeaderboardEntry = {
   rank: number;
@@ -155,6 +156,7 @@ export function App(): JSX.Element {
   const isBattleOverlayRoute = window.location.pathname === '/overlay/battle';
   const [overlayAlerts, setOverlayAlerts] = useState<OverlayHatchAlert[]>([]);
   const [battleWinners, setBattleWinners] = useState<OverlayBattleWinner[]>([]);
+  const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>([]);
 
   const activeIncubationByEggId = useMemo(() => {
     if (!playerInventory) return new Map<string, { startedAt: string; requiredProgressSeconds: number }>();
@@ -487,19 +489,60 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!isBattleOverlayRoute) return;
+    const source = new EventSource('/api/events/overlay/battle/stream');
+    source.addEventListener('battle_result', (event) => {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as { winners?: OverlayBattleWinner[] };
+      const winners = payload.winners ?? [];
+      setBattleWinners(winners);
+      setOverlayLeaders(winners.map((winner, index) => ({
+        rank: index + 1,
+        userName: winner.userName,
+        points: winner.pointsAwarded
+      })));
+    });
+    source.onerror = () => source.close();
     fetch('/api/events/overlay/battle').then(async (response) => {
       if (!response.ok) return;
-      const payload = (await response.json()) as { winners: OverlayBattleWinner[] };
-      setBattleWinners(payload.winners ?? []);
+      const payload = (await response.json()) as { winners?: OverlayBattleWinner[] };
+      const winners = payload.winners ?? [];
+      setBattleWinners(winners);
+      setOverlayLeaders(winners.map((winner, index) => ({ rank: index + 1, userName: winner.userName, points: winner.pointsAwarded })));
     }).catch(() => undefined);
+    return () => source.close();
   }, [isBattleOverlayRoute]);
 
   if (isAlertOverlayRoute) {
-    return <main className="container"><section className="card"><h2>🐣 Hatch Alerts</h2><ul>{overlayAlerts.map((alert) => <li key={`${alert.createdAt}-${alert.userName}-${alert.petName}`}><strong>{alert.userName}</strong> hat <strong>{alert.petName}</strong> ausgebrütet!</li>)}</ul></section></main>;
+    return <main className="overlay-canvas overlay-alerts">
+      <section className="overlay-panel">
+        <h2>🐣 Hatch Alerts</h2>
+        <ul>
+          {overlayAlerts.map((alert) => (
+            <li key={`${alert.createdAt}-${alert.userName}-${alert.petName}`}><strong>{alert.userName}</strong> hat <strong>{alert.petName}</strong> ausgebrütet!</li>
+          ))}
+        </ul>
+      </section>
+    </main>;
   }
 
   if (isBattleOverlayRoute) {
-    return <main className="container"><section className="card"><h2>🏆 Event Top 3</h2><ol>{battleWinners.map((winner) => <li key={`${winner.placement}-${winner.userName}-${winner.petName}`}>Platz {winner.placement}: <strong>{winner.userName}</strong> mit <strong>{winner.petName}</strong> (+{winner.pointsAwarded})</li>)}</ol></section></main>;
+    return <main className="overlay-canvas overlay-battle">
+      <section className="overlay-panel">
+        <h2>🏆 Event Top 3</h2>
+        <ol>
+          {battleWinners.map((winner) => (
+            <li key={`${winner.placement}-${winner.userName}-${winner.petName}`}>Platz {winner.placement}: <strong>{winner.userName}</strong> mit <strong>{winner.petName}</strong> (+{winner.pointsAwarded})</li>
+          ))}
+        </ol>
+      </section>
+      <section className="overlay-panel">
+        <h2>📊 Event Leader Alerts</h2>
+        <ul>
+          {overlayLeaders.map((leader) => (
+            <li key={`${leader.rank}-${leader.userName}`}>#{leader.rank} <strong>{leader.userName}</strong> (+{leader.points})</li>
+          ))}
+        </ul>
+      </section>
+    </main>;
   }
 
   if (isAdminRoute) {

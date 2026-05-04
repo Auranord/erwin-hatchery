@@ -239,6 +239,43 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { resolvedAt: eventRow.resolvedAt, winners: winnersWithNames.sort((a, b) => a.placement - b.placement) };
   });
 
+  app.get('/api/events/overlay/battle/stream', async (request, reply) => {
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.hijack();
+
+    const sendEvent = (event: string, data: unknown): void => {
+      reply.raw.write(`event: ${event}\n`);
+      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    let lastResolvedAtIso = '';
+    const intervalId = setInterval(async () => {
+      try {
+        const latestBattle = await app.inject({
+          method: 'GET',
+          url: '/api/events/overlay/battle'
+        });
+        if (latestBattle.statusCode !== 200) return;
+        const payload = latestBattle.json() as { resolvedAt?: string | null; winners?: unknown[] };
+        const resolvedAtIso = payload.resolvedAt ?? '';
+        if (resolvedAtIso && resolvedAtIso !== lastResolvedAtIso) {
+          sendEvent('battle_result', payload);
+          lastResolvedAtIso = resolvedAtIso;
+        }
+        sendEvent('heartbeat', { t: Date.now() });
+      } catch (error) {
+        request.log.error({ err: error }, 'battle overlay stream update failed');
+      }
+    }, 2000);
+
+    request.raw.on('close', () => {
+      clearInterval(intervalId);
+      reply.raw.end();
+    });
+  });
+
   app.get('/api/game/leaderboard', async () => {
     const rows = await db
       .select({
