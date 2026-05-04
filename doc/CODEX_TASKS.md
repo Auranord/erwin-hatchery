@@ -149,13 +149,13 @@ Acceptance:
 
 ## Milestone 8 - OBS overlays
 
-- `/overlay/alerts`
-- `/overlay/battle`
+- ✅ `/overlay/alerts`
+- ✅ `/overlay/battle`
 - Route token/secret protection.
-- SSE connection to backend.
-- Alert overlay shows hatch/rare hatch events.
-- Battle overlay shows winners and pet placeholders.
-- 1920x1080 safe layout.
+- ✅ SSE connection to backend.
+- ✅ Alert overlay shows hatch/rare hatch events.
+- ✅ Battle overlay shows winners and pet placeholders.
+- ✅ 1920x1080 safe layout.
 
 Acceptance:
 

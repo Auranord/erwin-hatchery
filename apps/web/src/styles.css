@@ -14,6 +14,10 @@ body {
   min-height: 100vh;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 .container {
   padding: 1rem;
   max-width: 42rem;
@@ -61,4 +65,31 @@ ul {
   background: #245f3b;
   color: #eafff0;
   border-color: #3f9b65;
+}
+
+.overlay-canvas {
+  width: 1920px;
+  height: 1080px;
+  padding: 40px;
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  background: transparent;
+  color: #ffffff;
+}
+
+.overlay-alerts {
+  grid-template-columns: minmax(480px, 720px);
+}
+
+.overlay-battle {
+  grid-template-columns: minmax(560px, 840px) minmax(360px, 520px);
+}
+
+.overlay-panel {
+  background: rgba(22, 16, 34, 0.78);
+  border: 2px solid rgba(120, 96, 180, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  padding: 20px 24px;
 }
