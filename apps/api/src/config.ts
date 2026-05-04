@@ -37,8 +37,11 @@ const configSchema = z.object({
   OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
   LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false),
   DEBUG_MODE: booleanFromEnv.default(false),
-  DEBUG_INCUBATION_TIME_FACTOR: z.coerce.number().gt(0).lte(1).default(1),
-  DEBUG_EGG_RESOURCE_MULTIPLIER: z.coerce.number().int().min(1).default(1)
+  DEBUG_EGG_RESOURCE_MULTIPLIER: z.coerce.number().int().min(1).default(1),
+  INCUBATION_OFFLINE_MULTIPLIER: z.coerce.number().gt(0).default(1),
+  INCUBATION_LIVE_BASE_MULTIPLIER: z.coerce.number().gt(0).default(2),
+  INCUBATION_VIEWER_MULTIPLIER_PER_VIEWER: z.coerce.number().min(0).default(0.01),
+  INCUBATION_MAX_MULTIPLIER: z.coerce.number().gt(0).default(3)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

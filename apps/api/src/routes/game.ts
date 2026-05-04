@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes, leaderboardScores, users, gameEvents } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
+import { computeIncubationMultiplier, getCurrentStreamState } from '../services/streamState.js';
 
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number; updatedAt: string }>;
@@ -441,10 +442,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [eggType] = await tx.select({ baseIncubationSeconds: eggTypes.baseIncubationSeconds }).from(eggTypes).where(eq(eggTypes.id, egg.eggTypeId)).limit(1);
       if (!eggType) return { kind: 'egg_type_missing' as const };
 
-      const debugShortenerDivisor = 1 / config.DEBUG_INCUBATION_TIME_FACTOR;
-      const debugAdjustedIncubationSeconds = Math.max(1, Math.ceil(eggType.baseIncubationSeconds / debugShortenerDivisor));
+      const streamState = await getCurrentStreamState();
+      const streamMultiplier = computeIncubationMultiplier({ isLive: streamState.isLive, viewerCount: streamState.viewerCount });
+      const adjustedSeconds = Math.max(1, Math.ceil(eggType.baseIncubationSeconds / streamMultiplier));
 
-      const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: debugAdjustedIncubationSeconds, progressSnapshot: { mode: 'timestamp_only' } }).returning({ id: incubationJobs.id });
+      const [created] = await tx.insert(incubationJobs).values({ ownerUserId: identity.userId, unhatchedEggId: egg.id, incubatorSlotId: slot.id, state: 'running', requiredProgressSeconds: adjustedSeconds, progressSnapshot: { mode: 'timestamp_with_stream_multiplier', streamState, multiplierApplied: streamMultiplier, baseIncubationSeconds: eggType.baseIncubationSeconds } }).returning({ id: incubationJobs.id });
       if (!created) {
         throw new Error('Failed to create incubation job');
       }
