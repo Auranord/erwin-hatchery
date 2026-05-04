@@ -63,7 +63,7 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 
 ## Implementation status snapshot
 
-Last reevaluated: **2026-05-03**.
+Last reevaluated: **2026-05-04**.
 
 The current repo implementation includes:
 
@@ -74,13 +74,14 @@ The current repo implementation includes:
 - Twitch OAuth login/logout and `/api/me` identity route
 - Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, and subscription auto-sync diagnostics
 - Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg/incubator grants, and ledger revert
+- Battle event flow with persisted results, leaderboard awards, and admin revert action
+- OBS overlays (`/overlay/alerts`, `/overlay/battle`) with SSE-backed live updates
 - Production Dockerfile for GHCR image builds
 
 Still pending for later milestones:
 
-- Stream-state incubation multipliers (live/viewer-based acceleration)
 - Admin lifecycle controls (freeze/reset/delete progress and fuller role lifecycle)
-- Battle event persistence/revert completeness, overlays, and bits/sub feature foundation
+- Bits/sub feature foundation (fixed, non-random effects only)
 - Deployment hardening milestones beyond the current baseline
 
 ## Admin testing seed dependency
