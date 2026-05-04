@@ -233,6 +233,12 @@ export function App(): JSX.Element {
 
 
 
+  async function refreshOwnInventory(): Promise<void> {
+    const response = await fetch('/api/game/inventory', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { inventory: PlayerInventory };
+    setPlayerInventory(payload.inventory);
+  }
 
   async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
     const response = await fetch('/api/game/mystery-eggs/identify', {
@@ -392,17 +398,7 @@ export function App(): JSX.Element {
       return;
     }
 
-    setPlayerInventory((current) => {
-      if (!current) return current;
-      return {
-        ...current,
-        hatchedPets: current.hatchedPets.map((pet) => (
-          pet.id === petId
-            ? { ...pet, selectedForEvent }
-            : pet
-        ))
-      };
-    });
+    await refreshOwnInventory();
   }
 
 
