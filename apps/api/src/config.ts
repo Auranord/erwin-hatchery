@@ -33,6 +33,7 @@ const configSchema = z.object({
   TWITCH_BROADCASTER_ID: z.string().min(1),
   TWITCH_EVENTSUB_SECRET: z.string().min(1),
   TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv.default(true),
+  TWITCH_SUBSCRIPTION_RENEWAL_DAYS: z.coerce.number().int().min(1).max(90).default(31),
   SESSION_SECRET: z.string().min(32),
   OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
   LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false),

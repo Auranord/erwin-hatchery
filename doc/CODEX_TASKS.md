@@ -165,6 +165,7 @@ Acceptance:
 ## Milestone 9 - Bits/sub event support foundation
 
 - Add schema/event ingestion for sub/gift sub/Bits events.
+- ✅ Add schema/event ingestion for sub status events (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) with persisted renewal/end cache on `users`.
 - Do not add paid random eggs.
 - Implement subscriber extra incubator if sub status can be reliably received.
 - Bits effects should be fixed only and can remain disabled behind config.

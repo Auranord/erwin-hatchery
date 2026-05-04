@@ -1,6 +1,11 @@
 import { config, getEventSubCallbackUrl } from '../config.js';
 
-const TARGET_SUBSCRIPTION_TYPE = 'channel.channel_points_custom_reward_redemption.add';
+const TARGET_SUBSCRIPTION_TYPES = [
+  'channel.channel_points_custom_reward_redemption.add',
+  'channel.subscribe',
+  'channel.subscription.end',
+  'channel.subscription.message'
+] as const;
 const TARGET_SUBSCRIPTION_VERSION = '1';
 
 type TwitchEventSubTransport = {
@@ -52,7 +57,7 @@ let eventSubSyncState: EventSubSyncState = {
   enabled: false,
   status: 'missing',
   subscriptionId: null,
-  type: TARGET_SUBSCRIPTION_TYPE,
+  type: TARGET_SUBSCRIPTION_TYPES.join(','),
   callback: getEventSubCallbackUrl(),
   createdAt: null,
   lastCheckedAt: new Date(0).toISOString(),
@@ -122,69 +127,59 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
   try {
     const token = await getAppAccessToken();
     const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token);
-    const matching = list.data.filter((subscription) => (
-      subscription.type === TARGET_SUBSCRIPTION_TYPE
-      && subscription.version === TARGET_SUBSCRIPTION_VERSION
-      && subscription.condition.broadcaster_user_id === config.TWITCH_BROADCASTER_ID
-      && subscription.transport.method === 'webhook'
-      && subscription.transport.callback === getEventSubCallbackUrl()
-    ));
-
-    const active = matching.find((subscription) => subscription.status === 'enabled' || subscription.status === 'webhook_callback_verification_pending');
-
-    if (matching.length > 1) {
-      log.warn({ count: matching.length }, 'Duplicate EventSub subscriptions detected; attempting cleanup');
-      for (const duplicate of matching.slice(1)) {
-        await twitchApi(`/eventsub/subscriptions?id=${encodeURIComponent(duplicate.id)}`, token, { method: 'DELETE' });
-      }
-    }
-
-    if (active) {
-      const status = active.status === 'enabled' ? 'enabled' : 'pending_verification';
-      eventSubSyncState = {
-        enabled: active.status === 'enabled',
-        status,
-        subscriptionId: active.id,
-        type: active.type,
-        callback: active.transport.callback,
-        createdAt: active.created_at,
-        lastCheckedAt: checkedAt,
-        error: matching.length > 1 ? 'Duplicate subscriptions were detected and cleaned up.' : null
-      };
-      log.info({ subscriptionId: active.id, status }, 'EventSub subscription is present');
-      return;
-    }
-
-    const created = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token, {
-      method: 'POST',
-      body: JSON.stringify({
-        type: TARGET_SUBSCRIPTION_TYPE,
-        version: TARGET_SUBSCRIPTION_VERSION,
-        condition: { broadcaster_user_id: config.TWITCH_BROADCASTER_ID },
-        transport: {
-          method: 'webhook',
-          callback: getEventSubCallbackUrl(),
-          secret: config.TWITCH_EVENTSUB_SECRET
+    const ensured: TwitchEventSubSubscription[] = [];
+    let duplicateCleanupCount = 0;
+    for (const subscriptionType of TARGET_SUBSCRIPTION_TYPES) {
+      const matching = list.data.filter((subscription) => (
+        subscription.type === subscriptionType
+        && subscription.version === TARGET_SUBSCRIPTION_VERSION
+        && subscription.condition.broadcaster_user_id === config.TWITCH_BROADCASTER_ID
+        && subscription.transport.method === 'webhook'
+        && subscription.transport.callback === getEventSubCallbackUrl()
+      ));
+      if (matching.length > 1) {
+        duplicateCleanupCount += matching.length - 1;
+        for (const duplicate of matching.slice(1)) {
+          await twitchApi(`/eventsub/subscriptions?id=${encodeURIComponent(duplicate.id)}`, token, { method: 'DELETE' });
         }
-      })
-    });
-
-    const first = created.data[0];
-    if (!first) {
-      throw new Error('Twitch create subscription response was empty');
+      }
+      const active = matching[0];
+      if (active) {
+        ensured.push(active);
+        continue;
+      }
+      const created = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token, {
+        method: 'POST',
+        body: JSON.stringify({
+          type: subscriptionType,
+          version: TARGET_SUBSCRIPTION_VERSION,
+          condition: { broadcaster_user_id: config.TWITCH_BROADCASTER_ID },
+          transport: {
+            method: 'webhook',
+            callback: getEventSubCallbackUrl(),
+            secret: config.TWITCH_EVENTSUB_SECRET
+          }
+        })
+      });
+      const first = created.data[0];
+      if (!first) throw new Error(`Twitch create subscription response was empty for ${subscriptionType}`);
+      ensured.push(first);
     }
+    const allEnabled = ensured.every((subscription) => subscription.status === 'enabled');
+    const anyPending = ensured.some((subscription) => subscription.status === 'webhook_callback_verification_pending');
+    const first = ensured[0]!;
 
     eventSubSyncState = {
-      enabled: first.status === 'enabled',
-      status: first.status === 'enabled' ? 'enabled' : 'pending_verification',
-      subscriptionId: first.id,
-      type: first.type,
+      enabled: allEnabled,
+      status: allEnabled ? 'enabled' : anyPending ? 'pending_verification' : 'error',
+      subscriptionId: ensured.map((subscription) => subscription.id).join(','),
+      type: TARGET_SUBSCRIPTION_TYPES.join(','),
       callback: first.transport.callback,
       createdAt: first.created_at,
       lastCheckedAt: checkedAt,
-      error: null
+      error: duplicateCleanupCount > 0 ? `Duplicate subscriptions detected and cleaned up (${duplicateCleanupCount}).` : null
     };
-    log.info({ subscriptionId: first.id, status: first.status }, 'Created Twitch EventSub subscription');
+    log.info({ subscriptionIds: ensured.map((subscription) => subscription.id), status: eventSubSyncState.status }, 'EventSub subscriptions ensured');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown error';
     eventSubSyncState = {

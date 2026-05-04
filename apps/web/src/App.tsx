@@ -22,6 +22,8 @@ type AdminUser = {
   displayName: string | null;
   login: string | null;
   isDeleted: boolean;
+  isSubscriber: boolean;
+  subscriberEndsAt: string | null;
   roles: string[];
 };
 
@@ -617,6 +619,11 @@ export function App(): JSX.Element {
             <>
               <p><strong>{selected.displayName ?? selected.login}</strong> ({selected.twitchUserId})</p>
               <p>Rollen: {selected.roles.join(', ') || 'user'}</p>
+              <p>
+                Abo-Status:{' '}
+                {selected.isSubscriber ? '✅ Aktiv' : '❌ Nicht aktiv'}
+                {selected.subscriberEndsAt ? ` (Ende: ${new Date(selected.subscriberEndsAt).toLocaleString()})` : ''}
+              </p>
               {me.roles.includes('owner') ? (
                 <div>
                   <button onClick={() => void changeRole(selected.id, 'admin', 'grant')}>Als Admin setzen</button>
