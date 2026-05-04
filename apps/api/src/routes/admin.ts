@@ -483,6 +483,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     const eventId = (request.params as { eventId: string }).eventId;
     const body = (request.body ?? {}) as { requestId?: string };
     if (!body.requestId) return reply.code(400).send({ message: 'requestId is required' });
+    const requestId = body.requestId;
 
     const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, body.requestId)).limit(1);
     if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
@@ -528,7 +529,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       await tx.insert(adminActionLogs).values({
         actorUserId: identity.userId,
         actionType: 'revert_battle_event',
-        requestId: body.requestId,
+        requestId,
         payload: { eventId }
       });
     });
