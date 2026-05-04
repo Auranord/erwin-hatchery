@@ -33,6 +33,13 @@ type LedgerEntry = {
   isReverted: boolean;
   createdAt: string;
 };
+type BattleEvent = {
+  id: string;
+  status: string;
+  resultJson: unknown;
+  createdAt: string;
+  revertedAt: string | null;
+};
 
 type AdminHealthIssue = {
   code: string;
@@ -135,6 +142,7 @@ export function App(): JSX.Element {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [inventoryJson, setInventoryJson] = useState<string>('');
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([]);
   const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
@@ -415,7 +423,31 @@ export function App(): JSX.Element {
       return;
     }
     await loadLedger();
+    await loadBattleEvents();
     window.alert('Event erfolgreich gestartet.');
+  }
+
+  async function loadBattleEvents(): Promise<void> {
+    const response = await fetch('/api/admin/events', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { events: BattleEvent[] };
+    setBattleEvents(payload.events);
+  }
+
+  async function revertBattleEvent(eventId: string): Promise<void> {
+    const response = await fetch(`/api/admin/events/${eventId}/revert`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: crypto.randomUUID() })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      window.alert(payload?.message ?? 'Battle-Event konnte nicht revertiert werden.');
+      return;
+    }
+    await loadBattleEvents();
+    await loadLedger();
   }
 
   async function revertLedger(ledgerId: string, userId: string | null): Promise<void> {
@@ -483,6 +515,7 @@ export function App(): JSX.Element {
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
           <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
+          <button onClick={() => void loadBattleEvents()}>Battle-Events laden</button>
           <div>
             <button onClick={() => void copyOverlaySource('alerts')}>OBS-Link kopieren: Hatch Alerts</button>
             <button onClick={() => void copyOverlaySource('battle')}>OBS-Link kopieren: Battle Top 3</button>
@@ -499,6 +532,18 @@ export function App(): JSX.Element {
           </ul>
         </section>
 
+
+        <section className="card">
+          <h2>Battle-Events</h2>
+          <ul>
+            {battleEvents.map((event) => (
+              <li key={event.id}>
+                <strong>{event.status}</strong> · {new Date(event.createdAt).toLocaleString()}
+                <button disabled={event.status === 'reverted'} onClick={() => void revertBattleEvent(event.id)}>Battle revertieren</button>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section className="card">
           <h2>Redemption-Verwaltung</h2>
