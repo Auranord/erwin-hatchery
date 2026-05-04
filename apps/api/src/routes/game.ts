@@ -1,11 +1,32 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { consumableInventory, economyLedger, eggLootTableEntries, unhatchedEggs, mysteryEggInventory, pets, resources, incubationJobs, incubatorSlots, eggTypes, petTypes, leaderboardScores, users, gameEvents } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
 import { computeIncubationMultiplier, getCurrentStreamState } from '../services/streamState.js';
+
+function getOverlayToken(request: FastifyRequest): string | undefined {
+  const authHeader = request.headers.authorization;
+  const bearerToken = typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice(7).trim()
+    : undefined;
+  const headerToken = typeof request.headers['x-overlay-secret'] === 'string' ? request.headers['x-overlay-secret'] : undefined;
+  const queryTokenValue = request.query.token;
+  const queryToken = typeof queryTokenValue === 'string' ? queryTokenValue : undefined;
+  return bearerToken ?? headerToken ?? queryToken;
+}
+
+function ensureOverlayAccess(request: FastifyRequest): boolean {
+  return verifyOverlayAccess(getOverlayToken(request));
+}
+
+function verifyOverlayAccess(rawToken: string | undefined): boolean {
+  const expectedSecret = config.OVERLAY_SECRET;
+  if (!expectedSecret) return true;
+  return rawToken === expectedSecret;
+}
 
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number; updatedAt: string }>;
@@ -175,6 +196,9 @@ async function computeInventoryRevision(userId: string): Promise<string> {
 
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/events/overlay/alerts/stream', async (request, reply) => {
+    if (!ensureOverlayAccess(request)) {
+      return reply.code(401).send({ message: 'Unauthorized' });
+    }
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
     reply.raw.setHeader('Connection', 'keep-alive');
@@ -219,7 +243,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.get('/api/events/overlay/battle', async () => {
+  app.get('/api/events/overlay/battle', async (request, reply) => {
+    if (!ensureOverlayAccess(request)) {
+      return reply.code(401).send({ message: 'Unauthorized' });
+    }
     const [eventRow] = await db.select({ id: gameEvents.id, resolvedAt: gameEvents.resolvedAt, resultJson: gameEvents.resultJson })
       .from(gameEvents)
       .where(and(eq(gameEvents.eventType, 'battle'), eq(gameEvents.status, 'resolved')))
@@ -240,6 +267,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/events/overlay/battle/stream', async (request, reply) => {
+    if (!ensureOverlayAccess(request)) {
+      return reply.code(401).send({ message: 'Unauthorized' });
+    }
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
     reply.raw.setHeader('Connection', 'keep-alive');
@@ -255,7 +285,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       try {
         const latestBattle = await app.inject({
           method: 'GET',
-          url: '/api/events/overlay/battle'
+          url: '/api/events/overlay/battle',
+          headers: config.OVERLAY_SECRET ? { 'x-overlay-secret': config.OVERLAY_SECRET } : undefined
         });
         if (latestBattle.statusCode !== 200) return;
         const payload = latestBattle.json() as { resolvedAt?: string | null; winners?: unknown[] };

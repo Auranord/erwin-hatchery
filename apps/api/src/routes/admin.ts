@@ -23,6 +23,7 @@ import { getSessionIdentity } from './session-auth.js';
 import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
 import { listManagedCustomRewards, syncEggTypeCustomRewards } from '../services/twitchRewards.js';
 import { getCurrentStreamState, getManualStreamStateOverride, setManualStreamStateOverride } from '../services/streamState.js';
+import { config } from '../config.js';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
@@ -32,6 +33,14 @@ function hasAdminAccess(roleNames: string[]): boolean {
 }
 
 export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
+
+  app.get('/api/admin/overlay-config', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    return { overlaySecret: config.OVERLAY_SECRET ?? null };
+  });
+
   app.get('/api/admin/users', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });

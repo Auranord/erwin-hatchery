@@ -467,20 +467,39 @@ export function App(): JSX.Element {
 
   async function copyOverlaySource(type: 'alerts' | 'battle'): Promise<void> {
     const path = type === 'alerts' ? '/overlay/alerts' : '/overlay/battle';
-    const sourceUrl = `${window.location.origin}${path}`;
+    let overlaySecret = '';
 
     try {
-      await navigator.clipboard.writeText(sourceUrl);
-      window.alert(`OBS-Overlay-Link kopiert: ${sourceUrl}`);
+      const response = await fetch('/api/admin/overlay-config', { credentials: 'include' });
+      if (response.ok) {
+        const payload = (await response.json()) as { overlaySecret?: string | null };
+        overlaySecret = payload.overlaySecret ?? '';
+      }
     } catch {
-      window.alert(`Kopieren fehlgeschlagen. Bitte manuell kopieren:\n${sourceUrl}`);
+      overlaySecret = '';
+    }
+
+    const sourceUrl = new URL(path, window.location.origin);
+    if (overlaySecret) {
+      sourceUrl.searchParams.set('token', overlaySecret);
+    }
+
+    const copyValue = sourceUrl.toString();
+
+    try {
+      await navigator.clipboard.writeText(copyValue);
+      window.alert(`OBS-Overlay-Link kopiert: ${copyValue}`);
+    } catch {
+      window.alert(`Kopieren fehlgeschlagen. Bitte manuell kopieren:\n${copyValue}`);
     }
   }
 
 
   useEffect(() => {
     if (!isAlertOverlayRoute) return;
-    const source = new EventSource('/api/events/overlay/alerts/stream');
+    const overlayToken = new URLSearchParams(window.location.search).get('token') ?? '';
+    const sourceUrl = overlayToken ? `/api/events/overlay/alerts/stream?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/alerts/stream';
+    const source = new EventSource(sourceUrl);
     source.addEventListener('hatch_alert', (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as OverlayHatchAlert;
       setOverlayAlerts((current) => [payload, ...current].slice(0, 5));
@@ -491,7 +510,10 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     if (!isBattleOverlayRoute) return;
-    const source = new EventSource('/api/events/overlay/battle/stream');
+    const overlayToken = new URLSearchParams(window.location.search).get('token') ?? '';
+    const streamUrl = overlayToken ? `/api/events/overlay/battle/stream?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/battle/stream';
+    const battleUrl = overlayToken ? `/api/events/overlay/battle?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/battle';
+    const source = new EventSource(streamUrl);
     source.addEventListener('battle_result', (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as { winners?: OverlayBattleWinner[] };
       const winners = payload.winners ?? [];
@@ -503,7 +525,7 @@ export function App(): JSX.Element {
       })));
     });
     source.onerror = () => source.close();
-    fetch('/api/events/overlay/battle').then(async (response) => {
+    fetch(battleUrl).then(async (response) => {
       if (!response.ok) return;
       const payload = (await response.json()) as { winners?: OverlayBattleWinner[] };
       const winners = payload.winners ?? [];
