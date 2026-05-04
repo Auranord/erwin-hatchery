@@ -3,17 +3,11 @@ WORKDIR /app
 RUN corepack enable
 
 FROM base AS deps
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
-COPY apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
-COPY packages/shared/package.json ./packages/shared/package.json
+COPY . .
 RUN pnpm install --no-frozen-lockfile
 
 FROM deps AS build
-COPY . .
-RUN pnpm --filter @erwin/shared build \
- && pnpm --filter @erwin/api build \
- && pnpm --filter @erwin/web build
+RUN pnpm -r build
 
 FROM build AS deploy
 RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
