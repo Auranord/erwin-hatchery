@@ -22,6 +22,7 @@ import {
 import { getSessionIdentity } from './session-auth.js';
 import { getEventSubSubscriptionStatus, syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
 import { listManagedCustomRewards, syncEggTypeCustomRewards } from '../services/twitchRewards.js';
+import { getCurrentStreamState, getManualStreamStateOverride, setManualStreamStateOverride } from '../services/streamState.js';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
@@ -466,6 +467,37 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return { status: 'ok', idempotent: false, gameEventId: result.gameEventId };
+  });
+
+
+  app.get('/api/admin/stream-state', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const state = await getCurrentStreamState();
+    return { state: { ...state, manualOverride: getManualStreamStateOverride() } };
+  });
+
+  app.post('/api/admin/stream-state/override', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
+
+    const body = (request.body ?? {}) as { mode?: 'live' | 'offline' | 'auto'; requestId?: string };
+    const requestId = body.requestId?.trim() || randomUUID();
+    if (!body.mode || !['live', 'offline', 'auto'].includes(body.mode)) return reply.code(400).send({ message: 'Invalid mode' });
+
+    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
+    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    setManualStreamStateOverride(body.mode === 'auto' ? null : body.mode);
+    await db.insert(adminActionLogs).values({
+      actorUserId: identity.userId,
+      actionType: 'stream_state_override_set',
+      requestId,
+      payload: { mode: body.mode }
+    });
+
+    return { status: 'ok', idempotent: false, mode: body.mode };
   });
 
   app.post('/api/admin/ledger/:ledgerId/revert', async (request, reply) => {

@@ -9,7 +9,7 @@ Last reevaluated: **2026-05-03**.
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
 - ✅ Milestone 3 completed (EventSub webhook ingestion + idempotent Channel Point redemption processing + startup subscription auto-sync + admin status debug implemented).
 - ✅ Milestone 4 completed (authenticated player shell, live inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, and public leaderboard are implemented).
-- 🟨 Milestone 5 partially completed (timestamp-based incubation start/finish flow and hatch pet creation are implemented; stream live/viewer multipliers and stream-state integration are still pending).
+- ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, stream live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg/incubator grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - 🟨 Milestone 7 partially completed (admin battle event start with random winners, 3/2/1 leaderboard award, and deselection are implemented; participant/result persistence and dedicated battle revert action are still pending).
 - ⏳ Milestones 8-10 not started.
