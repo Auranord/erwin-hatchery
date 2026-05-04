@@ -8,13 +8,25 @@ import { config } from '../config.js';
 type EventSubEnvelope = {
   subscription: { type: string };
   challenge?: string;
-  event?: { id: string; user_id: string; user_login?: string; user_name?: string; reward: { id: string; cost: number }; status: string };
+  event?: {
+    id: string;
+    user_id?: string;
+    user_login?: string;
+    user_name?: string;
+    reward?: { id: string; cost: number };
+    status?: string;
+  };
 };
 
 type RedemptionOutcome = 'unknown_reward' | 'inactive_egg_type' | 'granted';
 function headerValueToString(value: string | string[] | undefined): string | null { if (typeof value === 'string') return value; if (Array.isArray(value) && typeof value[0] === 'string') return value[0]; return null; }
 function verifyEventSubSignature(request: FastifyRequest): boolean { const id = headerValueToString(request.headers['twitch-eventsub-message-id']); const timestamp = headerValueToString(request.headers['twitch-eventsub-message-timestamp']); const signature = headerValueToString(request.headers['twitch-eventsub-message-signature']); const body = (request as FastifyRequest & { rawBody?: string }).rawBody; if (!id || !timestamp || !signature || !body) return false; const value = `${id}${timestamp}${body}`; const expected = `sha256=${createHmac('sha256', config.TWITCH_EVENTSUB_SECRET).update(value).digest('hex')}`; return timingSafeEqual(Buffer.from(signature), Buffer.from(expected)); }
 function shouldGrantRedemption(status: string | undefined): boolean { return status === 'unfulfilled' || status === 'fulfilled'; }
+function subscriptionEndsAtFromNow(now: Date): Date {
+  const endsAt = new Date(now);
+  endsAt.setUTCDate(endsAt.getUTCDate() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
+  return endsAt;
+}
 
 async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest['log']): Promise<RedemptionOutcome> {
   const redemption = payload.event;
@@ -50,6 +62,44 @@ async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest[
   log.info({ redemptionId: redemption.id, rewardId: redemption.reward.id, outcome }, 'EventSub redemption processed');
   return outcome;
 }
+
+async function processSubscriberStatus(payload: EventSubEnvelope, log: FastifyRequest['log']): Promise<'subscribed' | 'unsubscribed' | 'ignored'> {
+  const eventType = payload.subscription.type;
+  const event = payload.event;
+  const twitchUserId = event?.user_id?.trim();
+  if (!twitchUserId) return 'ignored';
+
+  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
+  const deactivateTypes = new Set(['channel.subscription.end']);
+  if (!activateTypes.has(eventType) && !deactivateTypes.has(eventType)) return 'ignored';
+
+  const now = new Date();
+  const nextEndsAt = subscriptionEndsAtFromNow(now);
+  const shouldActivate = activateTypes.has(eventType);
+  await db.transaction(async (tx) => {
+    const existingUser = (await tx.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1))[0];
+    const user = existingUser ?? (await tx.insert(users).values({
+      twitchUserId,
+      twitchLogin: event?.user_login ?? null,
+      displayName: event?.user_name ?? null,
+      isProvisional: true,
+      lastLoginAt: null,
+      updatedAt: now
+    }).returning())[0];
+    if (!user) throw new Error('Failed to upsert user for subscription event');
+
+    await tx.update(users).set({
+      isSubscriber: shouldActivate,
+      subscriberEndsAt: shouldActivate ? nextEndsAt : now,
+      twitchLogin: event?.user_login ?? user.twitchLogin ?? null,
+      displayName: event?.user_name ?? user.displayName ?? null,
+      updatedAt: now
+    }).where(eq(users.id, user.id));
+  });
+
+  log.info({ twitchUserId, eventType, isSubscriber: shouldActivate, subscriberEndsAt: shouldActivate ? nextEndsAt.toISOString() : now.toISOString() }, 'Subscriber status updated');
+  return shouldActivate ? 'subscribed' : 'unsubscribed';
+}
 function badRequest(reply: FastifyReply): FastifyReply { return reply.code(400).send({ message: 'Invalid EventSub request' }); }
 
 export async function registerEventSubRoutes(app: FastifyInstance): Promise<void> {
@@ -60,14 +110,20 @@ export async function registerEventSubRoutes(app: FastifyInstance): Promise<void
     const payload = request.body as EventSubEnvelope;
     if (!payload?.subscription?.type) return badRequest(reply);
     if (messageType === 'webhook_callback_verification') return reply.type('text/plain').send(payload.challenge ?? '');
-    if (messageType !== 'notification' || payload.subscription.type !== 'channel.channel_points_custom_reward_redemption.add') return reply.code(204).send();
+    if (messageType !== 'notification') return reply.code(204).send();
     if (!payload.event?.id || !messageId) return badRequest(reply);
 
     const [eventRow] = await db.insert(twitchEvents).values({ twitchEventId: messageId, type: payload.subscription.type, source: 'eventsub', rawPayload: payload, processingStatus: 'received' }).onConflictDoNothing().returning({ id: twitchEvents.id });
     if (!eventRow) return reply.code(204).send();
     try {
-      const outcome = await processRedemption(payload, request.log);
-      await db.update(twitchEvents).set({ processingStatus: 'processed', processedAt: new Date(), error: outcome === 'granted' ? null : outcome }).where(eq(twitchEvents.id, eventRow.id));
+      let outcome: string = 'ignored';
+      if (payload.subscription.type === 'channel.channel_points_custom_reward_redemption.add') {
+        outcome = await processRedemption(payload, request.log);
+      } else if (payload.subscription.type === 'channel.subscribe' || payload.subscription.type === 'channel.subscription.end' || payload.subscription.type === 'channel.subscription.message') {
+        outcome = await processSubscriberStatus(payload, request.log);
+      }
+      const nonErrorOutcomes = new Set(['granted', 'subscribed', 'unsubscribed', 'ignored']);
+      await db.update(twitchEvents).set({ processingStatus: 'processed', processedAt: new Date(), error: nonErrorOutcomes.has(outcome) ? null : outcome }).where(eq(twitchEvents.id, eventRow.id));
       return reply.code(204).send();
     } catch (error) {
       request.log.error({ err: error }, 'eventsub redemption processing failed');

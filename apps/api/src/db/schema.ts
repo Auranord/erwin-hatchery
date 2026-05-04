@@ -24,6 +24,8 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   isProvisional: boolean('is_provisional').notNull().default(true),
   isDeleted: boolean('is_deleted').notNull().default(false),
+  isSubscriber: boolean('is_subscriber').notNull().default(false),
+  subscriberEndsAt: timestamp('subscriber_ends_at', { withTimezone: true }),
   createdAt: timestamps.createdAt,
   updatedAt: timestamps.updatedAt,
   lastLoginAt: timestamp('last_login_at', { withTimezone: true })

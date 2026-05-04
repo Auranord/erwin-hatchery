@@ -27,12 +27,15 @@ display_name text
 avatar_url text
 is_provisional boolean not null default true
 is_deleted boolean not null default false
+is_subscriber boolean not null default false
+subscriber_ends_at timestamp nullable
 created_at timestamp
 updated_at timestamp
 last_login_at timestamp
 ```
 
 A provisional user is created from a Channel Point redemption before first login. On Twitch login, update the same row.
+`is_subscriber` and `subscriber_ends_at` cache Twitch subscription state for Milestone 9 features (subscriber incubator handling and admin visibility).
 
 ### roles
 

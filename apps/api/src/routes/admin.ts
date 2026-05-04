@@ -48,6 +48,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         displayName: users.displayName,
         login: users.twitchLogin,
         isDeleted: users.isDeleted,
+        isSubscriber: users.isSubscriber,
+        subscriberEndsAt: users.subscriberEndsAt,
         role: roles.role
       })
       .from(users)
@@ -56,10 +58,28 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       .orderBy(desc(users.createdAt))
       .limit(50);
 
-    const byUser = new Map<string, { id: string; twitchUserId: string; displayName: string | null; login: string | null; isDeleted: boolean; roles: string[] }>();
+    const byUser = new Map<string, {
+      id: string;
+      twitchUserId: string;
+      displayName: string | null;
+      login: string | null;
+      isDeleted: boolean;
+      isSubscriber: boolean;
+      subscriberEndsAt: Date | null;
+      roles: string[];
+    }>();
     for (const row of rows) {
       if (!byUser.has(row.id)) {
-        byUser.set(row.id, { id: row.id, twitchUserId: row.twitchUserId, displayName: row.displayName, login: row.login, isDeleted: row.isDeleted, roles: [] });
+        byUser.set(row.id, {
+          id: row.id,
+          twitchUserId: row.twitchUserId,
+          displayName: row.displayName,
+          login: row.login,
+          isDeleted: row.isDeleted,
+          isSubscriber: row.isSubscriber,
+          subscriberEndsAt: row.subscriberEndsAt,
+          roles: []
+        });
       }
       if (row.role) byUser.get(row.id)?.roles.push(row.role);
     }

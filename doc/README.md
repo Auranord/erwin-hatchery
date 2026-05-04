@@ -129,10 +129,15 @@ pnpm build
 
 ## EventSub subscription auto-sync (Milestone 3+)
 
-- On API startup, the backend can automatically ensure the required Twitch EventSub subscription exists for `channel.channel_points_custom_reward_redemption.add`.
+- On API startup, the backend can automatically ensure the required Twitch EventSub subscriptions exist for:
+  - `channel.channel_points_custom_reward_redemption.add`
+  - `channel.subscribe`
+  - `channel.subscription.message`
+  - `channel.subscription.end`
 - Required env vars: `TWITCH_BROADCASTER_ID`, `TWITCH_EVENTSUB_SECRET`.
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
+- `TWITCH_SUBSCRIPTION_RENEWAL_DAYS=31` controls the rolling subscriber status cache end time when subscribe/resubscribe events are received.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
 - Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
 

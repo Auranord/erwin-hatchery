@@ -57,6 +57,13 @@
       "when": 1783000000000,
       "tag": "0007_drop_egg_loot_table_entries_is_active",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784000000000,
+      "tag": "0008_user_subscriber_status",
+      "breakpoints": true
     }
   ]
 }
