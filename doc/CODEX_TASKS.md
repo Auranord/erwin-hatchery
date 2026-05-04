@@ -2,7 +2,7 @@
 
 ## Progress status
 
-Last reevaluated: **2026-05-03**.
+Last reevaluated: **2026-05-04**.
 
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
@@ -12,7 +12,8 @@ Last reevaluated: **2026-05-03**.
 - ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, stream live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg/incubator grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 completed (admin battle event start with random winners, 3/2/1 leaderboard award, participant/result persistence, pet deselection, and dedicated battle revert action are implemented).
-- ⏳ Milestones 8-10 not started.
+- ✅ Milestone 8 completed (overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, and OBS-safe layout are implemented).
+- ⏳ Milestones 9-10 not started.
 
 
 ## Milestone 0 - Repo skeleton
