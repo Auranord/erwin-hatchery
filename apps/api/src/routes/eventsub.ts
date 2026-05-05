@@ -28,6 +28,14 @@ function subscriptionEndsAtFromNow(now: Date): Date {
   return endsAt;
 }
 
+export function getSubscriptionStatusFromEventType(eventType: string): boolean | null {
+  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
+  const deactivateTypes = new Set(['channel.subscription.end']);
+  if (activateTypes.has(eventType)) return true;
+  if (deactivateTypes.has(eventType)) return false;
+  return null;
+}
+
 async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest['log']): Promise<RedemptionOutcome> {
   const redemption = payload.event;
   if (!redemption || !redemption.reward || !shouldGrantRedemption(redemption.status)) return 'unknown_reward';
@@ -72,13 +80,12 @@ async function processSubscriberStatus(payload: EventSubEnvelope, log: FastifyRe
   const twitchUserId = event?.user_id?.trim();
   if (!twitchUserId) return 'ignored';
 
-  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
-  const deactivateTypes = new Set(['channel.subscription.end']);
-  if (!activateTypes.has(eventType) && !deactivateTypes.has(eventType)) return 'ignored';
+  const subscriberStatus = getSubscriptionStatusFromEventType(eventType);
+  if (subscriberStatus === null) return 'ignored';
 
   const now = new Date();
   const nextEndsAt = subscriptionEndsAtFromNow(now);
-  const shouldActivate = activateTypes.has(eventType);
+  const shouldActivate = subscriberStatus;
   await db.transaction(async (tx) => {
     const existingUser = (await tx.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1))[0];
     const user = existingUser ?? (await tx.insert(users).values({

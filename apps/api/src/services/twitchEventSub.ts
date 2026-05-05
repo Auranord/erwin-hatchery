@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { config, getEventSubCallbackUrl } from '../config.js';
 import { db } from '../db/client.js';
-import { twitchUserTokens, users } from '../db/schema.js';
+import { twitchEvents, twitchUserTokens, users } from '../db/schema.js';
+import { getSubscriptionStatusFromEventType } from '../routes/eventsub.js';
 
 const TARGET_SUBSCRIPTION_TYPES = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -92,6 +93,18 @@ async function assertBroadcasterAuthorization(): Promise<void> {
     throw new Error(`Broadcaster token missing scopes: ${missingScopes.join(', ')}. Login again to refresh scopes.`);
   }
 
+}
+
+async function getBroadcasterUserAccessToken(): Promise<string> {
+  const rows = await db
+    .select({ accessToken: twitchUserTokens.accessToken })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+  const token = rows[0]?.accessToken;
+  if (!token) throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
+  return token;
 }
 
 
@@ -221,4 +234,140 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
     };
     log.error({ err: error }, 'EventSub sync failed');
   }
+}
+
+type SubscriptionEventEnvelope = {
+  event?: {
+    user_id?: string;
+    user_login?: string;
+    user_name?: string;
+  };
+};
+
+type HelixSubscription = {
+  user_id: string;
+  user_login: string;
+  user_name: string;
+};
+
+type HelixSubscriptionsResponse = {
+  data: HelixSubscription[];
+  pagination?: { cursor?: string };
+};
+
+export async function syncSubscriberStatusFromTwitch(log: { info: Function; warn: Function; error: Function }): Promise<void> {
+  await assertBroadcasterAuthorization();
+  const token = await getBroadcasterUserAccessToken();
+  const now = new Date();
+  const subscriberEndsAt = new Date(now);
+  subscriberEndsAt.setUTCDate(subscriberEndsAt.getUTCDate() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
+
+  const activeSubs: HelixSubscription[] = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({
+      broadcaster_id: config.TWITCH_BROADCASTER_ID,
+      first: '100'
+    });
+    if (cursor) query.set('after', cursor);
+    const page = await twitchApi<HelixSubscriptionsResponse>(`/subscriptions?${query.toString()}`, token);
+    activeSubs.push(...page.data);
+    cursor = page.pagination?.cursor ?? null;
+  } while (cursor);
+
+  const activeSubUserIds = new Set(activeSubs.map((sub) => sub.user_id));
+  const currentSubscriberUsers = await db.select({
+    id: users.id,
+    twitchUserId: users.twitchUserId
+  }).from(users).where(eq(users.isSubscriber, true));
+
+  let deactivatedSubscribers = 0;
+  for (const user of currentSubscriberUsers) {
+    if (activeSubUserIds.has(user.twitchUserId)) continue;
+    await db.update(users).set({
+      isSubscriber: false,
+      subscriberEndsAt: now,
+      updatedAt: now
+    }).where(eq(users.id, user.id));
+    deactivatedSubscribers += 1;
+  }
+
+  for (const sub of activeSubs) {
+    const existing = await db.select().from(users).where(eq(users.twitchUserId, sub.user_id)).limit(1);
+    const current = existing[0];
+    if (current) {
+      await db.update(users).set({
+        twitchLogin: sub.user_login,
+        displayName: sub.user_name,
+        isSubscriber: true,
+        subscriberEndsAt,
+        updatedAt: now
+      }).where(eq(users.id, current.id));
+    } else {
+      await db.insert(users).values({
+        twitchUserId: sub.user_id,
+        twitchLogin: sub.user_login,
+        displayName: sub.user_name,
+        isProvisional: true,
+        isSubscriber: true,
+        subscriberEndsAt,
+        lastLoginAt: null,
+        updatedAt: now
+      });
+    }
+  }
+
+  log.info({ activeSubscriptions: activeSubs.length, deactivatedSubscribers }, 'Subscriber startup sync from Twitch completed');
+}
+
+export async function syncSubscriberStatusFromRecentEvents(log: { info: Function; warn: Function; error: Function }): Promise<void> {
+  const now = new Date();
+  const rangeStart = new Date(now);
+  rangeStart.setUTCDate(rangeStart.getUTCDate() - config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
+  const rows = await db.select({
+    type: twitchEvents.type,
+    rawPayload: twitchEvents.rawPayload,
+    receivedAt: twitchEvents.receivedAt
+  }).from(twitchEvents);
+
+  const relevantRows = rows
+    .filter((row) => row.receivedAt >= rangeStart)
+    .filter((row) => getSubscriptionStatusFromEventType(row.type) !== null)
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+
+  let updatedUsers = 0;
+  for (const row of relevantRows) {
+    const payload = row.rawPayload as SubscriptionEventEnvelope;
+    const twitchUserId = payload.event?.user_id?.trim();
+    const status = getSubscriptionStatusFromEventType(row.type);
+    if (!twitchUserId || status === null) continue;
+    const subscriberEndsAt = status ? new Date(now.getTime() + (config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS * 24 * 60 * 60 * 1000)) : now;
+    const userLogin = payload.event?.user_login ?? null;
+    const displayName = payload.event?.user_name ?? null;
+    const existing = await db.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1);
+    const current = existing[0];
+    if (current) {
+      await db.update(users).set({
+        isSubscriber: status,
+        subscriberEndsAt,
+        twitchLogin: userLogin ?? current.twitchLogin ?? null,
+        displayName: displayName ?? current.displayName ?? null,
+        updatedAt: now
+      }).where(eq(users.id, current.id));
+    } else {
+      await db.insert(users).values({
+        twitchUserId,
+        twitchLogin: userLogin,
+        displayName,
+        isProvisional: true,
+        isSubscriber: status,
+        subscriberEndsAt,
+        lastLoginAt: null,
+        updatedAt: now
+      });
+    }
+    updatedUsers += 1;
+  }
+
+  log.info({ scannedEvents: relevantRows.length, updatedUsers, rangeStart: rangeStart.toISOString() }, 'Subscriber startup status replay completed');
 }
