@@ -30,9 +30,10 @@ function subscriptionEndsAtFromNow(now: Date): Date {
 
 async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest['log']): Promise<RedemptionOutcome> {
   const redemption = payload.event;
-  if (!redemption || !shouldGrantRedemption(redemption.status)) return 'unknown_reward';
+  if (!redemption || !redemption.reward || !shouldGrantRedemption(redemption.status)) return 'unknown_reward';
+  const { reward } = redemption;
 
-  const [eggType] = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes).where(eq(eggTypes.twitchRewardId, redemption.reward.id)).limit(1);
+  const [eggType] = await db.select({ id: eggTypes.id, isActive: eggTypes.isActive }).from(eggTypes).where(eq(eggTypes.twitchRewardId, reward.id)).limit(1);
   const outcome: RedemptionOutcome = !eggType ? 'unknown_reward' : eggType.isActive ? 'granted' : 'inactive_egg_type';
 
   await db.transaction(async (tx) => {
@@ -45,7 +46,7 @@ async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest[
     const user = existingUser ?? (await tx.insert(users).values({ twitchUserId: redemption.user_id, twitchLogin: redemption.user_login ?? null, displayName: redemption.user_name ?? null, isProvisional: true, lastLoginAt: null, updatedAt: now }).returning())[0];
     if (!user) throw new Error('Failed to upsert user for redemption');
 
-    const saved = await tx.insert(channelPointRedemptions).values({ twitchRedemptionId: redemption.id, twitchRewardId: redemption.reward.id, userId: user.id, cost: redemption.reward.cost, status: `processed:${outcome}`, rawPayload: payload, processedAt: now }).returning({ id: channelPointRedemptions.id });
+    const saved = await tx.insert(channelPointRedemptions).values({ twitchRedemptionId: redemption.id, twitchRewardId: reward.id, userId: user.id, cost: reward.cost, status: `processed:${outcome}`, rawPayload: payload, processedAt: now }).returning({ id: channelPointRedemptions.id });
     const savedRedemption = saved[0];
     if (!savedRedemption) throw new Error('Failed to persist channel point redemption');
 
@@ -55,11 +56,11 @@ async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest[
     }
 
     if (outcome === 'inactive_egg_type') {
-      await tx.insert(economyLedger).values({ userId: user.id, actorUserId: null, eventType: 'channel_point_redemption_refund_required', sourceType: 'channel_point_redemption', sourceId: savedRedemption.id, delta: { refund: { required: true, reason: 'inactive_egg_type', twitchRewardId: redemption.reward.id } } });
+      await tx.insert(economyLedger).values({ userId: user.id, actorUserId: null, eventType: 'channel_point_redemption_refund_required', sourceType: 'channel_point_redemption', sourceId: savedRedemption.id, delta: { refund: { required: true, reason: 'inactive_egg_type', twitchRewardId: reward.id } } });
     }
   });
 
-  log.info({ redemptionId: redemption.id, rewardId: redemption.reward.id, outcome }, 'EventSub redemption processed');
+  log.info({ redemptionId: redemption.id, rewardId: reward.id, outcome }, 'EventSub redemption processed');
   return outcome;
 }
 
