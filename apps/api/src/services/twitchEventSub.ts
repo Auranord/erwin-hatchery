@@ -1,4 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { config, getEventSubCallbackUrl } from '../config.js';
+import { db } from '../db/client.js';
+import { twitchUserTokens, users } from '../db/schema.js';
 
 const TARGET_SUBSCRIPTION_TYPES = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -64,28 +67,32 @@ let eventSubSyncState: EventSubSyncState = {
   error: null
 };
 
-async function getAppAccessToken(): Promise<string> {
-  const response = await fetch('https://id.twitch.tv/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: config.TWITCH_CLIENT_ID,
-      client_secret: config.TWITCH_CLIENT_SECRET,
-      grant_type: 'client_credentials'
-    })
-  });
+const REQUIRED_BROADCASTER_SCOPES = [
+  'channel:read:redemptions',
+  'channel:manage:redemptions',
+  'channel:read:subscriptions'
+] as const;
 
-  if (!response.ok) {
-    const details = await readErrorDetails(response);
-    throw new Error(`Failed to get Twitch app token: ${response.status} (${details})`);
+async function getBroadcasterAccessToken(): Promise<string> {
+  const rows = await db
+    .select({ accessToken: twitchUserTokens.accessToken, scope: twitchUserTokens.scope })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+
+  const tokenRow = rows[0];
+  if (!tokenRow?.accessToken) {
+    throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
   }
 
-  const payload = (await response.json()) as { access_token?: string };
-  if (!payload.access_token) {
-    throw new Error('Twitch app token response did not include access_token');
+  const grantedScopes = new Set(tokenRow.scope.split(/\s+/).filter(Boolean));
+  const missingScopes = REQUIRED_BROADCASTER_SCOPES.filter((scope) => !grantedScopes.has(scope));
+  if (missingScopes.length > 0) {
+    throw new Error(`Broadcaster token missing scopes: ${missingScopes.join(', ')}. Login again to refresh scopes.`);
   }
 
-  return payload.access_token;
+  return tokenRow.accessToken;
 }
 
 async function twitchApi<T>(path: string, token: string, init?: RequestInit): Promise<T> {
@@ -125,7 +132,7 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
   }
 
   try {
-    const token = await getAppAccessToken();
+    const token = await getBroadcasterAccessToken();
     const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token);
     const ensured: TwitchEventSubSubscription[] = [];
     let duplicateCleanupCount = 0;

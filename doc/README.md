@@ -142,5 +142,5 @@ pnpm build
 - Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
 
 
-- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions`.
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
