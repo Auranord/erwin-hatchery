@@ -106,9 +106,17 @@ async function getAppAccessToken(): Promise<string> {
     })
   });
 
-  if (!response.ok) {
-    const details = await readErrorDetails(response);
-    throw new Error(`Failed to get Twitch app token: ${response.status} (${details})`);
+async function getBroadcasterAccessToken(): Promise<string> {
+  const rows = await db
+    .select({ accessToken: twitchUserTokens.accessToken, scope: twitchUserTokens.scope })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+
+  const tokenRow = rows[0];
+  if (!tokenRow?.accessToken) {
+    throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
   }
 
   const payload = (await response.json()) as { access_token?: string };
