@@ -43,7 +43,7 @@ async function processRedemption(payload: EventSubEnvelope, log: FastifyRequest[
     const foundUsers = await tx.select().from(users).where(eq(users.twitchUserId, redemption.user_id)).limit(1);
     const existingUser = foundUsers[0];
     const now = new Date();
-    const user = existingUser ?? (await tx.insert(users).values({ twitchUserId: redemption.user_id, twitchLogin: redemption.user_login ?? null, displayName: redemption.user_name ?? null, isProvisional: true, lastLoginAt: null, updatedAt: now }).returning())[0];
+    const user = existingUser ?? (await tx.insert(users).values([{ twitchUserId: redemption.user_id, twitchLogin: redemption.user_login ?? null, displayName: redemption.user_name ?? null, isProvisional: true, lastLoginAt: null, updatedAt: now }]).returning())[0];
     if (!user) throw new Error('Failed to upsert user for redemption');
 
     const saved = await tx.insert(channelPointRedemptions).values({ twitchRedemptionId: redemption.id, twitchRewardId: reward.id, userId: user.id, cost: reward.cost, status: `processed:${outcome}`, rawPayload: payload, processedAt: now }).returning({ id: channelPointRedemptions.id });
@@ -79,14 +79,14 @@ async function processSubscriberStatus(payload: EventSubEnvelope, log: FastifyRe
   const shouldActivate = activateTypes.has(eventType);
   await db.transaction(async (tx) => {
     const existingUser = (await tx.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1))[0];
-    const user = existingUser ?? (await tx.insert(users).values({
+    const user = existingUser ?? (await tx.insert(users).values([{
       twitchUserId,
       twitchLogin: event?.user_login ?? null,
       displayName: event?.user_name ?? null,
       isProvisional: true,
       lastLoginAt: null,
       updatedAt: now
-    }).returning())[0];
+    }]).returning())[0];
     if (!user) throw new Error('Failed to upsert user for subscription event');
 
     await tx.update(users).set({

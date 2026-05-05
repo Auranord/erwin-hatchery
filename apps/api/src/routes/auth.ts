@@ -96,7 +96,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       } else {
         const insertedRows = await tx
           .insert(users)
-          .values({ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now })
+          .values([{ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now }])
           .returning();
         currentUser = insertedRows[0];
       }

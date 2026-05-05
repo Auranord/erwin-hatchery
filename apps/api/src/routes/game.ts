@@ -7,13 +7,13 @@ import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
 import { computeIncubationMultiplier, getCurrentStreamState } from '../services/streamState.js';
 
-function getOverlayToken(request: FastifyRequest<{ Querystring: { token?: string } }>): string | undefined {
+function getOverlayToken(request: FastifyRequest): string | undefined {
   const authHeader = request.headers.authorization;
   const bearerToken = typeof authHeader === 'string' && authHeader.toLowerCase().startsWith('bearer ')
     ? authHeader.slice(7).trim()
     : undefined;
   const headerToken = typeof request.headers['x-overlay-secret'] === 'string' ? request.headers['x-overlay-secret'] : undefined;
-  const queryTokenValue = request.query.token;
+  const queryTokenValue = (request.query as { token?: unknown } | undefined)?.token;
   const queryToken = typeof queryTokenValue === 'string' ? queryTokenValue : undefined;
   return bearerToken ?? headerToken ?? queryToken;
 }
