@@ -73,7 +73,7 @@ const REQUIRED_BROADCASTER_SCOPES = [
   'channel:read:subscriptions'
 ] as const;
 
-async function getBroadcasterAccessToken(): Promise<string> {
+async function assertBroadcasterAuthorization(): Promise<void> {
   const rows = await db
     .select({ accessToken: twitchUserTokens.accessToken, scope: twitchUserTokens.scope })
     .from(twitchUserTokens)
@@ -92,9 +92,37 @@ async function getBroadcasterAccessToken(): Promise<string> {
     throw new Error(`Broadcaster token missing scopes: ${missingScopes.join(', ')}. Login again to refresh scopes.`);
   }
 
-  return tokenRow.accessToken;
 }
 
+
+async function getAppAccessToken(): Promise<string> {
+  const response = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.TWITCH_CLIENT_ID,
+      client_secret: config.TWITCH_CLIENT_SECRET,
+      grant_type: 'client_credentials'
+    })
+  });
+
+async function getBroadcasterAccessToken(): Promise<string> {
+  const rows = await db
+    .select({ accessToken: twitchUserTokens.accessToken, scope: twitchUserTokens.scope })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+
+  const tokenRow = rows[0];
+  if (!tokenRow?.accessToken) {
+    throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
+  }
+
+  const payload = (await response.json()) as { access_token?: string };
+  if (!payload.access_token) throw new Error('Twitch app token response did not include access_token');
+  return payload.access_token;
+}
 async function twitchApi<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`https://api.twitch.tv/helix${path}`, {
     ...init,
@@ -132,7 +160,8 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
   }
 
   try {
-    const token = await getBroadcasterAccessToken();
+    await assertBroadcasterAuthorization();
+    const token = await getAppAccessToken();
     const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>('/eventsub/subscriptions', token);
     const ensured: TwitchEventSubSubscription[] = [];
     let duplicateCleanupCount = 0;
