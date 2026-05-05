@@ -138,6 +138,7 @@ pnpm build
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
 - `TWITCH_SUBSCRIPTION_RENEWAL_DAYS=31` controls the rolling subscriber status cache end time when subscribe/resubscribe events are received.
+- On API startup, subscriber cache is replayed from stored `twitch_events` (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) within the last `TWITCH_SUBSCRIPTION_RENEWAL_DAYS`, so missed live webhook processing can still restore current subscriber status.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
 - Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
 

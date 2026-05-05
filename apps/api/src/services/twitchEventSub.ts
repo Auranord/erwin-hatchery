@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { config, getEventSubCallbackUrl } from '../config.js';
 import { db } from '../db/client.js';
-import { twitchUserTokens, users } from '../db/schema.js';
+import { twitchEvents, twitchUserTokens, users } from '../db/schema.js';
+import { getSubscriptionStatusFromEventType } from '../routes/eventsub.js';
 
 const TARGET_SUBSCRIPTION_TYPES = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -221,4 +222,64 @@ export async function syncChannelPointRedemptionEventSub(log: { info: Function; 
     };
     log.error({ err: error }, 'EventSub sync failed');
   }
+}
+
+type SubscriptionEventEnvelope = {
+  event?: {
+    user_id?: string;
+    user_login?: string;
+    user_name?: string;
+  };
+};
+
+export async function syncSubscriberStatusFromRecentEvents(log: { info: Function; warn: Function; error: Function }): Promise<void> {
+  const now = new Date();
+  const rangeStart = new Date(now);
+  rangeStart.setUTCDate(rangeStart.getUTCDate() - config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
+  const rows = await db.select({
+    type: twitchEvents.type,
+    rawPayload: twitchEvents.rawPayload,
+    receivedAt: twitchEvents.receivedAt
+  }).from(twitchEvents);
+
+  const relevantRows = rows
+    .filter((row) => row.receivedAt >= rangeStart)
+    .filter((row) => getSubscriptionStatusFromEventType(row.type) !== null)
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+
+  let updatedUsers = 0;
+  for (const row of relevantRows) {
+    const payload = row.rawPayload as SubscriptionEventEnvelope;
+    const twitchUserId = payload.event?.user_id?.trim();
+    const status = getSubscriptionStatusFromEventType(row.type);
+    if (!twitchUserId || status === null) continue;
+    const subscriberEndsAt = status ? new Date(now.getTime() + (config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS * 24 * 60 * 60 * 1000)) : now;
+    const userLogin = payload.event?.user_login ?? null;
+    const displayName = payload.event?.user_name ?? null;
+    const existing = await db.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1);
+    const current = existing[0];
+    if (current) {
+      await db.update(users).set({
+        isSubscriber: status,
+        subscriberEndsAt,
+        twitchLogin: userLogin ?? current.twitchLogin ?? null,
+        displayName: displayName ?? current.displayName ?? null,
+        updatedAt: now
+      }).where(eq(users.id, current.id));
+    } else {
+      await db.insert(users).values({
+        twitchUserId,
+        twitchLogin: userLogin,
+        displayName,
+        isProvisional: true,
+        isSubscriber: status,
+        subscriberEndsAt,
+        lastLoginAt: null,
+        updatedAt: now
+      });
+    }
+    updatedUsers += 1;
+  }
+
+  log.info({ scannedEvents: relevantRows.length, updatedUsers, rangeStart: rangeStart.toISOString() }, 'Subscriber startup status replay completed');
 }
