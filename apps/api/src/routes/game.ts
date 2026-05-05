@@ -24,7 +24,7 @@ function ensureOverlayAccess(request: FastifyRequest): boolean {
 
 function verifyOverlayAccess(rawToken: string | undefined): boolean {
   const expectedSecret = config.OVERLAY_SECRET;
-  if (!expectedSecret) return true;
+  if (!expectedSecret) return false;
   return rawToken === expectedSecret;
 }
 
