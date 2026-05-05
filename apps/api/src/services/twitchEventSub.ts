@@ -95,6 +95,18 @@ async function assertBroadcasterAuthorization(): Promise<void> {
 
 }
 
+async function getBroadcasterUserAccessToken(): Promise<string> {
+  const rows = await db
+    .select({ accessToken: twitchUserTokens.accessToken })
+    .from(twitchUserTokens)
+    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+    .limit(1);
+  const token = rows[0]?.accessToken;
+  if (!token) throw new Error('Missing broadcaster OAuth token. Login with broadcaster account first.');
+  return token;
+}
+
 
 async function getAppAccessToken(): Promise<string> {
   const response = await fetch('https://id.twitch.tv/oauth2/token', {
@@ -231,6 +243,82 @@ type SubscriptionEventEnvelope = {
     user_name?: string;
   };
 };
+
+type HelixSubscription = {
+  user_id: string;
+  user_login: string;
+  user_name: string;
+};
+
+type HelixSubscriptionsResponse = {
+  data: HelixSubscription[];
+  pagination?: { cursor?: string };
+};
+
+export async function syncSubscriberStatusFromTwitch(log: { info: Function; warn: Function; error: Function }): Promise<void> {
+  await assertBroadcasterAuthorization();
+  const token = await getBroadcasterUserAccessToken();
+  const now = new Date();
+  const subscriberEndsAt = new Date(now);
+  subscriberEndsAt.setUTCDate(subscriberEndsAt.getUTCDate() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
+
+  const activeSubs: HelixSubscription[] = [];
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({
+      broadcaster_id: config.TWITCH_BROADCASTER_ID,
+      first: '100'
+    });
+    if (cursor) query.set('after', cursor);
+    const page = await twitchApi<HelixSubscriptionsResponse>(`/subscriptions?${query.toString()}`, token);
+    activeSubs.push(...page.data);
+    cursor = page.pagination?.cursor ?? null;
+  } while (cursor);
+
+  const activeSubUserIds = new Set(activeSubs.map((sub) => sub.user_id));
+  const currentSubscriberUsers = await db.select({
+    id: users.id,
+    twitchUserId: users.twitchUserId
+  }).from(users).where(eq(users.isSubscriber, true));
+
+  let deactivatedSubscribers = 0;
+  for (const user of currentSubscriberUsers) {
+    if (activeSubUserIds.has(user.twitchUserId)) continue;
+    await db.update(users).set({
+      isSubscriber: false,
+      subscriberEndsAt: now,
+      updatedAt: now
+    }).where(eq(users.id, user.id));
+    deactivatedSubscribers += 1;
+  }
+
+  for (const sub of activeSubs) {
+    const existing = await db.select().from(users).where(eq(users.twitchUserId, sub.user_id)).limit(1);
+    const current = existing[0];
+    if (current) {
+      await db.update(users).set({
+        twitchLogin: sub.user_login,
+        displayName: sub.user_name,
+        isSubscriber: true,
+        subscriberEndsAt,
+        updatedAt: now
+      }).where(eq(users.id, current.id));
+    } else {
+      await db.insert(users).values({
+        twitchUserId: sub.user_id,
+        twitchLogin: sub.user_login,
+        displayName: sub.user_name,
+        isProvisional: true,
+        isSubscriber: true,
+        subscriberEndsAt,
+        lastLoginAt: null,
+        updatedAt: now
+      });
+    }
+  }
+
+  log.info({ activeSubscriptions: activeSubs.length, deactivatedSubscribers }, 'Subscriber startup sync from Twitch completed');
+}
 
 export async function syncSubscriberStatusFromRecentEvents(log: { info: Function; warn: Function; error: Function }): Promise<void> {
   const now = new Date();
