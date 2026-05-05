@@ -228,5 +228,5 @@ Troubleshooting:
 3. Verify callback URL reachability and Twitch app credentials.
 
 
-- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions`.
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
