@@ -63,26 +63,26 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 
 ## Implementation status snapshot
 
-Last reevaluated: **2026-05-04**.
+Last reevaluated: **2026-05-09**.
 
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated player inventory, incubate/finish hatch actions, pet event selection, and public leaderboard view
+- React + Vite frontend shell with authenticated slotted player inventory, incubate/finish hatch actions, pet event selection, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route
-- Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, and subscription auto-sync diagnostics
+- Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, subscription auto-sync diagnostics, and subscriber status cache updates
 - Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grants, and ledger revert
 - Battle event flow with persisted results, leaderboard awards, and admin revert action
-- OBS overlays (`/overlay/alerts`, `/overlay/battle`) with SSE-backed live updates
-- Production Dockerfile for GHCR image builds
+- Secret-protected OBS overlays (`/overlay/alerts`, `/overlay/battle`) with SSE-backed live updates
+- Production Dockerfile for GHCR image builds plus a TrueNAS example deployment with Postgres, init migration/seed job, and container health checks
 
 Still pending for later milestones:
 
 - Admin lifecycle controls (freeze/reset/delete progress and fuller role lifecycle)
-- Bits/sub feature foundation (fixed, non-random effects only)
-- Deployment hardening milestones beyond the current baseline
+- Gift-sub/Bits feature foundation and fixed, non-random Bits effects
+- Deployment hardening beyond the current baseline: rate limiting, explicit CORS middleware, and backup/restore scripts or notes
 
 ## Admin testing seed dependency
 
