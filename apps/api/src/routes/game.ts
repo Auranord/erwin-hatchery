@@ -105,46 +105,79 @@ async function findFreePetSlotInTx(tx: DbTransaction, userId: string): Promise<n
   return null;
 }
 
-async function ensureDefaultIncubatorSlot(userId: string): Promise<void> {
+function isSubscriberStatusActive(row: { isSubscriber: boolean; subscriberEndsAt: Date | string | null }, now = new Date()): boolean {
+  if (!row.isSubscriber) return false;
+  if (!row.subscriberEndsAt) return true;
+  return new Date(row.subscriberEndsAt).getTime() > now.getTime();
+}
+
+async function isSubscriberActiveInTx(tx: DbTransaction, userId: string, now = new Date()): Promise<boolean> {
+  const [user] = await tx
+    .select({ isSubscriber: users.isSubscriber, subscriberEndsAt: users.subscriberEndsAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return user ? isSubscriberStatusActive(user, now) : false;
+}
+
+async function ensureIncubatorSlots(userId: string): Promise<void> {
   await db.transaction(async (tx) => {
     await ensureInventoryDimensionsInTx(tx, userId);
     const incubatorDimensions = await getDimensionsInTx(tx, userId, 'incubators');
-    const [existingDefaultSlot] = await tx
-      .select({ id: incubatorSlots.id })
+    const subscriberActive = await isSubscriberActiveInTx(tx, userId);
+    const existingSlots = await tx
+      .select({ id: incubatorSlots.id, slotSource: incubatorSlots.slotSource, slotIndex: incubatorSlots.slotIndex, isAvailable: incubatorSlots.isAvailable })
       .from(incubatorSlots)
-      .where(and(eq(incubatorSlots.ownerUserId, userId), eq(incubatorSlots.slotSource, 'default')))
-      .limit(1);
+      .where(eq(incubatorSlots.ownerUserId, userId));
 
-    if (existingDefaultSlot) {
-      return;
+    const occupied = new Set(existingSlots.map((row) => row.slotIndex).filter((slotIndex): slotIndex is number => slotIndex !== null));
+
+    async function ensureSlot(slotSource: 'default' | 'subscriber', shouldBeAvailableWhenEmpty: boolean): Promise<void> {
+      const existingSlot = existingSlots.find((slot) => slot.slotSource === slotSource);
+      if (existingSlot) {
+        const [runningJob] = await tx
+          .select({ id: incubationJobs.id })
+          .from(incubationJobs)
+          .where(and(eq(incubationJobs.incubatorSlotId, existingSlot.id), eq(incubationJobs.state, 'running')))
+          .limit(1);
+        const nextAvailability = runningJob ? false : shouldBeAvailableWhenEmpty;
+        if (existingSlot.isAvailable !== nextAvailability) {
+          await tx.update(incubatorSlots).set({ isAvailable: nextAvailability, updatedAt: new Date() }).where(eq(incubatorSlots.id, existingSlot.id));
+        }
+        return;
+      }
+
+      let slotIndex = 0;
+      while (occupied.has(slotIndex)) slotIndex += 1;
+      occupied.add(slotIndex);
+      if (slotIndex >= incubatorDimensions.capacity) {
+        await tx.update(inventoryDimensions).set({ baseRows: Math.ceil((slotIndex + 1) / incubatorDimensions.columns), updatedAt: new Date() }).where(and(eq(inventoryDimensions.userId, userId), eq(inventoryDimensions.inventoryKind, 'incubators')));
+      }
+
+      const [createdSlot] = await tx.insert(incubatorSlots).values({
+        ownerUserId: userId,
+        slotSource,
+        slotIndex,
+        isAvailable: shouldBeAvailableWhenEmpty
+      }).returning({ id: incubatorSlots.id });
+
+      if (!createdSlot) {
+        throw new Error(`Failed to create ${slotSource} incubator slot`);
+      }
+
+      await tx.insert(economyLedger).values({
+        userId,
+        actorUserId: null,
+        eventType: `${slotSource}_incubator_slot_granted`,
+        sourceType: 'system',
+        sourceId: createdSlot.id,
+        delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: slotSource, slotIndex, isAvailable: shouldBeAvailableWhenEmpty }] }
+      });
     }
 
-    const occupiedRows = await tx.select({ slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId));
-    const occupied = new Set(occupiedRows.map((row) => row.slotIndex).filter((slotIndex): slotIndex is number => slotIndex !== null));
-    let slotIndex = 0;
-    while (occupied.has(slotIndex)) slotIndex += 1;
-    if (slotIndex >= incubatorDimensions.capacity) {
-      await tx.update(inventoryDimensions).set({ baseRows: Math.ceil((slotIndex + 1) / incubatorDimensions.columns), updatedAt: new Date() }).where(and(eq(inventoryDimensions.userId, userId), eq(inventoryDimensions.inventoryKind, 'incubators')));
-    }
-
-    const [createdSlot] = await tx.insert(incubatorSlots).values({
-      ownerUserId: userId,
-      slotSource: 'default',
-      slotIndex
-    }).returning({ id: incubatorSlots.id });
-
-    if (!createdSlot) {
-      throw new Error('Failed to create default incubator slot');
-    }
-
-    await tx.insert(economyLedger).values({
-      userId,
-      actorUserId: null,
-      eventType: 'default_incubator_slot_granted',
-      sourceType: 'system',
-      sourceId: createdSlot.id,
-      delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'default', slotIndex }] }
-    });
+    await ensureSlot('default', true);
+    await ensureSlot('subscriber', subscriberActive);
   });
 }
 
@@ -251,7 +284,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
 }
 
 async function computeInventoryRevision(userId: string): Promise<string> {
-  const [invMax, resourceMax, petStats, eggStats, jobStats, slotStats, itemStats, dimensionStats] = await Promise.all([
+  const [invMax, resourceMax, petStats, eggStats, jobStats, slotStats, itemStats, dimensionStats, userStats] = await Promise.all([
     db.select({ updatedAt: sql<Date>`max(${mysteryEggInventory.updatedAt})` }).from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
     db.select({ updatedAt: sql<Date>`max(${resources.updatedAt})` }).from(resources).where(eq(resources.userId, userId)),
     db.select({ count: sql<number>`count(*)`, newestCreatedAt: sql<Date>`max(${pets.createdAt})`, slotSum: sql<number>`coalesce(sum(${pets.slotIndex}), 0)` }).from(pets).where(eq(pets.ownerUserId, userId)),
@@ -265,7 +298,8 @@ async function computeInventoryRevision(userId: string): Promise<string> {
       .where(eq(incubationJobs.ownerUserId, userId)),
     db.select({ count: sql<number>`count(*)`, updatedAt: sql<Date>`max(${incubatorSlots.updatedAt})`, slotSum: sql<number>`coalesce(sum(${incubatorSlots.slotIndex}), 0)` }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId)),
     db.select({ count: sql<number>`count(*)`, updatedAt: sql<Date>`max(${consumableItemStacks.updatedAt})`, slotSum: sql<number>`coalesce(sum(${consumableItemStacks.slotIndex}), 0)`, amountSum: sql<number>`coalesce(sum(${consumableItemStacks.amount}), 0)` }).from(consumableItemStacks).where(eq(consumableItemStacks.userId, userId)),
-    db.select({ updatedAt: sql<Date>`max(${inventoryDimensions.updatedAt})` }).from(inventoryDimensions).where(eq(inventoryDimensions.userId, userId))
+    db.select({ updatedAt: sql<Date>`max(${inventoryDimensions.updatedAt})` }).from(inventoryDimensions).where(eq(inventoryDimensions.userId, userId)),
+    db.select({ isSubscriber: users.isSubscriber, subscriberEndsAt: users.subscriberEndsAt, updatedAt: users.updatedAt }).from(users).where(eq(users.id, userId)).limit(1)
   ]);
 
   const payload = [
@@ -286,7 +320,10 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     itemStats[0]?.slotSum ?? 0,
     itemStats[0]?.amountSum ?? 0,
     itemStats[0]?.updatedAt ? toIsoTimestamp(itemStats[0].updatedAt) : '0',
-    dimensionStats[0]?.updatedAt ? toIsoTimestamp(dimensionStats[0].updatedAt) : '0'
+    dimensionStats[0]?.updatedAt ? toIsoTimestamp(dimensionStats[0].updatedAt) : '0',
+    userStats[0]?.isSubscriber ? 'subscribed' : 'not_subscribed',
+    userStats[0]?.subscriberEndsAt ? toIsoTimestamp(userStats[0].subscriberEndsAt) : '0',
+    userStats[0]?.updatedAt ? toIsoTimestamp(userStats[0].updatedAt) : '0'
   ].join('|');
 
   return createHash('sha1').update(payload).digest('hex');
@@ -434,7 +471,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/inventory', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    await ensureDefaultIncubatorSlot(identity.userId);
+    await ensureIncubatorSlots(identity.userId);
     const revision = await computeInventoryRevision(identity.userId);
     const inventory = await loadPlayerInventory(identity.userId);
     return { revision, inventory };
@@ -490,7 +527,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/mystery-eggs/identify', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    await ensureDefaultIncubatorSlot(identity.userId);
+    await ensureIncubatorSlots(identity.userId);
 
     const body = (request.body ?? {}) as { eggTypeId?: string };
     const eggTypeId = body.eggTypeId;
@@ -601,15 +638,17 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/incubation/start', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    await ensureDefaultIncubatorSlot(identity.userId);
+    await ensureIncubatorSlots(identity.userId);
     const body = (request.body ?? {}) as { unhatchedEggId?: string; incubatorSlotId?: string };
     if (!body.unhatchedEggId || !body.incubatorSlotId) {
       return reply.code(400).send({ message: 'unhatchedEggId and incubatorSlotId are required' });
     }
 
     const result = await db.transaction(async (tx) => {
-      const [slot] = await tx.select({ id: incubatorSlots.id, speedMultiplierBasisPoints: incubatorSlots.speedMultiplierBasisPoints, rarityBonusBasisPoints: incubatorSlots.rarityBonusBasisPoints, fuelBehavior: incubatorSlots.fuelBehavior, specialEffectConfig: incubatorSlots.specialEffectConfig }).from(incubatorSlots).where(and(eq(incubatorSlots.id, body.incubatorSlotId!), eq(incubatorSlots.ownerUserId, identity.userId), eq(incubatorSlots.isAvailable, true))).limit(1);
+      const [slot] = await tx.select({ id: incubatorSlots.id, slotSource: incubatorSlots.slotSource, isAvailable: incubatorSlots.isAvailable, speedMultiplierBasisPoints: incubatorSlots.speedMultiplierBasisPoints, rarityBonusBasisPoints: incubatorSlots.rarityBonusBasisPoints, fuelBehavior: incubatorSlots.fuelBehavior, specialEffectConfig: incubatorSlots.specialEffectConfig }).from(incubatorSlots).where(and(eq(incubatorSlots.id, body.incubatorSlotId!), eq(incubatorSlots.ownerUserId, identity.userId))).limit(1);
       if (!slot) return { kind: 'slot_missing' as const };
+      if (slot.slotSource === 'subscriber' && !(await isSubscriberActiveInTx(tx, identity.userId))) return { kind: 'subscriber_inactive' as const };
+      if (!slot.isAvailable) return { kind: 'slot_missing' as const };
       const [job] = await tx.select({ id: incubationJobs.id }).from(incubationJobs).where(and(eq(incubationJobs.incubatorSlotId, slot.id), eq(incubationJobs.state, 'running'))).limit(1);
       if (job) return { kind: 'slot_busy' as const };
       const [egg] = await tx.select({ id: unhatchedEggs.id, eggTypeId: unhatchedEggs.eggTypeId, state: unhatchedEggs.state, slotIndex: unhatchedEggs.slotIndex }).from(unhatchedEggs).where(and(eq(unhatchedEggs.id, body.unhatchedEggId!), eq(unhatchedEggs.ownerUserId, identity.userId))).limit(1);
@@ -633,6 +672,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     });
 
     if (result.kind !== 'ok') {
+      if (result.kind === 'subscriber_inactive') {
+        return reply.code(403).send({ code: 'SUBSCRIBER_INCUBATOR_INACTIVE', message: 'Dieser Subscriber-Inkubator ist ohne aktives Abo inaktiv. Laufende Eier brüten weiter, aber neue Eier brauchen ein aktives Abo.' });
+      }
       return reply.code(409).send({ message: result.kind });
     }
     return { ok: true };
@@ -641,7 +683,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/game/incubation/finish', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    await ensureDefaultIncubatorSlot(identity.userId);
+    await ensureIncubatorSlots(identity.userId);
     const body = (request.body ?? {}) as { unhatchedEggId?: string };
     if (!body.unhatchedEggId) {
       return reply.code(400).send({ message: 'unhatchedEggId is required' });
@@ -706,14 +748,16 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
       await tx.update(incubationJobs).set({ state: 'completed', completedAt: new Date() }).where(eq(incubationJobs.id, job.id));
       await tx.update(unhatchedEggs).set({ state: 'hatched' }).where(eq(unhatchedEggs.id, egg.id));
-      await tx.update(incubatorSlots).set({ isAvailable: true, updatedAt: new Date() }).where(eq(incubatorSlots.id, job.incubatorSlotId));
+      const [finishedSlot] = await tx.select({ slotSource: incubatorSlots.slotSource }).from(incubatorSlots).where(eq(incubatorSlots.id, job.incubatorSlotId)).limit(1);
+      const nextSlotAvailability = finishedSlot?.slotSource === 'subscriber' ? await isSubscriberActiveInTx(tx, identity.userId) : true;
+      await tx.update(incubatorSlots).set({ isAvailable: nextSlotAvailability, updatedAt: new Date() }).where(eq(incubatorSlots.id, job.incubatorSlotId));
       await tx.insert(economyLedger).values({
         userId: identity.userId,
         actorUserId: identity.userId,
         eventType: 'incubation_finished',
         sourceType: 'player_action',
         sourceId: job.id,
-        delta: { hatchedPets: [{ id: newPet?.id ?? null, petTypeId: petType.id, slotIndex: freePetSlot }], unhatchedEggs: [{ id: egg.id, change: -1 }], incubatorSlots: [{ id: job.incubatorSlotId, occupied: false }] }
+        delta: { hatchedPets: [{ id: newPet?.id ?? null, petTypeId: petType.id, slotIndex: freePetSlot }], unhatchedEggs: [{ id: egg.id, change: -1 }], incubatorSlots: [{ id: job.incubatorSlotId, occupied: false, isAvailable: nextSlotAvailability }] }
       });
 
       return { kind: 'ok' as const };
@@ -818,7 +862,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/game/inventory/stream', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    await ensureDefaultIncubatorSlot(identity.userId);
+    await ensureIncubatorSlots(identity.userId);
 
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');

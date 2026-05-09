@@ -196,8 +196,9 @@ updated_at timestamp
 
 Subscriber incubator behavior:
 
-- When sub is active, ensure subscriber slot exists.
-- When sub ends, set `remove_when_empty = true` if occupied, otherwise mark unavailable/delete.
+- Ensure the subscriber slot exists for every player so it is always visible.
+- When sub is active and the slot is empty, mark it available for starting new eggs.
+- When sub is inactive, mark an empty subscriber slot unavailable/inactive. If occupied, keep the incubation job running and keep the slot occupied; once collected, it returns to inactive until the player is subscribed again.
 
 ### incubation_jobs
 

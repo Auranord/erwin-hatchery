@@ -150,6 +150,13 @@ function formatEggResourceType(resourceType: string): string {
   return EGG_RESOURCE_LABELS[resourceType] ?? resourceType;
 }
 
+function formatIncubatorSource(slotSource: string): string {
+  if (slotSource === 'subscriber') return 'Subscriber-Inkubator';
+  if (slotSource === 'default') return 'Standard-Inkubator';
+  if (slotSource === 'upgrade') return 'Upgrade-Inkubator';
+  return slotSource;
+}
+
 function formatRemainingDuration(totalSeconds: number): string {
   const seconds = Math.max(0, totalSeconds);
   const hours = Math.floor(seconds / 3600);
@@ -870,39 +877,44 @@ export function App(): JSX.Element {
     return (
       <section className="inventory-panel incubator-panel">
         <h3>Inkubatoren</h3>
-        <p className="inventory-capacity">{incubators.length} verfügbare Inkubatoren · Eier hier ablegen</p>
+        <p className="inventory-capacity">{incubators.length} Inkubatoren · inaktive Slots brauchen ein Abo</p>
         {incubators.length > 0 ? (
           <div className="incubator-list">
             {incubators.map((incubator) => {
               const active = incubator.activeJob;
               const secondsRemaining = active ? Math.ceil((new Date(active.startedAt).getTime() + active.requiredProgressSeconds * 1000 - nowMs) / 1000) : null;
+              const canStartEgg = incubator.isAvailable && !active;
+              const isInactiveEmptySlot = !active && !incubator.isAvailable;
               return (
                 <div
                   key={incubator.id}
                   role="button"
                   tabIndex={0}
-                  className={`inventory-slot occupied incubator-slot incubator-drop-target ${selectedPayload?.kind === 'egg' ? 'select-target' : ''}`}
-                  onDragOver={(event) => event.preventDefault()}
+                  className={`inventory-slot occupied incubator-slot incubator-drop-target ${isInactiveEmptySlot ? 'incubator-inactive' : ''} ${selectedPayload?.kind === 'egg' && canStartEgg ? 'select-target' : ''}`}
+                  onDragOver={(event) => {
+                    if (canStartEgg) event.preventDefault();
+                  }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    void handleDropToSlot('incubator', 0, incubator.id);
+                    if (canStartEgg) void handleDropToSlot('incubator', 0, incubator.id);
                   }}
                   onClick={() => {
-                    if (selectedPayload?.kind === 'egg') {
+                    if (selectedPayload?.kind === 'egg' && canStartEgg) {
                       void handleDropToSlot('incubator', 0, incubator.id);
                     }
                   }}
-                  aria-label={`Inkubator ${incubator.slotSource} Level ${incubator.slotLevel}`}
+                  aria-label={`${formatIncubatorSource(incubator.slotSource)} Level ${incubator.slotLevel}`}
                 >
                   <div className="slot-content">
-                    <strong>Inkubator Lv. {incubator.slotLevel}</strong>
-                    <span>{incubator.slotSource}</span>
+                    <strong>{formatIncubatorSource(incubator.slotSource)}</strong>
+                    <span>Level {incubator.slotLevel}</span>
                     {active ? (
                       <>
                         <span className="slot-progress">{formatRemainingDuration(secondsRemaining ?? 0)}</span>
+                        <span>Brütet weiter</span>
                         {(secondsRemaining ?? 1) <= 0 ? <button type="button" onClick={(event) => { event.stopPropagation(); void finishIncubation(active.unhatchedEggId).then(refreshOwnInventory).catch(showGameError); }}>Abholen</button> : null}
                       </>
-                    ) : <span>Frei · Ei hier ablegen</span>}
+                    ) : canStartEgg ? <span>Frei · Ei hier ablegen</span> : <span>Inaktiv · Abo benötigt</span>}
                   </div>
                 </div>
               );
