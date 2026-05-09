@@ -73,7 +73,7 @@ The current repo implementation includes:
 - PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route
 - Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, and subscription auto-sync diagnostics
-- Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg/incubator grants, and ledger revert
+- Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grants, and ledger revert
 - Battle event flow with persisted results, leaderboard awards, and admin revert action
 - OBS overlays (`/overlay/alerts`, `/overlay/battle`) with SSE-backed live updates
 - Production Dockerfile for GHCR image builds
