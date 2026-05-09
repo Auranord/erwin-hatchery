@@ -67,7 +67,11 @@ ul {
 }
 
 .overlay-alerts {
-  grid-template-columns: minmax(480px, 720px);
+  width: 600px;
+  height: 260px;
+  padding: 0;
+  place-items: center;
+  overflow: hidden;
 }
 
 .overlay-battle {
@@ -80,6 +84,68 @@ ul {
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   padding: 20px 24px;
+}
+
+.overlay-alert-card {
+  width: min(560px, calc(100% - 32px));
+  min-height: 128px;
+  display: grid;
+  align-content: center;
+  gap: 0.45rem;
+  padding: 22px 28px;
+  border: 2px solid rgba(253, 224, 71, 0.9);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(30, 18, 48, 0.88), rgba(86, 50, 18, 0.72));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), 0 0 34px rgba(250, 204, 21, 0.24);
+  text-align: center;
+  animation: overlay-alert-life var(--overlay-alert-duration, 6200ms) ease-in-out both;
+}
+
+.overlay-alert-card--battle {
+  border-color: rgba(192, 132, 252, 0.9);
+  background: linear-gradient(135deg, rgba(30, 18, 48, 0.88), rgba(70, 36, 118, 0.76));
+}
+
+.overlay-alert-card--system {
+  border-color: rgba(125, 211, 252, 0.9);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(14, 116, 144, 0.72));
+}
+
+.overlay-alert-kicker,
+.overlay-alert-message {
+  margin: 0;
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.65);
+}
+
+.overlay-alert-kicker {
+  color: #fde68a;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.overlay-alert-message {
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 900;
+  line-height: 1.12;
+}
+
+@keyframes overlay-alert-life {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
 }
 
 .resource-summary {

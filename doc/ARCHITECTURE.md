@@ -81,7 +81,7 @@ The backend owns:
 - battle/event resolution
 - leaderboard updates
 - audit/ledger/revert logic
-- Server-Sent Events for overlays and live UI updates
+- Server-Sent Events for overlays and live UI updates; alert overlays consume normalized `overlay_alert` events for pet hatches now and future in-game event messages later
 
 ## Frontend responsibilities
 
@@ -96,7 +96,7 @@ The frontend owns:
 - pet inventory, fixed Event-Pet drop target, and selected pet stat summary
 - account deletion UI
 - admin UI for authorized roles
-- OBS overlay pages
+- OBS overlay pages (`/overlay/alerts` is a transparent 600x260 temporary alert source; `/overlay/battle` remains a larger event presentation source)
 
 The frontend must never decide final outcomes. It only sends user intent to the backend.
 
@@ -106,8 +106,9 @@ Use Server-Sent Events first:
 
 ```text
 GET /api/events/player
-GET /api/events/overlay/alerts?token=...
+GET /api/events/overlay/alerts/stream?token=...
 GET /api/events/overlay/battle?token=...
+GET /api/events/overlay/battle/stream?token=...
 ```
 
 SSE is simpler than WebSockets for the MVP because most updates are server-to-client broadcasts.

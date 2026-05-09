@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -120,7 +120,7 @@ type DragPayload =
   | { kind: 'item'; id: string };
 
 
-type OverlayHatchAlert = { userName: string; petName: string; createdAt: string };
+type OverlayAlertEvent = { id: string; type: string; title: string; message: string; accent: 'hatch' | 'battle' | 'system'; createdAt: string; durationMs: number };
 type OverlayBattleWinner = { placement: number; userName: string; petName: string; pointsAwarded: number };
 type OverlayEventLeader = { rank: number; userName: string; points: number };
 
@@ -186,7 +186,7 @@ export function App(): JSX.Element {
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
   const isBattleOverlayRoute = window.location.pathname === '/overlay/battle';
-  const [overlayAlerts, setOverlayAlerts] = useState<OverlayHatchAlert[]>([]);
+  const [overlayAlertQueue, setOverlayAlertQueue] = useState<OverlayAlertEvent[]>([]);
   const [battleWinners, setBattleWinners] = useState<OverlayBattleWinner[]>([]);
   const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>([]);
 
@@ -560,18 +560,28 @@ export function App(): JSX.Element {
   }
 
 
+  const activeOverlayAlert = overlayAlertQueue[0] ?? null;
+
   useEffect(() => {
     if (!isAlertOverlayRoute) return;
     const overlayToken = new URLSearchParams(window.location.search).get('token') ?? '';
     const sourceUrl = overlayToken ? `/api/events/overlay/alerts/stream?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/alerts/stream';
     const source = new EventSource(sourceUrl);
-    source.addEventListener('hatch_alert', (event) => {
-      const payload = JSON.parse((event as MessageEvent<string>).data) as OverlayHatchAlert;
-      setOverlayAlerts((current) => [payload, ...current].slice(0, 5));
+    source.addEventListener('overlay_alert', (event) => {
+      const payload = JSON.parse((event as MessageEvent<string>).data) as OverlayAlertEvent;
+      setOverlayAlertQueue((current) => [...current, payload].slice(-10));
     });
     source.onerror = () => source.close();
     return () => source.close();
   }, [isAlertOverlayRoute]);
+
+  useEffect(() => {
+    if (!activeOverlayAlert) return;
+    const timeoutId = window.setTimeout(() => {
+      setOverlayAlertQueue((current) => current.filter((alert) => alert.id !== activeOverlayAlert.id));
+    }, activeOverlayAlert.durationMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [activeOverlayAlert]);
 
   useEffect(() => {
     if (!isBattleOverlayRoute) return;
@@ -601,15 +611,13 @@ export function App(): JSX.Element {
   }, [isBattleOverlayRoute]);
 
   if (isAlertOverlayRoute) {
-    return <main className="overlay-canvas overlay-alerts">
-      <section className="overlay-panel">
-        <h2>🐣 Hatch Alerts</h2>
-        <ul>
-          {overlayAlerts.map((alert) => (
-            <li key={`${alert.createdAt}-${alert.userName}-${alert.petName}`}><strong>{alert.userName}</strong> hat <strong>{alert.petName}</strong> ausgebrütet!</li>
-          ))}
-        </ul>
-      </section>
+    return <main className="overlay-canvas overlay-alerts" aria-live="polite">
+      {activeOverlayAlert ? (
+        <section key={activeOverlayAlert.id} className={`overlay-alert-card overlay-alert-card--${activeOverlayAlert.accent}`} style={{ '--overlay-alert-duration': `${activeOverlayAlert.durationMs}ms` } as CSSProperties}>
+          <p className="overlay-alert-kicker">{activeOverlayAlert.title}</p>
+          <p className="overlay-alert-message">{activeOverlayAlert.message}</p>
+        </section>
+      ) : null}
     </main>;
   }
 

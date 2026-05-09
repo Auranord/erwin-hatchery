@@ -244,7 +244,7 @@ Future battle versions can use pet stats, items, training, or animation stages.
 
 ## Overlays
 
-Target resolution: 1920x1080.
+Target resolution: battle overlays use 1920x1080. The alerts overlay is a compact transparent OBS source sized 600x260.
 
 MVP overlay routes:
 
@@ -255,14 +255,14 @@ MVP overlay routes:
 
 ### Alerts overlay
 
-Shows who hatched what during stream with a visual representation of the pet.
+Shows one temporary in-game event message at a time with fade-in/fade-out animation. The backend emits normalized alert payloads so future event types can reuse the same overlay queue.
 
 Events to support:
 
 - egg received
 - egg identified
 - pet egg started incubating
-- pet hatched
+- pet hatched (implemented)
 - rare pet hatched
 - consumable used
 
