@@ -198,7 +198,6 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     db.select({ id: incubationJobs.id, incubatorSlotId: incubationJobs.incubatorSlotId, unhatchedEggId: incubationJobs.unhatchedEggId, state: incubationJobs.state, startedAt: incubationJobs.startedAt, requiredProgressSeconds: incubationJobs.requiredProgressSeconds, progressSnapshot: incubationJobs.progressSnapshot }).from(incubationJobs).where(and(eq(incubationJobs.ownerUserId, userId), eq(incubationJobs.state, 'running')))
   ]);
   const dimensionsByKind = new Map(dimensionRows.map((row) => [row.inventoryKind as InventoryKind, row]));
-  const incubatorDimensions = dimensionsFromRow('incubators', dimensionsByKind.get('incubators'));
   const eggDimensions = dimensionsFromRow('unhatched_eggs', dimensionsByKind.get('unhatched_eggs'));
   const petDimensions = dimensionsFromRow('pets', dimensionsByKind.get('pets'));
   const itemDimensions = dimensionsFromRow('items', dimensionsByKind.get('items'));
@@ -208,12 +207,11 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     mysteryEggs: mysteryEggs.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) })),
     crackedEggResources: resourceRows.map((row) => ({ ...row, updatedAt: toIsoTimestamp(row.updatedAt) })),
     incubators: {
-      dimensions: incubatorDimensions,
-      slots: cellsForGrid(incubatorDimensions, slotRows.map((slot) => {
-        const activeJob = jobsBySlot.get(slot.id);
-        return {
-          slotIndex: slot.slotIndex,
-          item: {
+      incubators: [...slotRows]
+        .sort((left, right) => (left.slotIndex ?? Number.MAX_SAFE_INTEGER) - (right.slotIndex ?? Number.MAX_SAFE_INTEGER))
+        .map((slot) => {
+          const activeJob = jobsBySlot.get(slot.id);
+          return {
             id: slot.id,
             slotSource: slot.slotSource,
             slotLevel: slot.slotLevel,
@@ -225,9 +223,8 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
               specialEffectConfig: slot.specialEffectConfig
             },
             activeJob: activeJob ? { id: activeJob.id, unhatchedEggId: activeJob.unhatchedEggId, state: activeJob.state, startedAt: toIsoTimestamp(activeJob.startedAt), requiredProgressSeconds: activeJob.requiredProgressSeconds, progressSnapshot: activeJob.progressSnapshot } : null
-          }
-        };
-      }))
+          };
+        })
     },
     unhatchedEggs: { dimensions: eggDimensions, slots: cellsForGrid(eggDimensions, unhatchedEggRows.map((row) => ({ slotIndex: row.slotIndex, item: { id: row.id, eggTypeId: row.eggTypeId, state: row.state } }))) },
     pets: {
@@ -783,29 +780,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  app.post('/api/game/incubators/move', async (request, reply) => {
-    const identity = await getSessionIdentity(request);
-    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    const body = (request.body ?? {}) as { incubatorSlotId?: string; toSlotIndex?: number };
-    if (!body.incubatorSlotId || !Number.isInteger(body.toSlotIndex)) return reply.code(400).send({ message: 'incubatorSlotId and toSlotIndex are required' });
-    const toSlotIndex = body.toSlotIndex as number;
-    const result = await db.transaction(async (tx) => {
-      const dimensions = await getDimensionsInTx(tx, identity.userId, 'incubators');
-      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
-      const [source] = await tx.select({ id: incubatorSlots.id, slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(and(eq(incubatorSlots.id, body.incubatorSlotId!), eq(incubatorSlots.ownerUserId, identity.userId))).limit(1);
-      if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const fromSlotIndex = source.slotIndex;
-      const [destination] = await tx.select({ id: incubatorSlots.id, slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(and(eq(incubatorSlots.ownerUserId, identity.userId), eq(incubatorSlots.slotIndex, toSlotIndex), not(eq(incubatorSlots.id, source.id)))).limit(1);
-      const slotMoves: SlotMoveDelta[] = [{ id: source.id, fromSlotIndex, toSlotIndex }];
-      if (destination && destination.slotIndex !== null) slotMoves.push({ id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: fromSlotIndex });
-      await tx.update(incubatorSlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(incubatorSlots.id, source.id));
-      if (destination) await tx.update(incubatorSlots).set({ slotIndex: fromSlotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, destination.id));
-      await tx.update(incubatorSlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, source.id));
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_incubator_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { incubatorSlots: slotMoves } });
-      return { kind: 'ok' as const };
-    });
-    if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
-    return { ok: true };
+  app.post('/api/game/incubators/move', async (_request, reply) => {
+    return reply.code(410).send({ message: 'Incubators are fixed drop targets and cannot be rearranged.' });
   });
 
   app.post('/api/game/inventory/item-slots/move', async (request, reply) => {

@@ -71,6 +71,13 @@
       "when": 1785000000000,
       "tag": "0009_slotted_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0010_inventory_grid_dimensions",
+      "breakpoints": true
     }
   ]
 }

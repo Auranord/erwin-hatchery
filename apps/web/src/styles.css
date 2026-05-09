@@ -55,18 +55,6 @@ ul {
   padding-left: 1.2rem;
 }
 
-.selected-pet {
-  background: rgba(120, 220, 160, 0.12);
-  border-radius: 8px;
-  padding: 0.4rem 0.5rem;
-}
-
-.selected-pet-button {
-  background: #245f3b;
-  color: #eafff0;
-  border-color: #3f9b65;
-}
-
 .overlay-canvas {
   width: 1920px;
   height: 1080px;
@@ -139,6 +127,65 @@ ul {
   gap: 0.45rem;
 }
 
+.event-pet-panel {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 7rem) 1fr;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.event-pet-drop-target {
+  min-height: 6.5rem;
+}
+
+.event-pet-details {
+  min-width: 0;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 0.85rem;
+  background: rgba(88, 28, 135, 0.16);
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event-pet-label {
+  color: #d8b4fe;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.event-pet-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.2rem 0.65rem;
+  color: #e9d5ff;
+  font-size: 0.85rem;
+}
+
+.event-pet-badge {
+  margin-top: auto;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #fde68a;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.incubator-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.45rem;
+}
+
+.incubator-drop-target {
+  aspect-ratio: auto;
+  min-height: 7.5rem;
+}
+
 .inventory-slot {
   aspect-ratio: 1 / 1;
   min-width: 0;
@@ -188,6 +235,12 @@ ul {
   border-color: rgba(56, 189, 248, 0.82);
 }
 
+.selected-event-pet,
+.selected-event-pet-slot {
+  border-color: rgba(250, 204, 21, 0.95);
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18), inset 0 0 0 1px rgba(250, 204, 21, 0.35);
+}
+
 .empty-slot-label {
   display: grid;
   place-items: center;
@@ -233,15 +286,4 @@ ul {
   padding: 0.1rem 0.4rem;
   font-size: 0.75rem;
   font-weight: 700;
-}
-
-@media (min-width: 760px) {
-  .inventory-stack {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .incubator-panel,
-  .egg-panel {
-    grid-column: 1 / -1;
-  }
 }
