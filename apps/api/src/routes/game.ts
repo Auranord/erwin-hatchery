@@ -31,6 +31,17 @@ function verifyOverlayAccess(rawToken: string | undefined): boolean {
 
 type PlayerInventory = PlayerInventoryPayload;
 type SlotMoveDelta = { id: string; fromSlotIndex: number; toSlotIndex: number };
+type OverlayAlertEvent = {
+  id: string;
+  type: 'pet_hatched';
+  title: string;
+  message: string;
+  accent: 'hatch' | 'battle' | 'system';
+  createdAt: string;
+  durationMs: number;
+};
+
+const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -329,6 +340,30 @@ async function computeInventoryRevision(userId: string): Promise<string> {
   return createHash('sha1').update(payload).digest('hex');
 }
 
+async function buildPetHatchedOverlayAlert(row: { id: string; userId: string | null; delta: unknown; createdAt: Date }): Promise<OverlayAlertEvent | null> {
+  const hatchedPetId = (row.delta as { hatchedPets?: Array<{ id?: string | null }> } | null)?.hatchedPets?.[0]?.id;
+  if (!hatchedPetId || !row.userId) return null;
+
+  const [details] = await db.select({ displayName: users.displayName, login: users.twitchLogin, petName: petTypes.displayName })
+    .from(pets)
+    .innerJoin(users, eq(pets.ownerUserId, users.id))
+    .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+    .where(eq(pets.id, hatchedPetId))
+    .limit(1);
+  if (!details) return null;
+
+  const userName = details.displayName ?? details.login ?? 'Unbekannt';
+  return {
+    id: row.id,
+    type: 'pet_hatched',
+    title: 'Neues Pet geschlüpft!',
+    message: `${userName} hat ${details.petName} ausgebrütet!`,
+    accent: 'hatch',
+    createdAt: toIsoTimestamp(row.createdAt),
+    durationMs: 6200
+  };
+}
+
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/events/overlay/alerts/stream', async (request, reply) => {
     if (!ensureOverlayAccess(request)) {
@@ -347,24 +382,18 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     let lastSeen = new Date(Date.now() - 20_000);
     const intervalId = setInterval(async () => {
       try {
-        const rows = await db.select({ id: economyLedger.id, userId: economyLedger.userId, delta: economyLedger.delta, createdAt: economyLedger.createdAt })
+        const rows = await db.select({ id: economyLedger.id, userId: economyLedger.userId, eventType: economyLedger.eventType, delta: economyLedger.delta, createdAt: economyLedger.createdAt })
           .from(economyLedger)
-          .where(and(eq(economyLedger.eventType, 'incubation_finished'), sql`${economyLedger.createdAt} > ${lastSeen}`))
+          .where(and(inArray(economyLedger.eventType, OVERLAY_ALERT_LEDGER_EVENT_TYPES), sql`${economyLedger.createdAt} > ${lastSeen}`))
           .orderBy(sql`${economyLedger.createdAt} asc`)
           .limit(25);
 
         for (const row of rows) {
-          const hatchedPetId = (row.delta as { hatchedPets?: Array<{ id?: string | null }> } | null)?.hatchedPets?.[0]?.id;
-          if (!hatchedPetId || !row.userId) continue;
-          const [details] = await db.select({ displayName: users.displayName, login: users.twitchLogin, petName: petTypes.displayName })
-            .from(pets)
-            .innerJoin(users, eq(pets.ownerUserId, users.id))
-            .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
-            .where(eq(pets.id, hatchedPetId))
-            .limit(1);
-          if (!details) continue;
-          sendEvent('hatch_alert', { userName: details.displayName ?? details.login ?? 'Unbekannt', petName: details.petName, createdAt: row.createdAt });
           lastSeen = row.createdAt;
+          if (row.eventType !== 'incubation_finished') continue;
+          const alert = await buildPetHatchedOverlayAlert(row);
+          if (!alert) continue;
+          sendEvent('overlay_alert', alert);
         }
         sendEvent('heartbeat', { t: Date.now() });
       } catch (error) {
