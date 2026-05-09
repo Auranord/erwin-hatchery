@@ -15,7 +15,6 @@ RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
 RUN addgroup -g 1001 -S nodejs && adduser -S appuser -u 1001
 COPY --from=deploy /app/deploy ./
 COPY --from=build /app/apps/web/dist ./apps/web/dist

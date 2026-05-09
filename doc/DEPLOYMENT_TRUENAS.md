@@ -135,11 +135,11 @@ MVP deployment is manual:
 
 API container startup order is enforced in-container:
 
-1. `pnpm db:migrate`
-2. `pnpm db:seed`
-3. `pnpm start`
+1. `node dist/db/migrate.js`
+2. `node dist/db/seed.js`
+3. `node dist/server.js`
 
-The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+The production image runs the compiled JavaScript files directly instead of invoking `pnpm` at runtime. This keeps startup independent from Corepack/package-manager cache writes in the read-only `/app` deployment tree. The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
 
 Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
 

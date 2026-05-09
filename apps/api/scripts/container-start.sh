@@ -19,6 +19,6 @@ run_step() {
   fi
 }
 
-run_step "db:migrate:runtime" pnpm db:migrate:runtime
-run_step "db:seed" pnpm db:seed
-run_step "start" pnpm start
+run_step "db:migrate:runtime" node dist/db/migrate.js
+run_step "db:seed" node dist/db/seed.js
+run_step "start" node dist/server.js
