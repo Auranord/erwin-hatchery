@@ -28,8 +28,10 @@ export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; b
   items: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'item_inventory_rows' }
 };
 
+export const DEFAULT_ITEM_STACK_LIMIT = 99;
+
 export const ITEM_STACK_LIMITS: Record<string, number> = {
-  default: 99
+  default: DEFAULT_ITEM_STACK_LIMIT
 };
 
 export function getInventoryCapacity(dimensions: Pick<InventoryGridDimensions, 'columns' | 'rows'>): number {
@@ -37,7 +39,7 @@ export function getInventoryCapacity(dimensions: Pick<InventoryGridDimensions, '
 }
 
 export function getStackLimit(itemTypeId: string): number {
-  return ITEM_STACK_LIMITS[itemTypeId] ?? ITEM_STACK_LIMITS.default;
+  return ITEM_STACK_LIMITS[itemTypeId] ?? DEFAULT_ITEM_STACK_LIMIT;
 }
 
 export function isSlotInsideGrid(slotIndex: number, dimensions: Pick<InventoryGridDimensions, 'columns' | 'rows'>): boolean {
