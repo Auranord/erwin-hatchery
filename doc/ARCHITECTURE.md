@@ -224,3 +224,17 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 - If one correct subscription already exists, it is reused.
 - If duplicates are found, extras are cleaned up and a warning status is exposed.
 - Sync errors do not crash startup by default; status is exposed via admin debug API/UI for operator troubleshooting.
+
+## Slotted RPG Inventory MVP Update
+
+- Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
+- Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
+- Capacity applies only to slotted inventories: unhatched eggs, pets, consumable/item stacks, and inventory-like incubator positions.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
+- Incubators are draggable inventory-like slots shown directly above the unhatched egg grid. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
+- Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
+- Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
+- Identifying a mystery egg into egg resources does not need slotted inventory space.
+- Consumables/items are represented as slotted stacks with server-side move, merge, and swap validation. Automatic sorting is intentionally out of scope.
+- Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

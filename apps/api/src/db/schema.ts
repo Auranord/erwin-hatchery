@@ -176,26 +176,52 @@ export const mysteryEggInventory = pgTable(
   })
 );
 
+export const inventoryDimensions = pgTable(
+  'inventory_dimensions',
+  {
+    userId: uuid('user_id').notNull().references(() => users.id),
+    inventoryKind: text('inventory_kind').notNull(),
+    columns: integer('columns').notNull(),
+    baseRows: integer('base_rows').notNull(),
+    bonusRows: integer('bonus_rows').notNull().default(0),
+    upgradeRef: text('upgrade_ref'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.userId, table.inventoryKind] })
+  })
+);
+
 export const unhatchedEggs = pgTable('unhatched_eggs', {
   id: uuid('id').defaultRandom().primaryKey(),
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
   eggTypeId: text('egg_type_id').notNull().references(() => eggTypes.id),
   hiddenPetTypeId: text('hidden_pet_type_id').notNull().references(() => petTypes.id),
   state: text('state').notNull(),
+  slotIndex: integer('slot_index'),
   createdFromRedemptionId: uuid('created_from_redemption_id').references(() => channelPointRedemptions.id),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  ownerSlotUnique: uniqueIndex('unhatched_eggs_owner_slot_idx').on(table.ownerUserId, table.slotIndex)
+}));
 
 export const incubatorSlots = pgTable('incubator_slots', {
   id: uuid('id').defaultRandom().primaryKey(),
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
   slotSource: text('slot_source').notNull(),
   slotLevel: integer('slot_level').notNull().default(1),
+  slotIndex: integer('slot_index'),
+  speedMultiplierBasisPoints: integer('speed_multiplier_basis_points').notNull().default(10000),
+  rarityBonusBasisPoints: integer('rarity_bonus_basis_points').notNull().default(0),
+  fuelBehavior: text('fuel_behavior').notNull().default('none'),
+  specialEffectConfig: jsonb('special_effect_config').notNull().default({}),
   isAvailable: boolean('is_available').notNull().default(true),
   removeWhenEmpty: boolean('remove_when_empty').notNull().default(false),
   createdAt: timestamps.createdAt,
   updatedAt: timestamps.updatedAt
-});
+}, (table) => ({
+  ownerSlotUnique: uniqueIndex('incubator_slots_owner_slot_idx').on(table.ownerUserId, table.slotIndex)
+}));
 
 export const incubationJobs = pgTable('incubation_jobs', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -220,11 +246,14 @@ export const pets = pgTable('pets', {
   speed: integer('speed').notNull(),
   statRolls: jsonb('stat_rolls').notNull(),
   sourceUnhatchedEggId: uuid('source_unhatched_egg_id').notNull().references(() => unhatchedEggs.id),
+  slotIndex: integer('slot_index'),
   isFavorite: boolean('is_favorite').notNull().default(false),
   selectedForEvent: boolean('selected_for_event').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   hatchedAt: timestamp('hatched_at', { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  ownerSlotUnique: uniqueIndex('pets_owner_slot_idx').on(table.ownerUserId, table.slotIndex)
+}));
 
 export const consumableTypes = pgTable('consumable_types', {
   id: text('id').primaryKey(),
@@ -246,6 +275,18 @@ export const consumableInventory = pgTable(
     pk: primaryKey({ columns: [table.userId, table.consumableTypeId] })
   })
 );
+
+export const consumableItemStacks = pgTable('consumable_item_stacks', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  consumableTypeId: text('consumable_type_id').notNull().references(() => consumableTypes.id),
+  amount: integer('amount').notNull().default(0),
+  slotIndex: integer('slot_index'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+}, (table) => ({
+  userSlotUnique: uniqueIndex('consumable_item_stacks_user_slot_idx').on(table.userId, table.slotIndex)
+}));
 
 export const hatcheryUpgrades = pgTable('hatchery_upgrades', {
   id: uuid('id').defaultRandom().primaryKey(),

@@ -64,6 +64,13 @@
       "when": 1784000000000,
       "tag": "0008_user_subscriber_status",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0009_slotted_inventory",
+      "breakpoints": true
     }
   ]
 }

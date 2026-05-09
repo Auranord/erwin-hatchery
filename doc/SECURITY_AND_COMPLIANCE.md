@@ -166,3 +166,17 @@ Use official/current Twitch docs when implementing:
 - EventSub HMAC verification is enforced before request processing.
 - Channel Point webhook notifications are idempotent by Twitch event ID and redemption ID.
 - Economy mutations for eligible redemptions run inside a transaction and always create a ledger event.
+
+## Slotted RPG Inventory MVP Update
+
+- Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
+- Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
+- Capacity applies only to slotted inventories: unhatched eggs, pets, consumable/item stacks, and inventory-like incubator positions.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
+- Incubators are draggable inventory-like slots shown directly above the unhatched egg grid. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
+- Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
+- Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
+- Identifying a mystery egg into egg resources does not need slotted inventory space.
+- Consumables/items are represented as slotted stacks with server-side move, merge, and swap validation. Automatic sorting is intentionally out of scope.
+- Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
