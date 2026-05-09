@@ -4,12 +4,13 @@ import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
   adminActionLogs,
-  consumableInventory,
+  consumableItemStacks,
   economyLedger,
   eggTypes,
   unhatchedEggs,
   mysteryEggInventory,
   incubatorSlots,
+  inventoryDimensions,
   pets,
   resources,
   roles,
@@ -164,22 +165,25 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
     const userId = (request.params as { userId: string }).userId;
 
-    const [mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows, incubatorSlotRows] = await Promise.all([
+    const [dimensions, mysteryEggs, unhatchedEggRows, petRows, consumableRows, resourceRows, incubatorSlotRows] = await Promise.all([
+      db.select().from(inventoryDimensions).where(eq(inventoryDimensions.userId, userId)),
       db.select().from(mysteryEggInventory).where(eq(mysteryEggInventory.userId, userId)),
       db.select({
         id: unhatchedEggs.id,
         eggTypeId: unhatchedEggs.eggTypeId,
         hiddenPetTypeId: unhatchedEggs.hiddenPetTypeId,
-        state: unhatchedEggs.state
+        state: unhatchedEggs.state,
+        slotIndex: unhatchedEggs.slotIndex
       }).from(unhatchedEggs).where(eq(unhatchedEggs.ownerUserId, userId)),
-      db.select({ id: pets.id, petTypeId: pets.petTypeId, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
-      db.select().from(consumableInventory).where(eq(consumableInventory.userId, userId)),
+      db.select({ id: pets.id, petTypeId: pets.petTypeId, slotIndex: pets.slotIndex, createdAt: pets.createdAt }).from(pets).where(eq(pets.ownerUserId, userId)),
+      db.select().from(consumableItemStacks).where(eq(consumableItemStacks.userId, userId)),
       db.select().from(resources).where(eq(resources.userId, userId)),
       db.select().from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId))
     ]);
 
     return {
       inventory: {
+        dimensions,
         mysteryEggs,
         unhatchedEggs: unhatchedEggRows,
         hatchedPets: petRows,
@@ -368,10 +372,17 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       const [targetUser] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
       if (!targetUser) throw new Error('User not found');
 
+      const occupiedRows = await tx.select({ slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId));
+      const occupied = new Set(occupiedRows.map((row) => row.slotIndex).filter((slotIndex): slotIndex is number => slotIndex !== null));
+      let slotIndex = 0;
+      while (occupied.has(slotIndex)) slotIndex += 1;
+      const requiredRows = Math.ceil((slotIndex + 1) / 4);
+      await tx.insert(inventoryDimensions).values({ userId, inventoryKind: 'incubators', columns: 4, baseRows: Math.max(1, requiredRows), bonusRows: 0, upgradeRef: null }).onConflictDoUpdate({ target: [inventoryDimensions.userId, inventoryDimensions.inventoryKind], set: { baseRows: sql`greatest(${inventoryDimensions.baseRows}, ${requiredRows})`, updatedAt: new Date() } });
       const [createdSlot] = await tx.insert(incubatorSlots).values({
         ownerUserId: userId,
         slotSource: 'admin_grant',
         slotLevel: 1,
+        slotIndex,
         isAvailable: true,
         removeWhenEmpty: false
       }).returning({ id: incubatorSlots.id });
@@ -382,7 +393,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         actorUserId: identity.userId,
         eventType: 'admin_incubator_slot_grant',
         sourceType: 'admin_action',
-        delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'admin_grant' }] }
+        delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'admin_grant', slotIndex }] }
       }).returning({ id: economyLedger.id });
       if (!ledgerRow) throw new Error('Failed to create ledger entry for incubator slot grant');
 

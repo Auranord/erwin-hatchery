@@ -93,3 +93,155 @@ ul {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   padding: 20px 24px;
 }
+
+.resource-summary {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.42);
+  margin-bottom: 1rem;
+}
+
+.game-message {
+  border: 1px solid rgba(250, 204, 21, 0.7);
+  border-radius: 0.75rem;
+  background: rgba(250, 204, 21, 0.14);
+  padding: 0.75rem;
+  color: #fef3c7;
+}
+
+.inventory-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.inventory-panel {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 1rem;
+  padding: 0.85rem;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.inventory-panel h3 {
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+
+.inventory-capacity {
+  margin-top: 0;
+  color: #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.inventory-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.inventory-slot {
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  border-radius: 0.85rem;
+  border: 2px solid rgba(100, 116, 139, 0.65);
+  background: rgba(2, 6, 23, 0.65);
+  color: #e2e8f0;
+  padding: 0.35rem;
+  text-align: left;
+  touch-action: manipulation;
+  position: relative;
+  overflow: hidden;
+}
+
+.inventory-slot.empty {
+  border-style: dashed;
+  color: #94a3b8;
+}
+
+.inventory-slot.occupied {
+  cursor: grab;
+  background: radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), rgba(15, 23, 42, 0.88));
+}
+
+.inventory-slot:focus-visible,
+.inventory-slot:hover,
+.inventory-slot.select-target {
+  outline: none;
+  border-color: #facc15;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18);
+}
+
+.incubator-slot.occupied {
+  border-color: rgba(251, 146, 60, 0.85);
+  background: radial-gradient(circle at top, rgba(251, 146, 60, 0.28), rgba(30, 41, 59, 0.9));
+}
+
+.egg-slot.occupied {
+  border-color: rgba(52, 211, 153, 0.82);
+}
+
+.pet-slot.occupied {
+  border-color: rgba(168, 85, 247, 0.82);
+}
+
+.item-slot.occupied {
+  border-color: rgba(56, 189, 248, 0.82);
+}
+
+.empty-slot-label {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: 0.85rem;
+}
+
+.slot-content {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: clamp(0.68rem, 2.8vw, 0.88rem);
+}
+
+.slot-content strong {
+  line-height: 1.1;
+}
+
+.slot-content button {
+  margin-top: auto;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.75rem;
+}
+
+.slot-progress {
+  display: inline-flex;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(250, 204, 21, 0.18);
+  color: #fde68a;
+  padding: 0.1rem 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.stack-badge {
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.35rem;
+  border-radius: 999px;
+  background: #0ea5e9;
+  color: #f0f9ff;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+@media (min-width: 760px) {
+  .inventory-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .incubator-panel,
+  .egg-panel {
+    grid-column: 1 / -1;
+  }
+}
