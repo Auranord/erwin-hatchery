@@ -23,9 +23,9 @@ export type InventoryGridDimensions = {
 
 export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; baseRows: number; bonusRows: number; upgradeRef: string | null }> = {
   incubators: { columns: 4, baseRows: 1, bonusRows: 0, upgradeRef: null },
-  unhatched_eggs: { columns: 4, baseRows: 5, bonusRows: 0, upgradeRef: 'unhatched_egg_inventory_rows' },
-  pets: { columns: 4, baseRows: 5, bonusRows: 0, upgradeRef: 'pet_inventory_rows' },
-  items: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'item_inventory_rows' }
+  unhatched_eggs: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'unhatched_egg_inventory_rows' },
+  pets: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'pet_inventory_rows' },
+  items: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'item_inventory_rows' }
 };
 
 export const DEFAULT_ITEM_STACK_LIMIT = 99;
@@ -107,10 +107,14 @@ export type SlottedGrid<T> = {
   slots: Array<SlottedInventoryCell<T>>;
 };
 
+export type IncubatorInventory = {
+  incubators: IncubatorSlotItem[];
+};
+
 export type PlayerInventoryPayload = {
   mysteryEggs: MysteryEggBalance[];
   crackedEggResources: EggResourceBalance[];
-  incubators: SlottedGrid<IncubatorSlotItem>;
+  incubators: IncubatorInventory;
   unhatchedEggs: SlottedGrid<UnhatchedEggSlotItem>;
   pets: SlottedGrid<PetSlotItem>;
   consumables: SlottedGrid<ConsumableSlotItem>;

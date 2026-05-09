@@ -87,7 +87,7 @@ Outcome B: egg contains a pet.
 
 ### 3. Pet egg incubated
 
-The player selects an unhatched egg and places it in an incubator slot.
+The player selects or drags an unhatched egg and places it onto an available incubator drop target.
 
 ### 4. Pet egg hatches
 
@@ -225,7 +225,7 @@ The event should not be hardcoded as “end of stream.” It is an admin-started
 
 MVP battle flow:
 
-1. Player selects one pet as their event pet at any time.
+1. Player selects one pet as their event pet by dropping or tap-targeting a pet into the fixed Event-Pet slot above the pet inventory. The pet remains in the pet inventory and is highlighted there.
 2. Admin opens admin UI and starts a battle event.
 3. Backend collects all currently selected pets.
 4. If fewer than 3 selected pets exist, still run with available participants or show a clear admin warning.
@@ -301,9 +301,11 @@ Implement this in a simple and transparent way.
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, consumable/item stacks, and inventory-like incubator positions.
+- Capacity applies only to slotted inventories: unhatched eggs, pets, and consumable/item stacks. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Incubators are draggable inventory-like slots shown directly above the unhatched egg grid. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and 8 columns × 3 base rows for items.
+- Incubators are shown directly above the unhatched egg grid as fixed drop targets without empty placeholder slots. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- The Event-Pet selector is shown directly above the pet inventory as a fixed drop target with stat labels. Selecting a pet does not move it out of the pet inventory; the original inventory slot stays occupied and is highlighted.
 - Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.

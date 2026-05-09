@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -81,6 +81,7 @@ type EventSubSubscriptionStatus = {
 type GridDimensions = { kind: string; columns: number; rows: number; baseRows: number; bonusRows: number; capacity: number; upgradeRef: string | null };
 type GridCell<T> = { slotIndex: number; item: T | null };
 type InventoryGrid<T> = { dimensions: GridDimensions; slots: Array<GridCell<T>> };
+type IncubatorInventory = { incubators: IncubatorItem[] };
 type IncubatorItem = {
   id: string;
   slotSource: string;
@@ -107,7 +108,7 @@ type ConsumableItem = { id: string; consumableTypeId: string; amount: number; st
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
-  incubators: InventoryGrid<IncubatorItem>;
+  incubators: IncubatorInventory;
   unhatchedEggs: InventoryGrid<EggItem>;
   pets: InventoryGrid<PetItem>;
   consumables: InventoryGrid<ConsumableItem>;
@@ -182,17 +183,6 @@ export function App(): JSX.Element {
   const [battleWinners, setBattleWinners] = useState<OverlayBattleWinner[]>([]);
   const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>([]);
 
-  const activeIncubationByEggId = useMemo(() => {
-    if (!playerInventory) return new Map<string, { startedAt: string; requiredProgressSeconds: number }>();
-    return new Map(
-      playerInventory.incubators.slots.map((cell) => cell.item).filter((slot): slot is IncubatorItem => slot !== null)
-        .filter((slot) => slot.activeJob)
-        .map((slot) => [
-          slot.activeJob!.unhatchedEggId,
-          { startedAt: slot.activeJob!.startedAt, requiredProgressSeconds: slot.activeJob!.requiredProgressSeconds }
-        ])
-    );
-  }, [playerInventory]);
 
   async function loadMe(): Promise<void> {
     const response = await fetch('/api/me', { credentials: 'include' });
@@ -347,7 +337,6 @@ export function App(): JSX.Element {
       if (payload.kind === 'egg' && targetKind === 'egg') await postInventoryMove('/api/game/inventory/egg-slots/move', { unhatchedEggId: payload.id, toSlotIndex: slotIndex });
       else if (payload.kind === 'pet' && targetKind === 'pet') await postInventoryMove('/api/game/inventory/pet-slots/move', { petId: payload.id, toSlotIndex: slotIndex });
       else if (payload.kind === 'item' && targetKind === 'item') await postInventoryMove('/api/game/inventory/item-slots/move', { itemStackId: payload.id, toSlotIndex: slotIndex });
-      else if (payload.kind === 'incubator' && targetKind === 'incubator') await postInventoryMove('/api/game/incubators/move', { incubatorSlotId: payload.id, toSlotIndex: slotIndex });
     } catch (error) {
       showGameError(error);
     }
@@ -359,7 +348,13 @@ export function App(): JSX.Element {
       return;
     }
     setSelectedPayload(payload);
-    setGameMessage('Ziel-Slot antippen, um zu verschieben.');
+    if (payload.kind === 'egg') {
+      setGameMessage('Inkubator oder Ziel-Slot antippen.');
+    } else if (payload.kind === 'pet') {
+      setGameMessage('Event-Slot oder Ziel-Slot antippen.');
+    } else {
+      setGameMessage('Ziel-Slot antippen, um zu verschieben.');
+    }
   }
 
   async function logout(): Promise<void> {
@@ -466,21 +461,33 @@ export function App(): JSX.Element {
   }
 
 
-  async function toggleEventPetSelection(petId: string, selectedForEvent: boolean): Promise<void> {
+  async function setEventPetSelection(petId: string): Promise<void> {
     const response = await fetch(`/api/game/pets/${petId}/selection`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedForEvent })
+      body: JSON.stringify({ selectedForEvent: true })
     });
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      window.alert(payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.');
-      return;
+      throw new Error(payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.');
     }
+  }
 
-    await refreshOwnInventory();
+  async function handleDropToEventPetSlot(): Promise<void> {
+    const payload = dragPayload ?? selectedPayload;
+    setSelectedPayload(null);
+    setDragPayload(null);
+    if (!payload || payload.kind !== 'pet') return;
+
+    try {
+      await setEventPetSelection(payload.id);
+      await refreshOwnInventory();
+      setGameMessage('Event-Pet ausgewählt.');
+    } catch (error) {
+      showGameError(error);
+    }
   }
 
 
@@ -798,42 +805,130 @@ export function App(): JSX.Element {
   }
 
   const showAdminNav = me?.authenticated && (me.roles.includes('owner') || me.roles.includes('admin'));
-  const petItems = playerInventory?.pets.slots.map((cell) => cell.item).filter((pet): pet is PetItem => pet !== null) ?? [];
+  const selectedEventPet = playerInventory?.pets.slots.map((cell) => cell.item).find((pet): pet is PetItem => pet?.selectedForEvent === true) ?? null;
 
-  function renderGrid<T extends { id: string }>(title: string, grid: InventoryGrid<T>, kind: DragPayload['kind'], renderItem: (item: T, slotIndex: number) => JSX.Element, className = ''): JSX.Element {
+  function renderGrid<T extends { id: string }>(title: string, grid: InventoryGrid<T>, kind: Exclude<DragPayload['kind'], 'incubator'>, renderItem: (item: T, slotIndex: number) => JSX.Element, className = '', getItemClassName?: (item: T) => string): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
         <h3>{title}</h3>
         <p className="inventory-capacity">{grid.slots.filter((cell) => cell.item).length}/{grid.dimensions.capacity} Slots · {grid.dimensions.columns}×{grid.dimensions.rows}</p>
         <div className="inventory-grid" style={{ gridTemplateColumns: `repeat(${grid.dimensions.columns}, minmax(0, 1fr))` }}>
-          {grid.slots.map((cell) => {
-            const incubator = kind === 'incubator' ? cell.item as IncubatorItem | null : null;
-            return (
-              <div
-                key={cell.slotIndex}
-                role="button"
-                tabIndex={0}
-                className={`inventory-slot ${cell.item ? 'occupied' : 'empty'} ${kind}-slot ${selectedPayload ? 'select-target' : ''}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  void handleDropToSlot(kind, cell.slotIndex, incubator?.id);
-                }}
-                onClick={() => {
-                  if (cell.item) {
-                    const payload: DragPayload = { kind, id: cell.item.id };
-                    selectOrRun(payload, kind, cell.slotIndex, incubator?.id);
-                  } else {
-                    void handleDropToSlot(kind, cell.slotIndex, incubator?.id);
-                  }
-                }}
-                aria-label={`${title} Slot ${cell.slotIndex + 1}`}
-              >
-                {cell.item ? renderItem(cell.item, cell.slotIndex) : <span className="empty-slot-label">Leer</span>}
-              </div>
-            );
-          })}
+          {grid.slots.map((cell) => (
+            <div
+              key={cell.slotIndex}
+              role="button"
+              tabIndex={0}
+              className={`inventory-slot ${cell.item ? 'occupied' : 'empty'} ${kind}-slot ${cell.item && getItemClassName ? getItemClassName(cell.item) : ''} ${selectedPayload ? 'select-target' : ''}`}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                void handleDropToSlot(kind, cell.slotIndex);
+              }}
+              onClick={() => {
+                if (cell.item) {
+                  const payload: DragPayload = { kind, id: cell.item.id };
+                  selectOrRun(payload, kind, cell.slotIndex);
+                } else {
+                  void handleDropToSlot(kind, cell.slotIndex);
+                }
+              }}
+              aria-label={`${title} Slot ${cell.slotIndex + 1}`}
+            >
+              {cell.item ? renderItem(cell.item, cell.slotIndex) : <span className="empty-slot-label">Leer</span>}
+            </div>
+          ))}
         </div>
+      </section>
+    );
+  }
+
+  function renderEventPetSelectionSlot(selectedPet: PetItem | null): JSX.Element {
+    return (
+      <section className="event-pet-panel">
+        <div
+          role="button"
+          tabIndex={0}
+          className={`inventory-slot event-pet-drop-target ${selectedPet ? 'occupied selected-event-pet-slot' : 'empty'} ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            void handleDropToEventPetSlot();
+          }}
+          onClick={() => {
+            if (selectedPayload?.kind === 'pet') {
+              void handleDropToEventPetSlot();
+            }
+          }}
+          aria-label="Event-Pet Auswahl-Slot"
+        >
+          {selectedPet ? (
+            <div className="slot-content">
+              <strong>{selectedPet.petTypeDisplayName}</strong>
+              <span>Event-Pet</span>
+            </div>
+          ) : <span className="empty-slot-label">Pet hier ablegen</span>}
+        </div>
+        <div className="event-pet-details">
+          <span className="event-pet-label">Event-Auswahl</span>
+          <strong>{selectedPet?.petTypeDisplayName ?? 'Kein Pet ausgewählt'}</strong>
+          <div className="event-pet-stat-grid">
+            <span>Seltenheit: {selectedPet?.rarity ?? '—'}</span>
+            <span>Rolle: {selectedPet?.role ?? '—'}</span>
+            <span>HP: {selectedPet?.hp ?? '—'}</span>
+            <span>ATK: {selectedPet?.attack ?? '—'}</span>
+            <span>DEF: {selectedPet?.defense ?? '—'}</span>
+            <span>SPD: {selectedPet?.speed ?? '—'}</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderIncubatorInventory(inventory: IncubatorInventory): JSX.Element {
+    const incubators = inventory.incubators;
+
+    return (
+      <section className="inventory-panel incubator-panel">
+        <h3>Inkubatoren</h3>
+        <p className="inventory-capacity">{incubators.length} verfügbare Inkubatoren · Eier hier ablegen</p>
+        {incubators.length > 0 ? (
+          <div className="incubator-list">
+            {incubators.map((incubator) => {
+              const active = incubator.activeJob;
+              const secondsRemaining = active ? Math.ceil((new Date(active.startedAt).getTime() + active.requiredProgressSeconds * 1000 - nowMs) / 1000) : null;
+              return (
+                <div
+                  key={incubator.id}
+                  role="button"
+                  tabIndex={0}
+                  className={`inventory-slot occupied incubator-slot incubator-drop-target ${selectedPayload?.kind === 'egg' ? 'select-target' : ''}`}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    void handleDropToSlot('incubator', 0, incubator.id);
+                  }}
+                  onClick={() => {
+                    if (selectedPayload?.kind === 'egg') {
+                      void handleDropToSlot('incubator', 0, incubator.id);
+                    }
+                  }}
+                  aria-label={`Inkubator ${incubator.slotSource} Level ${incubator.slotLevel}`}
+                >
+                  <div className="slot-content">
+                    <strong>Inkubator Lv. {incubator.slotLevel}</strong>
+                    <span>{incubator.slotSource}</span>
+                    {active ? (
+                      <>
+                        <span className="slot-progress">{formatRemainingDuration(secondsRemaining ?? 0)}</span>
+                        {(secondsRemaining ?? 1) <= 0 ? <button type="button" onClick={(event) => { event.stopPropagation(); void finishIncubation(active.unhatchedEggId).then(refreshOwnInventory).catch(showGameError); }}>Abholen</button> : null}
+                      </>
+                    ) : <span>Frei · Ei hier ablegen</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : <p>Keine Inkubatoren verfügbar.</p>}
       </section>
     );
   }
@@ -907,51 +1002,26 @@ export function App(): JSX.Element {
                     ))}
                 </div>
                 <div className="inventory-stack">
-                  {renderGrid('Inkubatoren', playerInventory.incubators, 'incubator', (incubator) => {
-                    const active = incubator.activeJob;
-                    const secondsRemaining = active ? Math.ceil((new Date(active.startedAt).getTime() + active.requiredProgressSeconds * 1000 - nowMs) / 1000) : null;
-                    return (
-                      <div
-                        draggable
-                        onDragStart={() => setDragPayload({ kind: 'incubator', id: incubator.id })}
-                        onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
-                      >
-                        <strong>Inkubator Lv. {incubator.slotLevel}</strong>
-                        <span>{incubator.slotSource}</span>
-                        {active ? (
-                          <>
-                            <span className="slot-progress">{formatRemainingDuration(secondsRemaining ?? 0)}</span>
-                            {(secondsRemaining ?? 1) <= 0 ? <button type="button" onClick={(event) => { event.stopPropagation(); void finishIncubation(active.unhatchedEggId).then(refreshOwnInventory).catch(showGameError); }}>Abholen</button> : null}
-                          </>
-                        ) : <span>Frei · Ei hier ablegen</span>}
-                      </div>
-                    );
-                  }, 'incubator-panel')}
+                  {renderIncubatorInventory(playerInventory.incubators)}
                   {renderGrid('Unausgebrütete Eier', playerInventory.unhatchedEggs, 'egg', (egg) => (
                     <div draggable onDragStart={() => setDragPayload({ kind: 'egg', id: egg.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
                       <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
                       <span>Bereit</span>
                     </div>
                   ), 'egg-panel')}
-                  {renderGrid('Pets', playerInventory.pets, 'pet', (pet) => (
+                  <section className="inventory-panel pet-panel">
+                    <h3>Pets</h3>
+                    <p className="inventory-capacity">Pet in den Event-Slot ziehen oder antippen und dann den Event-Slot wählen.</p>
+                    {renderEventPetSelectionSlot(selectedEventPet)}
+                  </section>
+                  {renderGrid('Pet-Inventar', playerInventory.pets, 'pet', (pet) => (
                     <div draggable onDragStart={() => setDragPayload({ kind: 'pet', id: pet.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
                       <strong>{pet.petTypeDisplayName}</strong>
                       <span>{pet.rarity} · {pet.role}</span>
                       <span>HP {pet.hp} · ATK {pet.attack}</span>
-                      <button
-                        className={pet.selectedForEvent ? 'selected-pet-button' : undefined}
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          const shouldSelect = !pet.selectedForEvent;
-                          void toggleEventPetSelection(pet.id, shouldSelect).then(refreshOwnInventory).catch(showGameError);
-                        }}
-                      >
-                        {pet.selectedForEvent ? 'Event-Pet' : 'Auswählen'}
-                      </button>
+                      {pet.selectedForEvent ? <span className="event-pet-badge">Event-Pet</span> : null}
                     </div>
-                  ), 'pet-panel')}
+                  ), 'pet-grid-panel', (pet) => pet.selectedForEvent ? 'selected-event-pet' : '')}
                   {renderGrid('Items', playerInventory.consumables, 'item', (item) => (
                     <div draggable onDragStart={() => setDragPayload({ kind: 'item', id: item.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
                       <strong>{item.consumableTypeId}</strong>
@@ -959,10 +1029,6 @@ export function App(): JSX.Element {
                     </div>
                   ), 'item-panel')}
                 </div>
-                <p>
-                  <strong>Event-Pet:</strong>{' '}
-                  {petItems.filter((pet) => pet.selectedForEvent).map((pet) => pet.petTypeDisplayName).join(', ') || 'Kein Pet ausgewählt'}
-                </p>
               </>
             ) : <p>Inventar wird geladen…</p>}
           </>

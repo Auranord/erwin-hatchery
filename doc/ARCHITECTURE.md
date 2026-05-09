@@ -93,7 +93,7 @@ The frontend owns:
 - inventory screens
 - egg identification actions
 - incubator management
-- pet list and selected event pet
+- pet inventory, fixed Event-Pet drop target, and selected pet stat summary
 - account deletion UI
 - admin UI for authorized roles
 - OBS overlay pages
@@ -229,9 +229,11 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, consumable/item stacks, and inventory-like incubator positions.
+- Capacity applies only to slotted inventories: unhatched eggs, pets, and consumable/item stacks. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Incubators are draggable inventory-like slots shown directly above the unhatched egg grid. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and 8 columns × 3 base rows for items.
+- Incubators are shown directly above the unhatched egg grid as fixed drop targets without empty placeholder slots. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- The Event-Pet selector is a fixed drop target directly above the pet inventory. It accepts pet drag/drop or tap selection, displays selected pet stats, and highlights the selected pet in its original pet inventory slot instead of acting as extra storage.
 - Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
