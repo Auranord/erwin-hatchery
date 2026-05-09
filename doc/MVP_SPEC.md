@@ -24,15 +24,16 @@ The reward is created manually in Twitch for the MVP. The Twitch reward ID is co
 
 ## Current MVP implementation status
 
-Last reevaluated: **2026-05-04**.
+Last reevaluated: **2026-05-09**.
 
 - ✅ Milestones 0-3 are completed (repo/workspace foundation, backend baseline, Twitch OAuth auth flow, and idempotent EventSub Channel Point redemption ingestion with startup subscription auto-sync).
-- ✅ Milestone 4 is completed (authenticated player shell, live inventory visibility, mystery egg identify, incubate -> hatch flow, pet selection, and public leaderboard are implemented).
+- ✅ Milestone 4 is completed (authenticated player shell, live slotted inventory visibility, mystery egg identify, incubate -> hatch flow, pet selection, server-authoritative inventory moves, and public leaderboard are implemented).
 - ✅ Milestone 5 is completed (timestamp-based incubation flow, live/viewer multipliers, stream-state integration, and hatch resolution are implemented).
 - 🟨 Milestone 6 is partially completed (admin route protection, user search/detail, role mutation, admin logs, ledger view, test mystery egg grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 is completed (admin battle start flow with random winners, leaderboard awards, participant/result persistence, pet deselection, and dedicated battle revert flow are implemented).
-- ✅ Milestone 8 is completed (overlay routes `/overlay/alerts` + `/overlay/battle`, SSE integration, hatch alerts, battle winners, and leaderboard snapshot display are implemented).
-- ⏳ Milestones 9-10 are not started.
+- ✅ Milestone 8 is completed (secret-protected overlay routes `/overlay/alerts` + `/overlay/battle`, SSE integration, hatch alerts, battle winners, and leaderboard snapshot display are implemented).
+- 🟨 Milestone 9 is partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, and subscriber extra incubator lifecycle are implemented; gifted-sub/Bits ingestion and fixed Bits effects are still pending).
+- 🟨 Milestone 10 is partially completed (production Docker image, GHCR branch tagging, TrueNAS example with Postgres/init/health checks, production env validation, secure production cookies, and frontend fallback routing are implemented; rate limiting, explicit CORS middleware, and backup scripts/restore notes are still pending).
 
 ## Player states
 

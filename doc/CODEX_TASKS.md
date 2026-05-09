@@ -2,18 +2,19 @@
 
 ## Progress status
 
-Last reevaluated: **2026-05-04**.
+Last reevaluated: **2026-05-09**.
 
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
 - ✅ Milestone 3 completed (EventSub webhook ingestion + idempotent Channel Point redemption processing + startup subscription auto-sync + admin status debug implemented).
-- ✅ Milestone 4 completed (authenticated player shell, live inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, and public leaderboard are implemented).
+- ✅ Milestone 4 completed (authenticated player shell, live slotted inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, item/pet/egg slot moves, and public leaderboard are implemented).
 - ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, stream live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 completed (admin battle event start with random winners, 3/2/1 leaderboard award, participant/result persistence, pet deselection, and dedicated battle revert action are implemented).
-- ✅ Milestone 8 completed (overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, and OBS-safe layout are implemented).
-- ⏳ Milestones 9-10 not started.
+- ✅ Milestone 8 completed (secret-protected overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, leaderboard snapshot, and OBS-safe layout are implemented).
+- 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, and the subscriber extra incubator lifecycle are implemented; gifted-sub/Bits ingestion and fixed Bits effects remain pending).
+- 🟨 Milestone 10 partially completed (production Docker image, GHCR branch tagging, TrueNAS example with Postgres/init/health checks, production env validation, secure production cookies, and frontend fallback routing are implemented; rate limiting, explicit CORS middleware, and backup scripts/restore notes remain pending).
 
 
 ## Milestone 0 - Repo skeleton
@@ -164,32 +165,34 @@ Acceptance:
 
 ## Milestone 9 - Bits/sub event support foundation
 
-- Add schema/event ingestion for sub/gift sub/Bits events.
+- 🟨 Add schema/event ingestion for sub/gift sub/Bits events.
 - ✅ Add schema/event ingestion for sub status events (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) with persisted renewal/end cache on `users`.
-- Do not add paid random eggs.
-- Implement subscriber extra incubator if sub status can be reliably received.
-- Bits effects should be fixed only and can remain disabled behind config.
+- ⏳ Add gift-sub and Bits/cheer EventSub subscription types and processing once fixed effects are defined.
+- ✅ Do not add paid random eggs.
+- ✅ Implement subscriber extra incubator if sub status can be reliably received.
+- ⏳ Bits effects should be fixed only and can remain disabled behind config.
 
 Acceptance:
 
-- Subbed users can receive one subscriber incubator.
-- When sub ends, occupied slot finishes current egg and then disappears.
+- ✅ Subbed users can receive one subscriber incubator.
+- ✅ When sub ends, an occupied subscriber slot finishes the current egg; after hatch it becomes unavailable until subscriber status is active again.
+- ⏳ Gift-sub and Bits event foundations are still pending.
 
 ## Milestone 10 - Deployment hardening
 
-- Docker image produces production build for both API and web assets.
-- Compose/YAML works with Postgres and Traefik.
-- Health check.
-- Basic rate limiting.
-- CORS config.
-- Secure cookies.
-- Backup notes/scripts.
-- Production env validation.
+- ✅ Docker image produces production build for both API and web assets.
+- ✅ Compose/YAML example works with Postgres/init job and Traefik-facing port configuration.
+- ✅ Health check.
+- ⏳ Basic rate limiting.
+- ⏳ Explicit CORS middleware/config enforcement.
+- ✅ Secure cookies in production.
+- ⏳ Backup scripts and restore notes.
+- ✅ Production env validation.
 
 Acceptance:
 
-- App runs on TrueNAS and survives restart with persistent DB.
-- `GET /` returns the landing page and frontend route fallback works without impacting `/api/*` routes.
+- 🟨 TrueNAS deployment baseline exists with persistent Postgres volume and init migration/seed job; backup/restore documentation still needs hardening.
+- ✅ `GET /` returns the landing page and frontend route fallback works without impacting `/api/*` routes.
 
 ## Slotted RPG Inventory MVP Update
 
