@@ -214,8 +214,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
 
-
-
   app.get('/api/admin/twitch/custom-rewards', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
@@ -357,59 +355,6 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
     return { status: 'ok', idempotent: false };
   });
-
-  app.post('/api/admin/users/:userId/grant-incubator-slot', async (request, reply) => {
-    const identity = await getSessionIdentity(request);
-    if (!identity || !hasAdminAccess(identity.roles)) return reply.code(403).send({ message: 'Forbidden' });
-    const userId = (request.params as { userId: string }).userId;
-    const body = (request.body ?? {}) as { requestId?: string };
-    const requestId = body.requestId?.trim() || randomUUID();
-
-    const duplicate = await db.select({ id: adminActionLogs.id }).from(adminActionLogs).where(eq(adminActionLogs.requestId, requestId)).limit(1);
-    if (duplicate.length > 0) return reply.code(200).send({ status: 'ok', idempotent: true });
-
-    await db.transaction(async (tx) => {
-      const [targetUser] = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
-      if (!targetUser) throw new Error('User not found');
-
-      const occupiedRows = await tx.select({ slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(eq(incubatorSlots.ownerUserId, userId));
-      const occupied = new Set(occupiedRows.map((row) => row.slotIndex).filter((slotIndex): slotIndex is number => slotIndex !== null));
-      let slotIndex = 0;
-      while (occupied.has(slotIndex)) slotIndex += 1;
-      const requiredRows = Math.ceil((slotIndex + 1) / 4);
-      await tx.insert(inventoryDimensions).values({ userId, inventoryKind: 'incubators', columns: 4, baseRows: Math.max(1, requiredRows), bonusRows: 0, upgradeRef: null }).onConflictDoUpdate({ target: [inventoryDimensions.userId, inventoryDimensions.inventoryKind], set: { baseRows: sql`greatest(${inventoryDimensions.baseRows}, ${requiredRows})`, updatedAt: new Date() } });
-      const [createdSlot] = await tx.insert(incubatorSlots).values({
-        ownerUserId: userId,
-        slotSource: 'admin_grant',
-        slotLevel: 1,
-        slotIndex,
-        isAvailable: true,
-        removeWhenEmpty: false
-      }).returning({ id: incubatorSlots.id });
-      if (!createdSlot) throw new Error('Failed to create incubator slot');
-
-      const [ledgerRow] = await tx.insert(economyLedger).values({
-        userId,
-        actorUserId: identity.userId,
-        eventType: 'admin_incubator_slot_grant',
-        sourceType: 'admin_action',
-        delta: { incubatorSlots: [{ id: createdSlot.id, change: 1, source: 'admin_grant', slotIndex }] }
-      }).returning({ id: economyLedger.id });
-      if (!ledgerRow) throw new Error('Failed to create ledger entry for incubator slot grant');
-
-      await tx.insert(adminActionLogs).values({
-        actorUserId: identity.userId,
-        targetUserId: userId,
-        actionType: 'grant_incubator_slot',
-        requestId,
-        payload: { incubatorSlotId: createdSlot.id, ledgerId: ledgerRow.id }
-      });
-    });
-
-    return { status: 'ok', idempotent: false };
-  });
-
-
 
   app.post('/api/admin/events/start', async (request, reply) => {
     const identity = await getSessionIdentity(request);
