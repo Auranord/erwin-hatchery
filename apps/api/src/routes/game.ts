@@ -30,6 +30,7 @@ function verifyOverlayAccess(rawToken: string | undefined): boolean {
 }
 
 type PlayerInventory = PlayerInventoryPayload;
+type SlotMoveDelta = { id: string; fromSlotIndex: number; toSlotIndex: number };
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -229,7 +230,25 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       }))
     },
     unhatchedEggs: { dimensions: eggDimensions, slots: cellsForGrid(eggDimensions, unhatchedEggRows.map((row) => ({ slotIndex: row.slotIndex, item: { id: row.id, eggTypeId: row.eggTypeId, state: row.state } }))) },
-    pets: { dimensions: petDimensions, slots: cellsForGrid(petDimensions, petRows.map((row) => ({ slotIndex: row.slotIndex, item: { ...row, createdAt: toIsoTimestamp(row.createdAt) } }))) },
+    pets: {
+      dimensions: petDimensions,
+      slots: cellsForGrid(petDimensions, petRows.map((row) => ({
+        slotIndex: row.slotIndex,
+        item: {
+          id: row.id,
+          petTypeId: row.petTypeId,
+          petTypeDisplayName: row.petTypeDisplayName,
+          rarity: row.rarity,
+          role: row.role,
+          hp: row.hp,
+          attack: row.attack,
+          defense: row.defense,
+          speed: row.speed,
+          selectedForEvent: row.selectedForEvent,
+          createdAt: toIsoTimestamp(row.createdAt)
+        }
+      })))
+    },
     consumables: { dimensions: itemDimensions, slots: cellsForGrid(itemDimensions, consumableRows.map((row) => ({ slotIndex: row.slotIndex, item: { id: row.id, consumableTypeId: row.consumableTypeId, amount: row.amount, stackLimit: getStackLimit(row.consumableTypeId) } }))) }
   };
 }
@@ -718,16 +737,20 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     const body = (request.body ?? {}) as { unhatchedEggId?: string; toSlotIndex?: number };
     if (!body.unhatchedEggId || !Number.isInteger(body.toSlotIndex)) return reply.code(400).send({ message: 'unhatchedEggId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
       const dimensions = await getDimensionsInTx(tx, identity.userId, 'unhatched_eggs');
-      if (!isSlotInsideGrid(body.toSlotIndex!, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
       const [source] = await tx.select({ id: unhatchedEggs.id, slotIndex: unhatchedEggs.slotIndex }).from(unhatchedEggs).where(and(eq(unhatchedEggs.id, body.unhatchedEggId!), eq(unhatchedEggs.ownerUserId, identity.userId), eq(unhatchedEggs.state, 'ready_for_incubation'))).limit(1);
       if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: unhatchedEggs.id, slotIndex: unhatchedEggs.slotIndex }).from(unhatchedEggs).where(and(eq(unhatchedEggs.ownerUserId, identity.userId), eq(unhatchedEggs.state, 'ready_for_incubation'), eq(unhatchedEggs.slotIndex, body.toSlotIndex!), not(eq(unhatchedEggs.id, source.id)))).limit(1);
+      const fromSlotIndex = source.slotIndex;
+      const [destination] = await tx.select({ id: unhatchedEggs.id, slotIndex: unhatchedEggs.slotIndex }).from(unhatchedEggs).where(and(eq(unhatchedEggs.ownerUserId, identity.userId), eq(unhatchedEggs.state, 'ready_for_incubation'), eq(unhatchedEggs.slotIndex, toSlotIndex), not(eq(unhatchedEggs.id, source.id)))).limit(1);
+      const slotMoves: SlotMoveDelta[] = [{ id: source.id, fromSlotIndex, toSlotIndex }];
+      if (destination && destination.slotIndex !== null) slotMoves.push({ id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: fromSlotIndex });
       await tx.update(unhatchedEggs).set({ slotIndex: null }).where(eq(unhatchedEggs.id, source.id));
-      if (destination) await tx.update(unhatchedEggs).set({ slotIndex: source.slotIndex }).where(eq(unhatchedEggs.id, destination.id));
-      await tx.update(unhatchedEggs).set({ slotIndex: body.toSlotIndex }).where(eq(unhatchedEggs.id, source.id));
-      const [ledger] = await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_egg_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { unhatchedEggSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex: body.toSlotIndex }, destination ? { id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: source.slotIndex } : null].filter((entry): entry is { id: string; fromSlotIndex: number | null; toSlotIndex: number | null } => entry !== null) } }).returning({ id: economyLedger.id });
+      if (destination) await tx.update(unhatchedEggs).set({ slotIndex: fromSlotIndex }).where(eq(unhatchedEggs.id, destination.id));
+      await tx.update(unhatchedEggs).set({ slotIndex: toSlotIndex }).where(eq(unhatchedEggs.id, source.id));
+      const [ledger] = await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_egg_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { unhatchedEggSlots: slotMoves } }).returning({ id: economyLedger.id });
       if (!ledger) throw new Error('Failed to ledger egg slot move');
       return { kind: 'ok' as const };
     });
@@ -740,16 +763,20 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     const body = (request.body ?? {}) as { petId?: string; toSlotIndex?: number };
     if (!body.petId || !Number.isInteger(body.toSlotIndex)) return reply.code(400).send({ message: 'petId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
       const dimensions = await getDimensionsInTx(tx, identity.userId, 'pets');
-      if (!isSlotInsideGrid(body.toSlotIndex!, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
       const [source] = await tx.select({ id: pets.id, slotIndex: pets.slotIndex }).from(pets).where(and(eq(pets.id, body.petId!), eq(pets.ownerUserId, identity.userId))).limit(1);
       if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: pets.id, slotIndex: pets.slotIndex }).from(pets).where(and(eq(pets.ownerUserId, identity.userId), eq(pets.slotIndex, body.toSlotIndex!), not(eq(pets.id, source.id)))).limit(1);
+      const fromSlotIndex = source.slotIndex;
+      const [destination] = await tx.select({ id: pets.id, slotIndex: pets.slotIndex }).from(pets).where(and(eq(pets.ownerUserId, identity.userId), eq(pets.slotIndex, toSlotIndex), not(eq(pets.id, source.id)))).limit(1);
+      const slotMoves: SlotMoveDelta[] = [{ id: source.id, fromSlotIndex, toSlotIndex }];
+      if (destination && destination.slotIndex !== null) slotMoves.push({ id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: fromSlotIndex });
       await tx.update(pets).set({ slotIndex: null }).where(eq(pets.id, source.id));
-      if (destination) await tx.update(pets).set({ slotIndex: source.slotIndex }).where(eq(pets.id, destination.id));
-      await tx.update(pets).set({ slotIndex: body.toSlotIndex }).where(eq(pets.id, source.id));
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_pet_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { petSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex: body.toSlotIndex }, destination ? { id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: source.slotIndex } : null].filter((entry): entry is { id: string; fromSlotIndex: number | null; toSlotIndex: number | null } => entry !== null) } });
+      if (destination) await tx.update(pets).set({ slotIndex: fromSlotIndex }).where(eq(pets.id, destination.id));
+      await tx.update(pets).set({ slotIndex: toSlotIndex }).where(eq(pets.id, source.id));
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_pet_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { petSlots: slotMoves } });
       return { kind: 'ok' as const };
     });
     if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
@@ -761,16 +788,20 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     const body = (request.body ?? {}) as { incubatorSlotId?: string; toSlotIndex?: number };
     if (!body.incubatorSlotId || !Number.isInteger(body.toSlotIndex)) return reply.code(400).send({ message: 'incubatorSlotId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
       const dimensions = await getDimensionsInTx(tx, identity.userId, 'incubators');
-      if (!isSlotInsideGrid(body.toSlotIndex!, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
       const [source] = await tx.select({ id: incubatorSlots.id, slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(and(eq(incubatorSlots.id, body.incubatorSlotId!), eq(incubatorSlots.ownerUserId, identity.userId))).limit(1);
       if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: incubatorSlots.id, slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(and(eq(incubatorSlots.ownerUserId, identity.userId), eq(incubatorSlots.slotIndex, body.toSlotIndex!), not(eq(incubatorSlots.id, source.id)))).limit(1);
+      const fromSlotIndex = source.slotIndex;
+      const [destination] = await tx.select({ id: incubatorSlots.id, slotIndex: incubatorSlots.slotIndex }).from(incubatorSlots).where(and(eq(incubatorSlots.ownerUserId, identity.userId), eq(incubatorSlots.slotIndex, toSlotIndex), not(eq(incubatorSlots.id, source.id)))).limit(1);
+      const slotMoves: SlotMoveDelta[] = [{ id: source.id, fromSlotIndex, toSlotIndex }];
+      if (destination && destination.slotIndex !== null) slotMoves.push({ id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: fromSlotIndex });
       await tx.update(incubatorSlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(incubatorSlots.id, source.id));
-      if (destination) await tx.update(incubatorSlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, destination.id));
-      await tx.update(incubatorSlots).set({ slotIndex: body.toSlotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, source.id));
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_incubator_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { incubatorSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex: body.toSlotIndex }, destination ? { id: destination.id, fromSlotIndex: destination.slotIndex, toSlotIndex: source.slotIndex } : null].filter((entry): entry is { id: string; fromSlotIndex: number | null; toSlotIndex: number | null } => entry !== null) } });
+      if (destination) await tx.update(incubatorSlots).set({ slotIndex: fromSlotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, destination.id));
+      await tx.update(incubatorSlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(incubatorSlots.id, source.id));
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_incubator_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { incubatorSlots: slotMoves } });
       return { kind: 'ok' as const };
     });
     if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
@@ -782,12 +813,13 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     const body = (request.body ?? {}) as { itemStackId?: string; toSlotIndex?: number };
     if (!body.itemStackId || !Number.isInteger(body.toSlotIndex)) return reply.code(400).send({ message: 'itemStackId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
       const dimensions = await getDimensionsInTx(tx, identity.userId, 'items');
-      if (!isSlotInsideGrid(body.toSlotIndex!, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
       const [source] = await tx.select({ id: consumableItemStacks.id, consumableTypeId: consumableItemStacks.consumableTypeId, amount: consumableItemStacks.amount, slotIndex: consumableItemStacks.slotIndex }).from(consumableItemStacks).where(and(eq(consumableItemStacks.id, body.itemStackId!), eq(consumableItemStacks.userId, identity.userId))).limit(1);
       if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: consumableItemStacks.id, consumableTypeId: consumableItemStacks.consumableTypeId, amount: consumableItemStacks.amount, slotIndex: consumableItemStacks.slotIndex }).from(consumableItemStacks).where(and(eq(consumableItemStacks.userId, identity.userId), eq(consumableItemStacks.slotIndex, body.toSlotIndex!), not(eq(consumableItemStacks.id, source.id)))).limit(1);
+      const [destination] = await tx.select({ id: consumableItemStacks.id, consumableTypeId: consumableItemStacks.consumableTypeId, amount: consumableItemStacks.amount, slotIndex: consumableItemStacks.slotIndex }).from(consumableItemStacks).where(and(eq(consumableItemStacks.userId, identity.userId), eq(consumableItemStacks.slotIndex, toSlotIndex), not(eq(consumableItemStacks.id, source.id)))).limit(1);
       if (destination && destination.consumableTypeId === source.consumableTypeId) {
         const stackLimit = getStackLimit(source.consumableTypeId);
         const moveAmount = Math.min(source.amount, Math.max(0, stackLimit - destination.amount));
@@ -798,9 +830,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       } else {
         await tx.update(consumableItemStacks).set({ slotIndex: null, updatedAt: new Date() }).where(eq(consumableItemStacks.id, source.id));
         if (destination) await tx.update(consumableItemStacks).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(consumableItemStacks.id, destination.id));
-        await tx.update(consumableItemStacks).set({ slotIndex: body.toSlotIndex, updatedAt: new Date() }).where(eq(consumableItemStacks.id, source.id));
+        await tx.update(consumableItemStacks).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(consumableItemStacks.id, source.id));
       }
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_item_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { itemStacks: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex: body.toSlotIndex, destinationStackId: destination?.id ?? null }] } });
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_item_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { itemStacks: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex, destinationStackId: destination?.id ?? null }] } });
       return { kind: 'ok' as const };
     });
     if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
