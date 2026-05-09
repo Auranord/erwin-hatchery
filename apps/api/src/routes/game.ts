@@ -634,6 +634,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             id: slot.id,
             slotSource: slot.slotSource,
             slotLevel: slot.slotLevel,
+            slotIndex: slot.slotIndex,
             isAvailable: slot.isAvailable,
             metadata: {
               speedMultiplierBasisPoints: slot.speedMultiplierBasisPoints,
