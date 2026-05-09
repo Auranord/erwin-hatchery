@@ -800,7 +800,7 @@ export function App(): JSX.Element {
   const showAdminNav = me?.authenticated && (me.roles.includes('owner') || me.roles.includes('admin'));
   const petItems = playerInventory?.pets.slots.map((cell) => cell.item).filter((pet): pet is PetItem => pet !== null) ?? [];
 
-  function renderGrid<T>(title: string, grid: InventoryGrid<T>, kind: 'incubator' | 'egg' | 'pet' | 'item', renderItem: (item: T, slotIndex: number) => JSX.Element, className = ''): JSX.Element {
+  function renderGrid<T extends { id: string }>(title: string, grid: InventoryGrid<T>, kind: DragPayload['kind'], renderItem: (item: T, slotIndex: number) => JSX.Element, className = ''): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
         <h3>{title}</h3>
@@ -821,10 +821,8 @@ export function App(): JSX.Element {
                 }}
                 onClick={() => {
                   if (cell.item) {
-                    if (kind === 'incubator') selectOrRun({ kind: 'incubator', id: (cell.item as IncubatorItem).id }, kind, cell.slotIndex, incubator?.id);
-                    if (kind === 'egg') selectOrRun({ kind: 'egg', id: (cell.item as EggItem).id }, kind, cell.slotIndex);
-                    if (kind === 'pet') selectOrRun({ kind: 'pet', id: (cell.item as PetItem).id }, kind, cell.slotIndex);
-                    if (kind === 'item') selectOrRun({ kind: 'item', id: (cell.item as ConsumableItem).id }, kind, cell.slotIndex);
+                    const payload: DragPayload = { kind, id: cell.item.id };
+                    selectOrRun(payload, kind, cell.slotIndex, incubator?.id);
                   } else {
                     void handleDropToSlot(kind, cell.slotIndex, incubator?.id);
                   }
