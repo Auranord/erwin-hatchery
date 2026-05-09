@@ -105,9 +105,9 @@ The generated pet has:
 ## Initial incubators
 
 - Normal viewer: 1 incubator.
-- Subscriber: +1 temporary subscriber incubator while subbed.
+- Subscriber: +1 subscriber incubator that is active while subbed and visible but inactive otherwise.
 
-If a user loses the sub perk while an egg is already in the subscriber incubator, that egg should finish. After it finishes, the subscriber incubator is removed or becomes unavailable until the user is subbed again.
+The subscriber incubator is always visible. If a user is not subscribed, it is shown as inactive and cannot accept new eggs. If a user loses the sub perk while an egg is already in the subscriber incubator, that egg keeps hatching and can be collected normally; after it finishes, the slot remains visible but inactive until the user is subbed again.
 
 Later upgrades can add more incubators for non-subs.
 
@@ -210,6 +210,7 @@ Suggested MVP upgrades:
 Subs:
 
 - Fixed transparent perk: +1 extra incubator while subbed.
+- Subscriber incubator remains visible when unsubscribed, but inactive for starting new eggs.
 - Current egg in that incubator finishes even if the sub ends.
 
 Bits:
