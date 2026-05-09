@@ -1,5 +1,11 @@
 :root {
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   line-height: 1.5;
   color: #f5f5f5;
   background: #171420;
@@ -95,20 +101,35 @@ ul {
   padding: 22px 28px;
   border: 2px solid rgba(253, 224, 71, 0.9);
   border-radius: 22px;
-  background: linear-gradient(135deg, rgba(30, 18, 48, 0.88), rgba(86, 50, 18, 0.72));
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), 0 0 34px rgba(250, 204, 21, 0.24);
+  background: linear-gradient(
+    135deg,
+    rgba(30, 18, 48, 0.88),
+    rgba(86, 50, 18, 0.72)
+  );
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.42),
+    0 0 34px rgba(250, 204, 21, 0.24);
   text-align: center;
-  animation: overlay-alert-life var(--overlay-alert-duration, 6200ms) ease-in-out both;
+  animation: overlay-alert-life var(--overlay-alert-duration, 6200ms)
+    ease-in-out both;
 }
 
 .overlay-alert-card--battle {
   border-color: rgba(192, 132, 252, 0.9);
-  background: linear-gradient(135deg, rgba(30, 18, 48, 0.88), rgba(70, 36, 118, 0.76));
+  background: linear-gradient(
+    135deg,
+    rgba(30, 18, 48, 0.88),
+    rgba(70, 36, 118, 0.76)
+  );
 }
 
 .overlay-alert-card--system {
   border-color: rgba(125, 211, 252, 0.9);
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(14, 116, 144, 0.72));
+  background: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.88),
+    rgba(14, 116, 144, 0.72)
+  );
 }
 
 .overlay-alert-kicker,
@@ -173,7 +194,11 @@ ul {
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 1rem;
   padding: 0.85rem;
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.9),
+    rgba(15, 23, 42, 0.9)
+  );
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 
@@ -273,7 +298,11 @@ ul {
 
 .inventory-slot.occupied {
   cursor: grab;
-  background: radial-gradient(circle at top left, rgba(96, 165, 250, 0.22), rgba(15, 23, 42, 0.88));
+  background: radial-gradient(
+    circle at top left,
+    rgba(96, 165, 250, 0.22),
+    rgba(15, 23, 42, 0.88)
+  );
 }
 
 .inventory-slot:focus-visible,
@@ -286,14 +315,21 @@ ul {
 
 .incubator-slot.occupied {
   border-color: rgba(251, 146, 60, 0.85);
-  background: radial-gradient(circle at top, rgba(251, 146, 60, 0.28), rgba(30, 41, 59, 0.9));
+  background: radial-gradient(
+    circle at top,
+    rgba(251, 146, 60, 0.28),
+    rgba(30, 41, 59, 0.9)
+  );
 }
-
 
 .incubator-slot.incubator-inactive {
   cursor: not-allowed;
   border-color: rgba(148, 163, 184, 0.55);
-  background: linear-gradient(135deg, rgba(71, 85, 105, 0.5), rgba(15, 23, 42, 0.92));
+  background: linear-gradient(
+    135deg,
+    rgba(71, 85, 105, 0.5),
+    rgba(15, 23, 42, 0.92)
+  );
   color: #cbd5e1;
   opacity: 0.78;
 }
@@ -319,7 +355,9 @@ ul {
 .selected-event-pet,
 .selected-event-pet-slot {
   border-color: rgba(250, 204, 21, 0.95);
-  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18), inset 0 0 0 1px rgba(250, 204, 21, 0.35);
+  box-shadow:
+    0 0 0 3px rgba(250, 204, 21, 0.18),
+    inset 0 0 0 1px rgba(250, 204, 21, 0.35);
 }
 
 .empty-slot-label {
@@ -367,4 +405,50 @@ ul {
   padding: 0.1rem 0.4rem;
   font-size: 0.75rem;
   font-weight: 700;
+}
+
+.pet-trash-panel {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.pet-trash-drop-target {
+  min-height: 6.5rem;
+  border-color: rgba(248, 113, 113, 0.78);
+  background: linear-gradient(
+    135deg,
+    rgba(127, 29, 29, 0.38),
+    rgba(15, 23, 42, 0.92)
+  );
+}
+
+.pet-trash-drop-target:hover,
+.pet-trash-drop-target:focus-visible,
+.pet-trash-drop-target.select-target {
+  border-color: rgba(252, 165, 165, 0.95);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
+}
+
+.pet-trash-content strong {
+  color: #fecaca;
+}
+
+.confirm-panel {
+  border: 1px solid rgba(248, 113, 113, 0.72);
+  border-radius: 0.85rem;
+  background: rgba(127, 29, 29, 0.28);
+  color: #fee2e2;
+  padding: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.confirm-panel p {
+  margin: 0.45rem 0;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }

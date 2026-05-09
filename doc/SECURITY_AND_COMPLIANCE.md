@@ -29,7 +29,7 @@ Bits/subs:
 
 - Bits/subs must not create random eggs or mystery rewards.
 - Bits may later trigger fixed effects such as a known hatch speed boost or known overlay animation.
-- Subs may grant a fixed perk, such as one extra incubator while subbed.
+- Subs grant fixed Gutschein resources only; they do not grant random eggs, random pets, or extra incubators.
 - Avoid any paid action that determines a random reward.
 
 Giveaways:
@@ -161,8 +161,8 @@ Use official/current Twitch docs when implementing:
 - Twitch Channel Points Acceptable Use Policy
 - Twitch Extensions monetization / Bits-in-Extensions docs if Bits are ever used inside an Extension
 
-
 ### Milestone 3 controls implemented
+
 - EventSub HMAC verification is enforced before request processing.
 - Channel Point webhook notifications are idempotent by Twitch event ID and redemption ID.
 - Economy mutations for eligible redemptions run inside a transaction and always create a ledger event.

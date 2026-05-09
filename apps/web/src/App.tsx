@@ -59,7 +59,6 @@ type EventSubFeedItem = {
   error: string | null;
 };
 
-
 type TwitchCustomReward = {
   id: string;
   name: string;
@@ -69,7 +68,12 @@ type TwitchCustomReward = {
 
 type EventSubSubscriptionStatus = {
   enabled: boolean;
-  status: 'enabled' | 'missing' | 'error' | 'duplicate' | 'pending_verification';
+  status:
+    | 'enabled'
+    | 'missing'
+    | 'error'
+    | 'duplicate'
+    | 'pending_verification';
   subscriptionId: string | null;
   type: string;
   callback: string;
@@ -78,17 +82,43 @@ type EventSubSubscriptionStatus = {
   error: string | null;
 };
 
-type GridDimensions = { kind: string; columns: number; rows: number; baseRows: number; bonusRows: number; capacity: number; upgradeRef: string | null };
+type GridDimensions = {
+  kind: string;
+  columns: number;
+  rows: number;
+  baseRows: number;
+  bonusRows: number;
+  capacity: number;
+  upgradeRef: string | null;
+};
 type GridCell<T> = { slotIndex: number; item: T | null };
-type InventoryGrid<T> = { dimensions: GridDimensions; slots: Array<GridCell<T>> };
+type InventoryGrid<T> = {
+  dimensions: GridDimensions;
+  slots: Array<GridCell<T>>;
+};
 type IncubatorInventory = { incubators: IncubatorItem[] };
 type IncubatorItem = {
   id: string;
   slotSource: string;
   slotLevel: number;
+  slotIndex: number | null;
   isAvailable: boolean;
-  metadata: { speedMultiplierBasisPoints: number; rarityBonusBasisPoints: number; fuelBehavior: string; specialEffectConfig: unknown };
-  activeJob: { id: string; unhatchedEggId: string; state: string; startedAt: string; requiredProgressSeconds: number; progressSnapshot?: unknown } | null;
+  metadata: {
+    speedMultiplierBasisPoints: number;
+    rarityBonusBasisPoints: number;
+    fuelBehavior: string;
+    specialEffectConfig: unknown;
+  };
+  activeJob: {
+    id: string;
+    unhatchedEggId: string;
+    state: string;
+    startedAt: string;
+    requiredProgressSeconds: number;
+    progressSecondsAccumulated: number;
+    lastProgressedAt: string | null;
+    progressSnapshot?: unknown;
+  } | null;
 };
 type EggItem = { id: string; eggTypeId: string; state: string };
 type PetItem = {
@@ -104,7 +134,12 @@ type PetItem = {
   selectedForEvent: boolean;
   createdAt: string;
 };
-type ConsumableItem = { id: string; consumableTypeId: string; amount: number; stackLimit: number };
+type ConsumableItem = {
+  id: string;
+  consumableTypeId: string;
+  amount: number;
+  stackLimit: number;
+};
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
@@ -118,10 +153,23 @@ type DragPayload =
   | { kind: 'egg'; id: string }
   | { kind: 'pet'; id: string }
   | { kind: 'item'; id: string };
+type PetScrapTarget = { petId: string; label: string; rarity: string };
 
-
-type OverlayAlertEvent = { id: string; type: string; title: string; message: string; accent: 'hatch' | 'battle' | 'system'; createdAt: string; durationMs: number };
-type OverlayBattleWinner = { placement: number; userName: string; petName: string; pointsAwarded: number };
+type OverlayAlertEvent = {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  accent: 'hatch' | 'battle' | 'system';
+  createdAt: string;
+  durationMs: number;
+};
+type OverlayBattleWinner = {
+  placement: number;
+  userName: string;
+  petName: string;
+  pointsAwarded: number;
+};
 type OverlayEventLeader = { rank: number; userName: string; points: number };
 
 type LeaderboardEntry = {
@@ -139,7 +187,8 @@ const MYSTERY_EGG_LABELS: Record<string, string> = {
 };
 
 const EGG_RESOURCE_LABELS: Record<string, string> = {
-  cracked_eggs: 'Aufgebrochene Eier'
+  cracked_eggs: 'Aufgebrochene Eier',
+  voucher: 'Gutschein'
 };
 
 function formatMysteryEggType(eggTypeId: string): string {
@@ -151,7 +200,6 @@ function formatEggResourceType(resourceType: string): string {
 }
 
 function formatIncubatorSource(slotSource: string): string {
-  if (slotSource === 'subscriber') return 'Subscriber-Inkubator';
   if (slotSource === 'default') return 'Standard-Inkubator';
   if (slotSource === 'upgrade') return 'Upgrade-Inkubator';
   return slotSource;
@@ -173,23 +221,38 @@ export function App(): JSX.Element {
   const [inventoryJson, setInventoryJson] = useState<string>('');
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [battleEvents, setBattleEvents] = useState<BattleEvent[]>([]);
-  const [adminHealthIssue, setAdminHealthIssue] = useState<AdminHealthIssue | null>(null);
-  const [playerInventory, setPlayerInventory] = useState<PlayerInventory | null>(null);
+  const [adminHealthIssue, setAdminHealthIssue] =
+    useState<AdminHealthIssue | null>(null);
+  const [playerInventory, setPlayerInventory] =
+    useState<PlayerInventory | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
-  const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] = useState<EventSubSubscriptionStatus | null>(null);
-  const [twitchCustomRewards, setTwitchCustomRewards] = useState<TwitchCustomReward[]>([]);
-  const [leaderboardEntries, setLeaderboardEntries] = useState<LeaderboardEntry[]>([]);
+  const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
+    useState<EventSubSubscriptionStatus | null>(null);
+  const [twitchCustomRewards, setTwitchCustomRewards] = useState<
+    TwitchCustomReward[]
+  >([]);
+  const [leaderboardEntries, setLeaderboardEntries] = useState<
+    LeaderboardEntry[]
+  >([]);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
-  const [selectedPayload, setSelectedPayload] = useState<DragPayload | null>(null);
+  const [selectedPayload, setSelectedPayload] = useState<DragPayload | null>(
+    null
+  );
+  const [pendingPetScrap, setPendingPetScrap] = useState<PetScrapTarget | null>(
+    null
+  );
   const [gameMessage, setGameMessage] = useState<string | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
   const isBattleOverlayRoute = window.location.pathname === '/overlay/battle';
-  const [overlayAlertQueue, setOverlayAlertQueue] = useState<OverlayAlertEvent[]>([]);
+  const [overlayAlertQueue, setOverlayAlertQueue] = useState<
+    OverlayAlertEvent[]
+  >([]);
   const [battleWinners, setBattleWinners] = useState<OverlayBattleWinner[]>([]);
-  const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>([]);
-
+  const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>(
+    []
+  );
 
   async function loadMe(): Promise<void> {
     const response = await fetch('/api/me', { credentials: 'include' });
@@ -197,7 +260,10 @@ export function App(): JSX.Element {
   }
 
   async function loadUsers(search = ''): Promise<void> {
-    const response = await fetch(`/api/admin/users?q=${encodeURIComponent(search)}`, { credentials: 'include' });
+    const response = await fetch(
+      `/api/admin/users?q=${encodeURIComponent(search)}`,
+      { credentials: 'include' }
+    );
     if (response.ok) {
       const payload = (await response.json()) as { users: AdminUser[] };
       setUsers(payload.users);
@@ -205,19 +271,25 @@ export function App(): JSX.Element {
   }
 
   async function loadAdminHealth(): Promise<void> {
-    const response = await fetch('/api/admin/health', { credentials: 'include' });
+    const response = await fetch('/api/admin/health', {
+      credentials: 'include'
+    });
     if (response.ok) {
       setAdminHealthIssue(null);
       return;
     }
-    const payload = (await response.json().catch(() => null)) as AdminHealthIssue | null;
+    const payload = (await response
+      .json()
+      .catch(() => null)) as AdminHealthIssue | null;
     if (payload?.code) {
       setAdminHealthIssue(payload);
     }
   }
 
   async function loadLeaderboard(): Promise<void> {
-    const response = await fetch('/api/game/leaderboard', { credentials: 'include' });
+    const response = await fetch('/api/game/leaderboard', {
+      credentials: 'include'
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { entries?: LeaderboardEntry[] };
     setLeaderboardEntries(payload.entries ?? []);
@@ -249,9 +321,13 @@ export function App(): JSX.Element {
       return;
     }
 
-    const source = new EventSource('/api/game/inventory/stream', { withCredentials: true });
+    const source = new EventSource('/api/game/inventory/stream', {
+      withCredentials: true
+    });
     source.addEventListener('inventory', (event) => {
-      const payload = JSON.parse((event as MessageEvent<string>).data) as { inventory: PlayerInventory };
+      const payload = JSON.parse((event as MessageEvent<string>).data) as {
+        inventory: PlayerInventory;
+      };
       setPlayerInventory(payload.inventory);
     });
 
@@ -263,7 +339,9 @@ export function App(): JSX.Element {
   }, [isAdminRoute, me?.authenticated]);
 
   async function refreshOwnInventory(): Promise<void> {
-    const response = await fetch('/api/game/inventory', { credentials: 'include' });
+    const response = await fetch('/api/game/inventory', {
+      credentials: 'include'
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { inventory: PlayerInventory };
     setPlayerInventory(payload.inventory);
@@ -278,12 +356,19 @@ export function App(): JSX.Element {
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.'
+      );
     }
   }
 
-  async function startIncubation(unhatchedEggId: string, incubatorSlotId: string): Promise<void> {
+  async function startIncubation(
+    unhatchedEggId: string,
+    incubatorSlotId: string
+  ): Promise<void> {
     const response = await fetch('/api/game/incubation/start', {
       method: 'POST',
       credentials: 'include',
@@ -291,8 +376,12 @@ export function App(): JSX.Element {
       body: JSON.stringify({ unhatchedEggId, incubatorSlotId })
     });
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Inkubation konnte nicht gestartet werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Inkubation konnte nicht gestartet werden.'
+      );
     }
   }
 
@@ -304,13 +393,34 @@ export function App(): JSX.Element {
       body: JSON.stringify({ unhatchedEggId })
     });
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Inkubation konnte nicht abgeschlossen werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Inkubation konnte nicht abgeschlossen werden.'
+      );
     }
   }
 
+  async function scrapPet(petId: string): Promise<void> {
+    const response = await fetch('/api/game/pets/scrap', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ petId, confirm: true })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(payload?.message ?? 'Pet konnte nicht verwertet werden.');
+    }
+  }
 
-  async function postInventoryMove(endpoint: string, payload: Record<string, string | number>): Promise<void> {
+  async function postInventoryMove(
+    endpoint: string,
+    payload: Record<string, string | number>
+  ): Promise<void> {
     const response = await fetch(endpoint, {
       method: 'POST',
       credentials: 'include',
@@ -318,36 +428,76 @@ export function App(): JSX.Element {
       body: JSON.stringify(payload)
     });
     if (!response.ok) {
-      const responsePayload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(responsePayload?.message ?? 'Inventar-Aktion fehlgeschlagen.');
+      const responsePayload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        responsePayload?.message ?? 'Inventar-Aktion fehlgeschlagen.'
+      );
     }
     await refreshOwnInventory();
   }
 
   function showGameError(error: unknown): void {
-    setGameMessage(error instanceof Error ? error.message : 'Aktion fehlgeschlagen.');
+    setGameMessage(
+      error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
+    );
   }
 
-  async function handleDropToSlot(targetKind: 'incubator' | 'egg' | 'pet' | 'item', slotIndex: number, targetIncubatorId?: string): Promise<void> {
+  async function handleDropToSlot(
+    targetKind: 'incubator' | 'egg' | 'pet' | 'item' | 'trashcan',
+    slotIndex: number,
+    targetIncubatorId?: string
+  ): Promise<void> {
     const payload = dragPayload ?? selectedPayload;
     setSelectedPayload(null);
     setDragPayload(null);
     if (!payload) return;
     try {
-      if (payload.kind === 'egg' && targetKind === 'incubator' && targetIncubatorId) {
+      if (
+        payload.kind === 'egg' &&
+        targetKind === 'incubator' &&
+        targetIncubatorId
+      ) {
         await startIncubation(payload.id, targetIncubatorId);
         await refreshOwnInventory();
         return;
       }
-      if (payload.kind === 'egg' && targetKind === 'egg') await postInventoryMove('/api/game/inventory/egg-slots/move', { unhatchedEggId: payload.id, toSlotIndex: slotIndex });
-      else if (payload.kind === 'pet' && targetKind === 'pet') await postInventoryMove('/api/game/inventory/pet-slots/move', { petId: payload.id, toSlotIndex: slotIndex });
-      else if (payload.kind === 'item' && targetKind === 'item') await postInventoryMove('/api/game/inventory/item-slots/move', { itemStackId: payload.id, toSlotIndex: slotIndex });
+      if (payload.kind === 'pet' && targetKind === 'trashcan') {
+        const pet = playerInventory?.pets.slots
+          .map((cell) => cell.item)
+          .find((item): item is PetItem => item?.id === payload.id);
+        setPendingPetScrap({
+          petId: payload.id,
+          label: pet?.petTypeDisplayName ?? 'dieses Pet',
+          rarity: pet?.rarity ?? 'unbekannt'
+        });
+      } else if (payload.kind === 'egg' && targetKind === 'egg')
+        await postInventoryMove('/api/game/inventory/egg-slots/move', {
+          unhatchedEggId: payload.id,
+          toSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'pet' && targetKind === 'pet')
+        await postInventoryMove('/api/game/inventory/pet-slots/move', {
+          petId: payload.id,
+          toSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'item' && targetKind === 'item')
+        await postInventoryMove('/api/game/inventory/item-slots/move', {
+          itemStackId: payload.id,
+          toSlotIndex: slotIndex
+        });
     } catch (error) {
       showGameError(error);
     }
   }
 
-  function selectOrRun(payload: DragPayload, targetKind: 'incubator' | 'egg' | 'pet' | 'item', slotIndex: number, targetIncubatorId?: string): void {
+  function selectOrRun(
+    payload: DragPayload,
+    targetKind: 'incubator' | 'egg' | 'pet' | 'item' | 'trashcan',
+    slotIndex: number,
+    targetIncubatorId?: string
+  ): void {
     if (selectedPayload) {
       void handleDropToSlot(targetKind, slotIndex, targetIncubatorId);
       return;
@@ -356,7 +506,7 @@ export function App(): JSX.Element {
     if (payload.kind === 'egg') {
       setGameMessage('Inkubator oder Ziel-Slot antippen.');
     } else if (payload.kind === 'pet') {
-      setGameMessage('Event-Slot oder Ziel-Slot antippen.');
+      setGameMessage('Event-Slot, Verwerten-Slot oder Ziel-Slot antippen.');
     } else {
       setGameMessage('Ziel-Slot antippen, um zu verschieben.');
     }
@@ -367,7 +517,11 @@ export function App(): JSX.Element {
     await loadMe();
   }
 
-  async function changeRole(userId: string, role: Role, action: 'grant' | 'revoke'): Promise<void> {
+  async function changeRole(
+    userId: string,
+    role: Role,
+    action: 'grant' | 'revoke'
+  ): Promise<void> {
     await fetch(`/api/admin/users/${userId}/role`, {
       method: 'POST',
       credentials: 'include',
@@ -377,50 +531,81 @@ export function App(): JSX.Element {
     await loadUsers(query);
   }
 
-  async function grantTestEgg(userId: string, eggTypeId: 'common_mystery_egg' | 'uncommon_mystery_egg' | 'rare_mystery_egg'): Promise<void> {
-    const response = await fetch(`/api/admin/users/${userId}/grant-test-mystery-egg`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: crypto.randomUUID(), eggTypeId, amount: 1 })
-    });
+  async function grantTestEgg(
+    userId: string,
+    eggTypeId:
+      | 'common_mystery_egg'
+      | 'uncommon_mystery_egg'
+      | 'rare_mystery_egg'
+  ): Promise<void> {
+    const response = await fetch(
+      `/api/admin/users/${userId}/grant-test-mystery-egg`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          eggTypeId,
+          amount: 1
+        })
+      }
+    );
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Test-Mystery-Ei konnte nicht vergeben werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Test-Mystery-Ei konnte nicht vergeben werden.'
+      );
     }
     await loadInventory(userId);
     await loadLedger(userId);
   }
 
   async function loadInventory(userId: string): Promise<void> {
-    const response = await fetch(`/api/admin/users/${userId}/inventory`, { credentials: 'include' });
+    const response = await fetch(`/api/admin/users/${userId}/inventory`, {
+      credentials: 'include'
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { inventory: unknown };
     setInventoryJson(JSON.stringify(payload.inventory, null, 2));
   }
 
-
   async function loadEventSubFeed(): Promise<void> {
-    const response = await fetch('/api/admin/debug/eventsubs', { credentials: 'include' });
+    const response = await fetch('/api/admin/debug/eventsubs', {
+      credentials: 'include'
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { events: EventSubFeedItem[] };
     setEventSubFeed(payload.events);
   }
 
-
-  async function loadEventSubSubscriptionStatus(refresh = false): Promise<void> {
-    const response = await fetch(`/api/admin/debug/eventsub-subscription${refresh ? '?refresh=true' : ''}`, { credentials: 'include' });
+  async function loadEventSubSubscriptionStatus(
+    refresh = false
+  ): Promise<void> {
+    const response = await fetch(
+      `/api/admin/debug/eventsub-subscription${refresh ? '?refresh=true' : ''}`,
+      { credentials: 'include' }
+    );
     if (!response.ok) return;
     const payload = (await response.json()) as EventSubSubscriptionStatus;
     setEventSubSubscriptionStatus(payload);
   }
 
-
   async function loadTwitchCustomRewards(): Promise<void> {
-    const response = await fetch('/api/admin/twitch/custom-rewards', { credentials: 'include' });
-    const payload = (await response.json().catch(() => null)) as { rewards?: TwitchCustomReward[]; message?: string } | null;
+    const response = await fetch('/api/admin/twitch/custom-rewards', {
+      credentials: 'include'
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      rewards?: TwitchCustomReward[];
+      message?: string;
+    } | null;
     if (!response.ok) {
-      window.alert(payload?.message ?? 'Twitch Custom Rewards konnten nicht geladen werden.');
+      window.alert(
+        payload?.message ??
+          'Twitch Custom Rewards konnten nicht geladen werden.'
+      );
       return;
     }
     setTwitchCustomRewards(payload?.rewards ?? []);
@@ -433,21 +618,30 @@ export function App(): JSX.Element {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ requestId: crypto.randomUUID() })
     });
-    const payload = (await response.json().catch(() => null)) as { message?: string; created?: number; updated?: number; total?: number } | null;
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string;
+      created?: number;
+      updated?: number;
+      total?: number;
+    } | null;
     if (!response.ok) {
       window.alert(payload?.message ?? 'Twitch-Reward-Sync fehlgeschlagen.');
       return;
     }
-    window.alert(`Twitch-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`);
+    window.alert(
+      `Twitch-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`
+    );
   }
 
   async function loadLedger(userId?: string): Promise<void> {
-    const response = await fetch(`/api/admin/ledger${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`, { credentials: 'include' });
+    const response = await fetch(
+      `/api/admin/ledger${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`,
+      { credentials: 'include' }
+    );
     if (!response.ok) return;
     const payload = (await response.json()) as { entries: LedgerEntry[] };
     setLedgerEntries(payload.entries);
   }
-
 
   async function setEventPetSelection(petId: string): Promise<void> {
     const response = await fetch(`/api/game/pets/${petId}/selection`, {
@@ -458,8 +652,12 @@ export function App(): JSX.Element {
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      throw new Error(payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Event-Pet konnte nicht aktualisiert werden.'
+      );
     }
   }
 
@@ -478,7 +676,6 @@ export function App(): JSX.Element {
     }
   }
 
-
   async function startBattleEvent(): Promise<void> {
     const response = await fetch('/api/admin/events/start', {
       method: 'POST',
@@ -487,7 +684,9 @@ export function App(): JSX.Element {
       body: JSON.stringify({ requestId: crypto.randomUUID() })
     });
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
       window.alert(payload?.message ?? 'Event konnte nicht gestartet werden.');
       return;
     }
@@ -497,7 +696,9 @@ export function App(): JSX.Element {
   }
 
   async function loadBattleEvents(): Promise<void> {
-    const response = await fetch('/api/admin/events', { credentials: 'include' });
+    const response = await fetch('/api/admin/events', {
+      credentials: 'include'
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { events: BattleEvent[] };
     setBattleEvents(payload.events);
@@ -511,15 +712,22 @@ export function App(): JSX.Element {
       body: JSON.stringify({ requestId: crypto.randomUUID() })
     });
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-      window.alert(payload?.message ?? 'Battle-Event konnte nicht revertiert werden.');
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      window.alert(
+        payload?.message ?? 'Battle-Event konnte nicht revertiert werden.'
+      );
       return;
     }
     await loadBattleEvents();
     await loadLedger();
   }
 
-  async function revertLedger(ledgerId: string, userId: string | null): Promise<void> {
+  async function revertLedger(
+    ledgerId: string,
+    userId: string | null
+  ): Promise<void> {
     await fetch(`/api/admin/ledger/${ledgerId}/revert`, {
       method: 'POST',
       credentials: 'include',
@@ -535,9 +743,13 @@ export function App(): JSX.Element {
     let overlaySecret = '';
 
     try {
-      const response = await fetch('/api/admin/overlay-config', { credentials: 'include' });
+      const response = await fetch('/api/admin/overlay-config', {
+        credentials: 'include'
+      });
       if (response.ok) {
-        const payload = (await response.json()) as { overlaySecret?: string | null };
+        const payload = (await response.json()) as {
+          overlaySecret?: string | null;
+        };
         overlaySecret = payload.overlaySecret ?? '';
       }
     } catch {
@@ -555,20 +767,26 @@ export function App(): JSX.Element {
       await navigator.clipboard.writeText(copyValue);
       window.alert(`OBS-Overlay-Link kopiert: ${copyValue}`);
     } catch {
-      window.alert(`Kopieren fehlgeschlagen. Bitte manuell kopieren:\n${copyValue}`);
+      window.alert(
+        `Kopieren fehlgeschlagen. Bitte manuell kopieren:\n${copyValue}`
+      );
     }
   }
-
 
   const activeOverlayAlert = overlayAlertQueue[0] ?? null;
 
   useEffect(() => {
     if (!isAlertOverlayRoute) return;
-    const overlayToken = new URLSearchParams(window.location.search).get('token') ?? '';
-    const sourceUrl = overlayToken ? `/api/events/overlay/alerts/stream?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/alerts/stream';
+    const overlayToken =
+      new URLSearchParams(window.location.search).get('token') ?? '';
+    const sourceUrl = overlayToken
+      ? `/api/events/overlay/alerts/stream?token=${encodeURIComponent(overlayToken)}`
+      : '/api/events/overlay/alerts/stream';
     const source = new EventSource(sourceUrl);
     source.addEventListener('overlay_alert', (event) => {
-      const payload = JSON.parse((event as MessageEvent<string>).data) as OverlayAlertEvent;
+      const payload = JSON.parse(
+        (event as MessageEvent<string>).data
+      ) as OverlayAlertEvent;
       setOverlayAlertQueue((current) => [...current, payload].slice(-10));
     });
     source.onerror = () => source.close();
@@ -578,72 +796,123 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!activeOverlayAlert) return;
     const timeoutId = window.setTimeout(() => {
-      setOverlayAlertQueue((current) => current.filter((alert) => alert.id !== activeOverlayAlert.id));
+      setOverlayAlertQueue((current) =>
+        current.filter((alert) => alert.id !== activeOverlayAlert.id)
+      );
     }, activeOverlayAlert.durationMs);
     return () => window.clearTimeout(timeoutId);
   }, [activeOverlayAlert]);
 
   useEffect(() => {
     if (!isBattleOverlayRoute) return;
-    const overlayToken = new URLSearchParams(window.location.search).get('token') ?? '';
-    const streamUrl = overlayToken ? `/api/events/overlay/battle/stream?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/battle/stream';
-    const battleUrl = overlayToken ? `/api/events/overlay/battle?token=${encodeURIComponent(overlayToken)}` : '/api/events/overlay/battle';
+    const overlayToken =
+      new URLSearchParams(window.location.search).get('token') ?? '';
+    const streamUrl = overlayToken
+      ? `/api/events/overlay/battle/stream?token=${encodeURIComponent(overlayToken)}`
+      : '/api/events/overlay/battle/stream';
+    const battleUrl = overlayToken
+      ? `/api/events/overlay/battle?token=${encodeURIComponent(overlayToken)}`
+      : '/api/events/overlay/battle';
     const source = new EventSource(streamUrl);
     source.addEventListener('battle_result', (event) => {
-      const payload = JSON.parse((event as MessageEvent<string>).data) as { winners?: OverlayBattleWinner[] };
+      const payload = JSON.parse((event as MessageEvent<string>).data) as {
+        winners?: OverlayBattleWinner[];
+      };
       const winners = payload.winners ?? [];
       setBattleWinners(winners);
-      setOverlayLeaders(winners.map((winner, index) => ({
-        rank: index + 1,
-        userName: winner.userName,
-        points: winner.pointsAwarded
-      })));
+      setOverlayLeaders(
+        winners.map((winner, index) => ({
+          rank: index + 1,
+          userName: winner.userName,
+          points: winner.pointsAwarded
+        }))
+      );
     });
     source.onerror = () => source.close();
-    fetch(battleUrl).then(async (response) => {
-      if (!response.ok) return;
-      const payload = (await response.json()) as { winners?: OverlayBattleWinner[] };
-      const winners = payload.winners ?? [];
-      setBattleWinners(winners);
-      setOverlayLeaders(winners.map((winner, index) => ({ rank: index + 1, userName: winner.userName, points: winner.pointsAwarded })));
-    }).catch(() => undefined);
+    fetch(battleUrl)
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          winners?: OverlayBattleWinner[];
+        };
+        const winners = payload.winners ?? [];
+        setBattleWinners(winners);
+        setOverlayLeaders(
+          winners.map((winner, index) => ({
+            rank: index + 1,
+            userName: winner.userName,
+            points: winner.pointsAwarded
+          }))
+        );
+      })
+      .catch(() => undefined);
     return () => source.close();
   }, [isBattleOverlayRoute]);
 
   if (isAlertOverlayRoute) {
-    return <main className="overlay-canvas overlay-alerts" aria-live="polite">
-      {activeOverlayAlert ? (
-        <section key={activeOverlayAlert.id} className={`overlay-alert-card overlay-alert-card--${activeOverlayAlert.accent}`} style={{ '--overlay-alert-duration': `${activeOverlayAlert.durationMs}ms` } as CSSProperties}>
-          <p className="overlay-alert-kicker">{activeOverlayAlert.title}</p>
-          <p className="overlay-alert-message">{activeOverlayAlert.message}</p>
-        </section>
-      ) : null}
-    </main>;
+    return (
+      <main className="overlay-canvas overlay-alerts" aria-live="polite">
+        {activeOverlayAlert ? (
+          <section
+            key={activeOverlayAlert.id}
+            className={`overlay-alert-card overlay-alert-card--${activeOverlayAlert.accent}`}
+            style={
+              {
+                '--overlay-alert-duration': `${activeOverlayAlert.durationMs}ms`
+              } as CSSProperties
+            }
+          >
+            <p className="overlay-alert-kicker">{activeOverlayAlert.title}</p>
+            <p className="overlay-alert-message">
+              {activeOverlayAlert.message}
+            </p>
+          </section>
+        ) : null}
+      </main>
+    );
   }
 
   if (isBattleOverlayRoute) {
-    return <main className="overlay-canvas overlay-battle">
-      <section className="overlay-panel">
-        <h2>🏆 Event Top 3</h2>
-        <ol>
-          {battleWinners.map((winner) => (
-            <li key={`${winner.placement}-${winner.userName}-${winner.petName}`}>Platz {winner.placement}: <strong>{winner.userName}</strong> mit <strong>{winner.petName}</strong> (+{winner.pointsAwarded})</li>
-          ))}
-        </ol>
-      </section>
-      <section className="overlay-panel">
-        <h2>📊 Event Leader Alerts</h2>
-        <ul>
-          {overlayLeaders.map((leader) => (
-            <li key={`${leader.rank}-${leader.userName}`}>#{leader.rank} <strong>{leader.userName}</strong> (+{leader.points})</li>
-          ))}
-        </ul>
-      </section>
-    </main>;
+    return (
+      <main className="overlay-canvas overlay-battle">
+        <section className="overlay-panel">
+          <h2>🏆 Event Top 3</h2>
+          <ol>
+            {battleWinners.map((winner) => (
+              <li
+                key={`${winner.placement}-${winner.userName}-${winner.petName}`}
+              >
+                Platz {winner.placement}: <strong>{winner.userName}</strong> mit{' '}
+                <strong>{winner.petName}</strong> (+{winner.pointsAwarded})
+              </li>
+            ))}
+          </ol>
+        </section>
+        <section className="overlay-panel">
+          <h2>📊 Event Leader Alerts</h2>
+          <ul>
+            {overlayLeaders.map((leader) => (
+              <li key={`${leader.rank}-${leader.userName}`}>
+                #{leader.rank} <strong>{leader.userName}</strong> (+
+                {leader.points})
+              </li>
+            ))}
+          </ul>
+        </section>
+      </main>
+    );
   }
 
   if (isAdminRoute) {
-    if (!me?.authenticated || !me.isAdmin) return <main className="container"><section className="card"><h2>Adminbereich</h2><p>Zugriff verweigert.</p></section></main>;
+    if (!me?.authenticated || !me.isAdmin)
+      return (
+        <main className="container">
+          <section className="card">
+            <h2>Adminbereich</h2>
+            <p>Zugriff verweigert.</p>
+          </section>
+        </main>
+      );
     const selected = users.find((x) => x.id === selectedUserId) ?? null;
 
     return (
@@ -651,35 +920,60 @@ export function App(): JSX.Element {
         <section className="card">
           <h2>Adminbereich</h2>
           {adminHealthIssue?.code === 'NO_ACTIVE_EGG_TYPES' ? (
-            <p role="alert"><strong>⚠ Konfigurationsfehler:</strong> Keine aktiven Ei-Typen vorhanden. Bitte Migration + Seed ausführen.</p>
+            <p role="alert">
+              <strong>⚠ Konfigurationsfehler:</strong> Keine aktiven Ei-Typen
+              vorhanden. Bitte Migration + Seed ausführen.
+            </p>
           ) : null}
           <p>Nutzerverwaltung (Milestone 3 Fundament).</p>
-          <button onClick={() => void startBattleEvent()}>Stream-Event starten (3 zufällige Pets)</button>
-          <button onClick={() => void loadBattleEvents()}>Battle-Events laden</button>
+          <button onClick={() => void startBattleEvent()}>
+            Stream-Event starten (3 zufällige Pets)
+          </button>
+          <button onClick={() => void loadBattleEvents()}>
+            Battle-Events laden
+          </button>
           <div>
-            <button onClick={() => void copyOverlaySource('alerts')}>OBS-Link kopieren: Hatch Alerts</button>
-            <button onClick={() => void copyOverlaySource('battle')}>OBS-Link kopieren: Battle Top 3</button>
+            <button onClick={() => void copyOverlaySource('alerts')}>
+              OBS-Link kopieren: Hatch Alerts
+            </button>
+            <button onClick={() => void copyOverlaySource('battle')}>
+              OBS-Link kopieren: Battle Top 3
+            </button>
           </div>
-          <p><a href="/">Zurück zur Startseite</a></p>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Suche nach Name, Login oder Twitch-ID" />
+          <p>
+            <a href="/">Zurück zur Startseite</a>
+          </p>
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Suche nach Name, Login oder Twitch-ID"
+          />
           <button onClick={() => void loadUsers(query)}>Suchen</button>
           <ul>
             {users.map((user) => (
               <li key={user.id}>
-                <button onClick={() => setSelectedUserId(user.id)}>{user.displayName ?? user.login ?? user.twitchUserId}</button> · Rollen: {user.roles.join(', ') || 'user'}
+                <button onClick={() => setSelectedUserId(user.id)}>
+                  {user.displayName ?? user.login ?? user.twitchUserId}
+                </button>{' '}
+                · Rollen: {user.roles.join(', ') || 'user'}
               </li>
             ))}
           </ul>
         </section>
-
 
         <section className="card">
           <h2>Battle-Events</h2>
           <ul>
             {battleEvents.map((event) => (
               <li key={event.id}>
-                <strong>{event.status}</strong> · {new Date(event.createdAt).toLocaleString()}
-                <button disabled={event.status === 'reverted'} onClick={() => void revertBattleEvent(event.id)}>Battle revertieren</button>
+                <strong>{event.status}</strong> ·{' '}
+                {new Date(event.createdAt).toLocaleString()}
+                <button
+                  disabled={event.status === 'reverted'}
+                  onClick={() => void revertBattleEvent(event.id)}
+                >
+                  Battle revertieren
+                </button>
               </li>
             ))}
           </ul>
@@ -689,8 +983,12 @@ export function App(): JSX.Element {
           <h2>Redemption-Verwaltung</h2>
           <p>Verwaltung und Übersicht der Twitch Custom Rewards.</p>
           <div>
-            <button onClick={() => void syncTwitchCustomRewards()}>Twitch Custom Rewards mit Ei-Typen synchronisieren</button>
-            <button onClick={() => void loadTwitchCustomRewards()}>Alle Custom Rewards laden</button>
+            <button onClick={() => void syncTwitchCustomRewards()}>
+              Twitch Custom Rewards mit Ei-Typen synchronisieren
+            </button>
+            <button onClick={() => void loadTwitchCustomRewards()}>
+              Alle Custom Rewards laden
+            </button>
           </div>
           {twitchCustomRewards.length > 0 ? (
             <ul>
@@ -712,70 +1010,155 @@ export function App(): JSX.Element {
           <h2>Nutzerdetail</h2>
           {selected ? (
             <>
-              <p><strong>{selected.displayName ?? selected.login}</strong> ({selected.twitchUserId})</p>
+              <p>
+                <strong>{selected.displayName ?? selected.login}</strong> (
+                {selected.twitchUserId})
+              </p>
               <p>Rollen: {selected.roles.join(', ') || 'user'}</p>
               <p>
                 Abo-Status:{' '}
                 {selected.isSubscriber ? '✅ Aktiv' : '❌ Nicht aktiv'}
-                {selected.subscriberEndsAt ? ` (Ende: ${new Date(selected.subscriberEndsAt).toLocaleString()})` : ''}
+                {selected.subscriberEndsAt
+                  ? ` (Ende: ${new Date(selected.subscriberEndsAt).toLocaleString()})`
+                  : ''}
               </p>
               {me.roles.includes('owner') ? (
                 <div>
-                  <button onClick={() => void changeRole(selected.id, 'admin', 'grant')}>Als Admin setzen</button>
-                  <button onClick={() => void changeRole(selected.id, 'admin', 'revoke')}>Admin entfernen</button>
-                  <button onClick={() => void changeRole(selected.id, 'moderator', 'grant')}>Als Moderator setzen</button>
-                  <button onClick={() => void changeRole(selected.id, 'moderator', 'revoke')}>Moderator entfernen</button>
+                  <button
+                    onClick={() =>
+                      void changeRole(selected.id, 'admin', 'grant')
+                    }
+                  >
+                    Als Admin setzen
+                  </button>
+                  <button
+                    onClick={() =>
+                      void changeRole(selected.id, 'admin', 'revoke')
+                    }
+                  >
+                    Admin entfernen
+                  </button>
+                  <button
+                    onClick={() =>
+                      void changeRole(selected.id, 'moderator', 'grant')
+                    }
+                  >
+                    Als Moderator setzen
+                  </button>
+                  <button
+                    onClick={() =>
+                      void changeRole(selected.id, 'moderator', 'revoke')
+                    }
+                  >
+                    Moderator entfernen
+                  </button>
                 </div>
-              ) : <p>Nur Owner dürfen Rollen ändern.</p>}
+              ) : (
+                <p>Nur Owner dürfen Rollen ändern.</p>
+              )}
               <div>
-                <button onClick={() => void grantTestEgg(selected.id, 'common_mystery_egg')}>Gewöhnliches Test-Mystery-Ei</button>
-                <button onClick={() => void grantTestEgg(selected.id, 'uncommon_mystery_egg')}>Ungewöhnliches Test-Mystery-Ei</button>
-                <button onClick={() => void grantTestEgg(selected.id, 'rare_mystery_egg')}>Seltenes Test-Mystery-Ei</button>
-                <button onClick={() => void loadInventory(selected.id)}>Inventar laden</button>
-                <button onClick={() => void loadLedger(selected.id)}>Ledger laden</button>
+                <button
+                  onClick={() =>
+                    void grantTestEgg(selected.id, 'common_mystery_egg')
+                  }
+                >
+                  Gewöhnliches Test-Mystery-Ei
+                </button>
+                <button
+                  onClick={() =>
+                    void grantTestEgg(selected.id, 'uncommon_mystery_egg')
+                  }
+                >
+                  Ungewöhnliches Test-Mystery-Ei
+                </button>
+                <button
+                  onClick={() =>
+                    void grantTestEgg(selected.id, 'rare_mystery_egg')
+                  }
+                >
+                  Seltenes Test-Mystery-Ei
+                </button>
+                <button onClick={() => void loadInventory(selected.id)}>
+                  Inventar laden
+                </button>
+                <button onClick={() => void loadLedger(selected.id)}>
+                  Ledger laden
+                </button>
               </div>
             </>
-          ) : <p>Bitte einen Nutzer auswählen.</p>}
+          ) : (
+            <p>Bitte einen Nutzer auswählen.</p>
+          )}
         </section>
         <section className="card">
           <h2>Inventar (JSON)</h2>
           <pre>{inventoryJson || 'Kein Inventar geladen.'}</pre>
         </section>
 
-
         <section className="card">
           <h2>Debug: EventSub Subscription Status</h2>
-          <button onClick={() => void loadEventSubSubscriptionStatus(true)}>Status aktualisieren</button>
+          <button onClick={() => void loadEventSubSubscriptionStatus(true)}>
+            Status aktualisieren
+          </button>
           {eventSubSubscriptionStatus ? (
             <>
               <p>
                 Status:{' '}
                 {eventSubSubscriptionStatus.status === 'enabled'
                   ? '✅ Aktiviert'
-                  : eventSubSubscriptionStatus.status === 'pending_verification' || eventSubSubscriptionStatus.status === 'duplicate'
+                  : eventSubSubscriptionStatus.status ===
+                        'pending_verification' ||
+                      eventSubSubscriptionStatus.status === 'duplicate'
                     ? '⚠ Ausstehend / Mehrdeutig'
                     : '❌ Nicht eingerichtet / Fehler'}
               </p>
               <p>Typ: {eventSubSubscriptionStatus.type}</p>
-              <p>Subscription ID: {eventSubSubscriptionStatus.subscriptionId ?? '—'}</p>
+              <p>
+                Subscription ID:{' '}
+                {eventSubSubscriptionStatus.subscriptionId ?? '—'}
+              </p>
               <p>Callback: {eventSubSubscriptionStatus.callback}</p>
-              <p>Erstellt: {eventSubSubscriptionStatus.createdAt ? new Date(eventSubSubscriptionStatus.createdAt).toLocaleString() : '—'}</p>
-              <p>Letzte Prüfung: {new Date(eventSubSubscriptionStatus.lastCheckedAt).toLocaleString()}</p>
-              {eventSubSubscriptionStatus.error ? <p>Fehler: {eventSubSubscriptionStatus.error}</p> : null}
+              <p>
+                Erstellt:{' '}
+                {eventSubSubscriptionStatus.createdAt
+                  ? new Date(
+                      eventSubSubscriptionStatus.createdAt
+                    ).toLocaleString()
+                  : '—'}
+              </p>
+              <p>
+                Letzte Prüfung:{' '}
+                {new Date(
+                  eventSubSubscriptionStatus.lastCheckedAt
+                ).toLocaleString()}
+              </p>
+              {eventSubSubscriptionStatus.error ? (
+                <p>Fehler: {eventSubSubscriptionStatus.error}</p>
+              ) : null}
             </>
-          ) : <p>Kein Status geladen.</p>}
+          ) : (
+            <p>Kein Status geladen.</p>
+          )}
         </section>
 
         <section className="card">
           <h2>Debug: Twitch EventSub Feed (letzte 25)</h2>
-          <button onClick={() => void loadEventSubFeed()}>Feed aktualisieren</button>
+          <button onClick={() => void loadEventSubFeed()}>
+            Feed aktualisieren
+          </button>
           <ul>
             {eventSubFeed.map((event) => (
               <li key={event.id}>
-                <strong>{event.type}</strong> · {new Date(event.receivedAt).toLocaleString()} · Status: {event.processingStatus}
+                <strong>{event.type}</strong> ·{' '}
+                {new Date(event.receivedAt).toLocaleString()} · Status:{' '}
+                {event.processingStatus}
                 <div>Event ID: {event.twitchEventId}</div>
                 <div>Quelle: {event.source}</div>
-                {event.processedAt ? <div>Verarbeitet: {new Date(event.processedAt).toLocaleString()}</div> : null}
+                {event.processedAt ? (
+                  <div>
+                    Verarbeitet: {new Date(event.processedAt).toLocaleString()}
+                  </div>
+                ) : null}
                 {event.error ? <div>Fehler: {event.error}</div> : null}
               </li>
             ))}
@@ -787,8 +1170,16 @@ export function App(): JSX.Element {
           <ul>
             {ledgerEntries.map((entry) => (
               <li key={entry.id}>
-                <strong>{entry.eventType}</strong> · {new Date(entry.createdAt).toLocaleString()} · reverted: {String(entry.isReverted)}
-                <button disabled={entry.isReverted || entry.eventType !== 'admin_test_mystery_egg_grant'} onClick={() => void revertLedger(entry.id, entry.userId)}>
+                <strong>{entry.eventType}</strong> ·{' '}
+                {new Date(entry.createdAt).toLocaleString()} · reverted:{' '}
+                {String(entry.isReverted)}
+                <button
+                  disabled={
+                    entry.isReverted ||
+                    entry.eventType !== 'admin_test_mystery_egg_grant'
+                  }
+                  onClick={() => void revertLedger(entry.id, entry.userId)}
+                >
                   Revert
                 </button>
               </li>
@@ -799,15 +1190,36 @@ export function App(): JSX.Element {
     );
   }
 
-  const showAdminNav = me?.authenticated && (me.roles.includes('owner') || me.roles.includes('admin'));
-  const selectedEventPet = playerInventory?.pets.slots.map((cell) => cell.item).find((pet): pet is PetItem => pet?.selectedForEvent === true) ?? null;
+  const showAdminNav =
+    me?.authenticated &&
+    (me.roles.includes('owner') || me.roles.includes('admin'));
+  const selectedEventPet =
+    playerInventory?.pets.slots
+      .map((cell) => cell.item)
+      .find((pet): pet is PetItem => pet?.selectedForEvent === true) ?? null;
 
-  function renderGrid<T extends { id: string }>(title: string, grid: InventoryGrid<T>, kind: Exclude<DragPayload['kind'], 'incubator'>, renderItem: (item: T, slotIndex: number) => JSX.Element, className = '', getItemClassName?: (item: T) => string): JSX.Element {
+  function renderGrid<T extends { id: string }>(
+    title: string,
+    grid: InventoryGrid<T>,
+    kind: Exclude<DragPayload['kind'], 'incubator'>,
+    renderItem: (item: T, slotIndex: number) => JSX.Element,
+    className = '',
+    getItemClassName?: (item: T) => string
+  ): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
         <h3>{title}</h3>
-        <p className="inventory-capacity">{grid.slots.filter((cell) => cell.item).length}/{grid.dimensions.capacity} Slots · {grid.dimensions.columns}×{grid.dimensions.rows}</p>
-        <div className="inventory-grid" style={{ gridTemplateColumns: `repeat(${grid.dimensions.columns}, minmax(0, 1fr))` }}>
+        <p className="inventory-capacity">
+          {grid.slots.filter((cell) => cell.item).length}/
+          {grid.dimensions.capacity} Slots · {grid.dimensions.columns}×
+          {grid.dimensions.rows}
+        </p>
+        <div
+          className="inventory-grid"
+          style={{
+            gridTemplateColumns: `repeat(${grid.dimensions.columns}, minmax(0, 1fr))`
+          }}
+        >
           {grid.slots.map((cell) => (
             <div
               key={cell.slotIndex}
@@ -829,7 +1241,11 @@ export function App(): JSX.Element {
               }}
               aria-label={`${title} Slot ${cell.slotIndex + 1}`}
             >
-              {cell.item ? renderItem(cell.item, cell.slotIndex) : <span className="empty-slot-label">Leer</span>}
+              {cell.item ? (
+                renderItem(cell.item, cell.slotIndex)
+              ) : (
+                <span className="empty-slot-label">Leer</span>
+              )}
             </div>
           ))}
         </div>
@@ -837,7 +1253,9 @@ export function App(): JSX.Element {
     );
   }
 
-  function renderEventPetSelectionSlot(selectedPet: PetItem | null): JSX.Element {
+  function renderEventPetSelectionSlot(
+    selectedPet: PetItem | null
+  ): JSX.Element {
     return (
       <section className="event-pet-panel">
         <div
@@ -861,11 +1279,15 @@ export function App(): JSX.Element {
               <strong>{selectedPet.petTypeDisplayName}</strong>
               <span>Event-Pet</span>
             </div>
-          ) : <span className="empty-slot-label">Pet hier ablegen</span>}
+          ) : (
+            <span className="empty-slot-label">Pet hier ablegen</span>
+          )}
         </div>
         <div className="event-pet-details">
           <span className="event-pet-label">Event-Auswahl</span>
-          <strong>{selectedPet?.petTypeDisplayName ?? 'Kein Pet ausgewählt'}</strong>
+          <strong>
+            {selectedPet?.petTypeDisplayName ?? 'Kein Pet ausgewählt'}
+          </strong>
           <div className="event-pet-stat-grid">
             <span>Seltenheit: {selectedPet?.rarity ?? '—'}</span>
             <span>Rolle: {selectedPet?.role ?? '—'}</span>
@@ -879,18 +1301,74 @@ export function App(): JSX.Element {
     );
   }
 
-  function renderIncubatorInventory(inventory: IncubatorInventory): JSX.Element {
+  function renderPetTrashSlot(): JSX.Element {
+    return (
+      <section className="pet-trash-panel">
+        <div
+          role="button"
+          tabIndex={0}
+          className={`inventory-slot pet-trash-drop-target empty ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
+          onDragOver={(event) => {
+            if ((dragPayload ?? selectedPayload)?.kind === 'pet')
+              event.preventDefault();
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            void handleDropToSlot('trashcan', 0);
+          }}
+          onClick={() => {
+            if (selectedPayload?.kind === 'pet')
+              void handleDropToSlot('trashcan', 0);
+          }}
+          aria-label="Pet verwerten"
+        >
+          <div className="slot-content pet-trash-content">
+            <strong>Verwerten</strong>
+            <span>Pet hier ablegen</span>
+            <span>Gibt Aufgebrochene Eier</span>
+          </div>
+        </div>
+        <p className="inventory-capacity">
+          Vor dem Löschen erscheint eine Bestätigung.
+        </p>
+      </section>
+    );
+  }
+
+  function renderIncubatorInventory(
+    inventory: IncubatorInventory
+  ): JSX.Element {
     const incubators = inventory.incubators;
 
     return (
       <section className="inventory-panel incubator-panel">
         <h3>Inkubatoren</h3>
-        <p className="inventory-capacity">{incubators.length} Inkubatoren · inaktive Slots brauchen ein Abo</p>
+        <p className="inventory-capacity">
+          {incubators.length} Queue-Slots · Fortschritt zählt nur, wenn der
+          Stream online ist
+        </p>
         {incubators.length > 0 ? (
           <div className="incubator-list">
             {incubators.map((incubator) => {
               const active = incubator.activeJob;
-              const secondsRemaining = active ? Math.ceil((new Date(active.startedAt).getTime() + active.requiredProgressSeconds * 1000 - nowMs) / 1000) : null;
+              const liveClientProgress =
+                active?.state === 'running' && active.lastProgressedAt
+                  ? Math.max(
+                      0,
+                      Math.floor(
+                        (nowMs - new Date(active.lastProgressedAt).getTime()) /
+                          1000
+                      )
+                    )
+                  : 0;
+              const secondsRemaining = active
+                ? Math.max(
+                    0,
+                    active.requiredProgressSeconds -
+                      active.progressSecondsAccumulated -
+                      liveClientProgress
+                  )
+                : null;
               const canStartEgg = incubator.isAvailable && !active;
               const isInactiveEmptySlot = !active && !incubator.isAvailable;
               return (
@@ -904,31 +1382,61 @@ export function App(): JSX.Element {
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
-                    if (canStartEgg) void handleDropToSlot('incubator', 0, incubator.id);
+                    if (canStartEgg)
+                      void handleDropToSlot('incubator', 0, incubator.id);
                   }}
                   onClick={() => {
                     if (selectedPayload?.kind === 'egg' && canStartEgg) {
                       void handleDropToSlot('incubator', 0, incubator.id);
                     }
                   }}
-                  aria-label={`${formatIncubatorSource(incubator.slotSource)} Level ${incubator.slotLevel}`}
+                  aria-label={`${formatIncubatorSource(incubator.slotSource)} Queue-Slot ${(incubator.slotIndex ?? 0) + 1}`}
                 >
                   <div className="slot-content">
-                    <strong>{formatIncubatorSource(incubator.slotSource)}</strong>
-                    <span>Level {incubator.slotLevel}</span>
+                    <strong>
+                      {formatIncubatorSource(incubator.slotSource)}
+                    </strong>
+                    <span>Queue-Slot {(incubator.slotIndex ?? 0) + 1}</span>
                     {active ? (
                       <>
-                        <span className="slot-progress">{formatRemainingDuration(secondsRemaining ?? 0)}</span>
-                        <span>Brütet weiter</span>
-                        {(secondsRemaining ?? 1) <= 0 ? <button type="button" onClick={(event) => { event.stopPropagation(); void finishIncubation(active.unhatchedEggId).then(refreshOwnInventory).catch(showGameError); }}>Abholen</button> : null}
+                        <span className="slot-progress">
+                          {active.state === 'queued'
+                            ? 'Warteschlange'
+                            : formatRemainingDuration(secondsRemaining ?? 0)}
+                        </span>
+                        <span>
+                          {active.state === 'queued'
+                            ? 'Startet automatisch, sobald der Stream live ist und kein Ei brütet'
+                            : 'Zählt nur während Live-Stream'}
+                        </span>
+                        {active.state === 'running' &&
+                        (secondsRemaining ?? 1) <= 0 ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void finishIncubation(active.unhatchedEggId)
+                                .then(refreshOwnInventory)
+                                .catch(showGameError);
+                            }}
+                          >
+                            Abholen
+                          </button>
+                        ) : null}
                       </>
-                    ) : canStartEgg ? <span>Frei · Ei hier ablegen</span> : <span>Inaktiv · Abo benötigt</span>}
+                    ) : canStartEgg ? (
+                      <span>Frei · Ei hier ablegen</span>
+                    ) : (
+                      <span>Inaktiv</span>
+                    )}
                   </div>
                 </div>
               );
             })}
           </div>
-        ) : <p>Keine Inkubatoren verfügbar.</p>}
+        ) : (
+          <p>Keine Inkubatoren verfügbar.</p>
+        )}
       </section>
     );
   }
@@ -944,11 +1452,23 @@ export function App(): JSX.Element {
         {me?.authenticated ? (
           <>
             <p>
-              Angemeldet als <strong>{me.user.displayName ?? me.user.login}</strong>
+              Angemeldet als{' '}
+              <strong>{me.user.displayName ?? me.user.login}</strong>
             </p>
-            {me.user.avatarUrl ? <img src={me.user.avatarUrl} alt="Profilbild" width={72} height={72} /> : null}
+            {me.user.avatarUrl ? (
+              <img
+                src={me.user.avatarUrl}
+                alt="Profilbild"
+                width={72}
+                height={72}
+              />
+            ) : null}
             <p>Rolle: {me.isAdmin ? 'Admin' : 'Spieler'}</p>
-            {showAdminNav ? <p><a href="/admin">Zum Adminbereich</a></p> : null}
+            {showAdminNav ? (
+              <p>
+                <a href="/admin">Zum Adminbereich</a>
+              </p>
+            ) : null}
             <button onClick={() => void logout()}>Logout</button>
           </>
         ) : (
@@ -966,7 +1486,10 @@ export function App(): JSX.Element {
           <ol>
             {leaderboardEntries.map((entry) => (
               <li key={entry.userId}>
-                <strong>{entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}</strong> · {entry.score} Punkte
+                <strong>
+                  {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}
+                </strong>{' '}
+                · {entry.score} Punkte
               </li>
             ))}
           </ol>
@@ -982,55 +1505,178 @@ export function App(): JSX.Element {
             <p>Dein Inventar wird automatisch aktualisiert.</p>
             {playerInventory ? (
               <>
-                {gameMessage ? <p className="game-message" role="status">{gameMessage}</p> : null}
+                {gameMessage ? (
+                  <p className="game-message" role="status">
+                    {gameMessage}
+                  </p>
+                ) : null}
+                {pendingPetScrap ? (
+                  <div
+                    className="confirm-panel"
+                    role="alertdialog"
+                    aria-modal="true"
+                    aria-label="Pet verwerten bestätigen"
+                  >
+                    <strong>{pendingPetScrap.label} wirklich verwerten?</strong>
+                    <p>
+                      Dieses Pet wird dauerhaft gelöscht und du erhältst
+                      Aufgebrochene Eier abhängig von der Seltenheit (
+                      {pendingPetScrap.rarity}).
+                    </p>
+                    <div className="confirm-actions">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void scrapPet(pendingPetScrap.petId)
+                            .then(async () => {
+                              setPendingPetScrap(null);
+                              await refreshOwnInventory();
+                            })
+                            .catch(showGameError)
+                        }
+                      >
+                        Ja, verwerten
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingPetScrap(null)}
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="resource-summary">
                   <h3>Gezählte Vorräte</h3>
-                  <p><strong>Mystery-Eier:</strong> {playerInventory.mysteryEggs.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                  <p>
+                    <strong>Mystery-Eier:</strong>{' '}
+                    {playerInventory.mysteryEggs.reduce(
+                      (sum, entry) => sum + entry.amount,
+                      0
+                    )}
+                  </p>
                   {playerInventory.mysteryEggs
                     .filter((entry) => entry.amount > 0)
                     .map((entry) => (
                       <p key={entry.eggTypeId}>
-                        <strong>{formatMysteryEggType(entry.eggTypeId)}:</strong> {entry.amount}{' '}
-                        <button type="button" onClick={() => void identifyMysteryEgg(entry.eggTypeId).then(refreshOwnInventory).catch(showGameError)}>Typ bestimmen</button>
+                        <strong>
+                          {formatMysteryEggType(entry.eggTypeId)}:
+                        </strong>{' '}
+                        {entry.amount}{' '}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void identifyMysteryEgg(entry.eggTypeId)
+                              .then(refreshOwnInventory)
+                              .catch(showGameError)
+                          }
+                        >
+                          Typ bestimmen
+                        </button>
                       </p>
                     ))}
-                  <p><strong>Ei-Ressourcen:</strong> {playerInventory.crackedEggResources.reduce((sum, entry) => sum + entry.amount, 0)}</p>
+                  <p>
+                    <strong>Ei-Ressourcen:</strong>{' '}
+                    {playerInventory.crackedEggResources.reduce(
+                      (sum, entry) => sum + entry.amount,
+                      0
+                    )}
+                  </p>
                   {playerInventory.crackedEggResources
                     .filter((entry) => entry.amount > 0)
                     .map((entry) => (
-                      <p key={entry.resourceType}><strong>{formatEggResourceType(entry.resourceType)}:</strong> {entry.amount}</p>
+                      <p key={entry.resourceType}>
+                        <strong>
+                          {formatEggResourceType(entry.resourceType)}:
+                        </strong>{' '}
+                        {entry.amount}
+                      </p>
                     ))}
                 </div>
                 <div className="inventory-stack">
                   {renderIncubatorInventory(playerInventory.incubators)}
-                  {renderGrid('Unausgebrütete Eier', playerInventory.unhatchedEggs, 'egg', (egg) => (
-                    <div draggable onDragStart={() => setDragPayload({ kind: 'egg', id: egg.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
-                      <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
-                      <span>Bereit</span>
-                    </div>
-                  ), 'egg-panel')}
+                  {renderGrid(
+                    'Unausgebrütete Eier',
+                    playerInventory.unhatchedEggs,
+                    'egg',
+                    (egg) => (
+                      <div
+                        draggable
+                        onDragStart={() =>
+                          setDragPayload({ kind: 'egg', id: egg.id })
+                        }
+                        onDragEnd={() => setDragPayload(null)}
+                        className="slot-content"
+                      >
+                        <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
+                        <span>Bereit</span>
+                      </div>
+                    ),
+                    'egg-panel'
+                  )}
                   <section className="inventory-panel pet-panel">
                     <h3>Pets</h3>
-                    <p className="inventory-capacity">Pet in den Event-Slot ziehen oder antippen und dann den Event-Slot wählen.</p>
+                    <p className="inventory-capacity">
+                      Pet in den Event-Slot ziehen oder antippen und dann den
+                      Event-Slot wählen.
+                    </p>
                     {renderEventPetSelectionSlot(selectedEventPet)}
+                    {renderPetTrashSlot()}
                   </section>
-                  {renderGrid('Pet-Inventar', playerInventory.pets, 'pet', (pet) => (
-                    <div draggable onDragStart={() => setDragPayload({ kind: 'pet', id: pet.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
-                      <strong>{pet.petTypeDisplayName}</strong>
-                      <span>{pet.rarity} · {pet.role}</span>
-                      <span>HP {pet.hp} · ATK {pet.attack}</span>
-                      {pet.selectedForEvent ? <span className="event-pet-badge">Event-Pet</span> : null}
-                    </div>
-                  ), 'pet-grid-panel', (pet) => pet.selectedForEvent ? 'selected-event-pet' : '')}
-                  {renderGrid('Items', playerInventory.consumables, 'item', (item) => (
-                    <div draggable onDragStart={() => setDragPayload({ kind: 'item', id: item.id })} onDragEnd={() => setDragPayload(null)} className="slot-content">
-                      <strong>{item.consumableTypeId}</strong>
-                      <span className="stack-badge">{item.amount}/{item.stackLimit}</span>
-                    </div>
-                  ), 'item-panel')}
+                  {renderGrid(
+                    'Pet-Inventar',
+                    playerInventory.pets,
+                    'pet',
+                    (pet) => (
+                      <div
+                        draggable
+                        onDragStart={() =>
+                          setDragPayload({ kind: 'pet', id: pet.id })
+                        }
+                        onDragEnd={() => setDragPayload(null)}
+                        className="slot-content"
+                      >
+                        <strong>{pet.petTypeDisplayName}</strong>
+                        <span>
+                          {pet.rarity} · {pet.role}
+                        </span>
+                        <span>
+                          HP {pet.hp} · ATK {pet.attack}
+                        </span>
+                        {pet.selectedForEvent ? (
+                          <span className="event-pet-badge">Event-Pet</span>
+                        ) : null}
+                      </div>
+                    ),
+                    'pet-grid-panel',
+                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : '')
+                  )}
+                  {renderGrid(
+                    'Items',
+                    playerInventory.consumables,
+                    'item',
+                    (item) => (
+                      <div
+                        draggable
+                        onDragStart={() =>
+                          setDragPayload({ kind: 'item', id: item.id })
+                        }
+                        onDragEnd={() => setDragPayload(null)}
+                        className="slot-content"
+                      >
+                        <strong>{item.consumableTypeId}</strong>
+                        <span className="stack-badge">
+                          {item.amount}/{item.stackLimit}
+                        </span>
+                      </div>
+                    ),
+                    'item-panel'
+                  )}
                 </div>
               </>
-            ) : <p>Inventar wird geladen…</p>}
+            ) : (
+              <p>Inventar wird geladen…</p>
+            )}
           </>
         ) : (
           <p>Nach dem Login siehst du hier deinen Spielbereich.</p>

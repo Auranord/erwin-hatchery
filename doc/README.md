@@ -16,9 +16,9 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
    - become cracked egg resources, or
    - move into an unhatched egg inventory.
 6. Viewer chooses unhatched eggs to incubate.
-7. Incubation progresses over time and speeds up while the stream is live.
+7. The incubator accepts queued eggs; countdown progress is accumulated only while the stream is live.
 8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
-9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot.
+9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity.
 10. Admin starts a battle event from the admin panel. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
 11. Winners receive leaderboard points (3/2/1). Event is logged and selected pets are deselected after resolution.
 
@@ -68,11 +68,11 @@ Last reevaluated: **2026-05-09**.
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated slotted player inventory, incubate/finish hatch actions, pet event selection, and public leaderboard view
+- React + Vite frontend shell with authenticated slotted player inventory, queue/incubate/finish hatch actions, pet event selection, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route
-- Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, subscription auto-sync diagnostics, and subscriber status cache updates
+- Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, subscription/gift subscription auto-sync diagnostics, subscriber status cache updates, and fixed Gutschein grants
 - Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grants, and ledger revert
 - Battle event flow with persisted results, leaderboard awards, and admin revert action
 - Secret-protected OBS overlays (`/overlay/alerts`, `/overlay/battle`) with SSE-backed live updates
@@ -104,15 +104,13 @@ pnpm db:seed
 pnpm build
 ```
 
-## Incubation countdown quirk (known behavior)
+## Incubation queue behavior
 
-- The player UI computes remaining incubation time from the browser clock (`Date.now()`) to reduce polling and keep traffic lower.
-- If a player's system clock is wrong (ahead/behind), the shown remaining timer can be significantly incorrect.
-- API hatch validation remains server-authoritative. The backend decides whether finish is too early based on server time.
-- Operational symptom: an egg may still appear as `incubating` in the UI even when enough real time has passed, until the client-side countdown reaches zero and the finish action is triggered.
-- Troubleshooting: first verify/correct the device system clock (including automatic time sync) before investigating backend incubation logic.
-
-
+- The player UI shows two standard incubator queue slots at launch.
+- Dropping an egg into an empty incubator queue slot removes it from the unhatched egg inventory and creates a queued incubation job.
+- If the stream is live and no other egg is running, the backend automatically starts the first queued egg.
+- Countdown progress is server-authoritative and accumulates only while Twitch stream state is live. When the stream is offline, queued/running eggs stay in place but do not gain progress.
+- The UI refreshes the inventory stream regularly so queued/running state and live-progress countdowns stay close to backend state.
 
 ## EventSub webhook processing (Milestone 3)
 
@@ -126,7 +124,6 @@ pnpm build
 - Increments `common_mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
-
 ## EventSub subscription auto-sync (Milestone 3+)
 
 - On API startup, the backend can automatically ensure the required Twitch EventSub subscriptions exist for:
@@ -134,6 +131,7 @@ pnpm build
   - `channel.subscribe`
   - `channel.subscription.message`
   - `channel.subscription.end`
+  - `channel.subscription.gift`
 - Required env vars: `TWITCH_BROADCASTER_ID`, `TWITCH_EVENTSUB_SECRET`.
 - EventSub callback URL is derived from `PUBLIC_APP_URL` + `/api/twitch/eventsub`.
 - `TWITCH_EVENTSUB_AUTO_SYNC=true` (default) enables startup sync; set to `false` to disable automatic management.
@@ -142,7 +140,6 @@ pnpm build
 - If Twitch subscription sync fails (for example token/scope issues), startup falls back to replaying stored `twitch_events` (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) within the last `TWITCH_SUBSCRIPTION_RENEWAL_DAYS`.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
 - Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
-
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
