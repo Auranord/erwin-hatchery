@@ -35,7 +35,7 @@ last_login_at timestamp
 ```
 
 A provisional user is created from a Channel Point redemption before first login. On Twitch login, update the same row.
-`is_subscriber` and `subscriber_ends_at` cache Twitch subscription state for Milestone 9 features (subscriber incubator handling and admin visibility).
+`is_subscriber` and `subscriber_ends_at` cache Twitch subscription state for Milestone 9 admin visibility and fixed subscription resource grants. Subscriptions do not grant incubators.
 
 ### roles
 
@@ -181,24 +181,30 @@ created_at timestamp
 
 ### incubator_slots
 
-Tracks available incubators.
+Tracks the single standard incubator and future queue/upgrade slots.
 
 ```text
 id uuid primary key
 owner_user_id uuid references users(id)
-slot_source text not null -- base, subscriber, upgrade
+slot_source text not null -- default, upgrade (future); subscriber/admin sources are not used in MVP
 slot_level integer not null default 1
+slot_index integer nullable
+speed_multiplier_basis_points integer not null default 10000
+rarity_bonus_basis_points integer not null default 0
+fuel_behavior text not null default 'none'
+special_effect_config jsonb not null default '{}'
 is_available boolean not null default true
 remove_when_empty boolean not null default false
 created_at timestamp
 updated_at timestamp
 ```
 
-Subscriber incubator behavior:
+Incubator behavior:
 
-- Ensure the subscriber slot exists for every player so it is always visible.
-- When sub is active and the slot is empty, mark it available for starting new eggs.
-- When sub is inactive, mark an empty subscriber slot unavailable/inactive. If occupied, keep the incubation job running and keep the slot occupied; once collected, it returns to inactive until the player is subscribed again.
+- Ensure one default standard incubator exists for every player at slot index 0.
+- Two incubator queue slots are enabled at launch. Additional queue slots are future upgrades and must not be enabled until explicitly granted.
+- Subscriptions and admin actions do not grant incubators in the MVP.
+- Queueing incubation writes an immutable ledger row. The first queued egg starts automatically when the stream is live and no other egg is running.
 
 ### incubation_jobs
 
@@ -209,14 +215,16 @@ id uuid primary key
 owner_user_id uuid references users(id)
 unhatched_egg_id uuid references unhatched_eggs(id)
 incubator_slot_id uuid references incubator_slots(id)
-state text not null -- active, completed, canceled
-started_at timestamp
+state text not null -- queued, running, completed, canceled
+started_at timestamp -- queue insertion/start metadata timestamp
 completed_at timestamp nullable
 required_progress_seconds integer not null
-progress_snapshot jsonb not null -- modifiers at start if needed
+progress_seconds_accumulated integer not null default 0
+last_progressed_at timestamp nullable -- last live-progress sync point for running jobs
+progress_snapshot jsonb not null -- stream state/modifiers from latest sync if needed
 ```
 
-Do not tick every second in the database. Calculate effective progress from timestamps and stream multipliers.
+Do not tick every second in the database. Store accumulated progress plus the last live-progress timestamp, and only add progress for elapsed time while the stream is live.
 
 ### pet_types
 
@@ -252,6 +260,8 @@ stat_rolls jsonb not null
 source_unhatched_egg_id uuid references unhatched_eggs(id)
 is_favorite boolean not null default false
 selected_for_event boolean not null default false
+is_scrapped boolean not null default false
+scrapped_at timestamp nullable
 created_at timestamp
 hatched_at timestamp
 ```
@@ -281,7 +291,7 @@ primary key(user_id, consumable_type_id)
 ```text
 id uuid primary key
 user_id uuid references users(id)
-upgrade_type text not null -- incubator_speed_level, extra_incubator
+upgrade_type text not null -- incubator_speed_level, incubator_queue_slot
 level integer not null
 created_at timestamp
 updated_at timestamp
@@ -360,15 +370,14 @@ Use weights totaling 10000:
  200 pet goldener_erwin
 ```
 
-
 ## Admin action log
 
 - `admin_action_logs` stores immutable admin mutations.
 - Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
 - Role changes are the only economy-adjacent admin mutation in milestone 3.
 
-
 ## Milestone 3 data flow
+
 - `twitch_events`: one row per unique Twitch EventSub event ID (`twitch_event_id` unique).
 - `channel_point_redemptions`: one row per unique Twitch redemption ID (`twitch_redemption_id` unique).
 - Valid configured reward redemptions currently create one `common_mystery_egg` inventory unit, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
@@ -376,13 +385,13 @@ Use weights totaling 10000:
 ## Slotted RPG Inventory MVP Update
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
-- Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
+- Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
 - Capacity applies only to slotted inventories: unhatched eggs, pets, and consumable/item stacks. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
 - Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and 8 columns × 3 base rows for items.
-- Incubators are shown directly above the unhatched egg grid as fixed drop targets without empty placeholder slots. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - Event-Pet selection is represented by the `pets.selected_for_event` flag. The UI exposes it as a fixed drop target above the pet grid, but the selected pet remains in the pet grid and therefore continues to consume its normal pet inventory slot.
-- Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
+- Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.

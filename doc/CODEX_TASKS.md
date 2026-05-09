@@ -9,13 +9,12 @@ Last reevaluated: **2026-05-09**.
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
 - ✅ Milestone 3 completed (EventSub webhook ingestion + idempotent Channel Point redemption processing + startup subscription auto-sync + admin status debug implemented).
 - ✅ Milestone 4 completed (authenticated player shell, live slotted inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, item/pet/egg slot moves, and public leaderboard are implemented).
-- ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, stream live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
+- ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, queue-based live-progress accumulation, live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 completed (admin battle event start with random winners, 3/2/1 leaderboard award, participant/result persistence, pet deselection, and dedicated battle revert action are implemented).
 - ✅ Milestone 8 completed (secret-protected overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, leaderboard snapshot, and OBS-safe layout are implemented).
-- 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, and the subscriber extra incubator lifecycle are implemented; gifted-sub/Bits ingestion and fixed Bits effects remain pending).
+- 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, gift-sub ingestion, and fixed Gutschein grants are implemented; Bits ingestion/effects remain pending).
 - 🟨 Milestone 10 partially completed (production Docker image, GHCR branch tagging, TrueNAS example with Postgres/init/health checks, production env validation, secure production cookies, and frontend fallback routing are implemented; rate limiting, explicit CORS middleware, and backup scripts/restore notes remain pending).
-
 
 ## Milestone 0 - Repo skeleton
 
@@ -167,16 +166,17 @@ Acceptance:
 
 - 🟨 Add schema/event ingestion for sub/gift sub/Bits events.
 - ✅ Add schema/event ingestion for sub status events (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) with persisted renewal/end cache on `users`.
-- ⏳ Add gift-sub and Bits/cheer EventSub subscription types and processing once fixed effects are defined.
+- ✅ Add gift-sub EventSub subscription type and fixed Gutschein processing for gifter/recipient where Twitch identity is available.
+- ⏳ Add Bits/cheer EventSub subscription types and processing once fixed effects are defined.
 - ✅ Do not add paid random eggs.
-- ✅ Implement subscriber extra incubator if sub status can be reliably received.
+- ✅ Remove subscriber incubators; subscriptions now grant fixed Gutschein resources instead.
 - ⏳ Bits effects should be fixed only and can remain disabled behind config.
 
 Acceptance:
 
-- ✅ Subbed users can receive one subscriber incubator.
-- ✅ When sub ends, an occupied subscriber slot finishes the current egg; after hatch it becomes unavailable until subscriber status is active again.
-- ⏳ Gift-sub and Bits event foundations are still pending.
+- ✅ Subbed users receive fixed Gutschein resources instead of incubators.
+- ✅ Gift-sub ingestion grants Gutschein resources to the gifter and recipient when Twitch identity is available.
+- ⏳ Bits event foundation is still pending.
 
 ## Milestone 10 - Deployment hardening
 
@@ -197,13 +197,13 @@ Acceptance:
 ## Slotted RPG Inventory MVP Update
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
-- Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
+- Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
 - Capacity applies only to slotted inventories: unhatched eggs, pets, and consumable/item stacks. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
 - Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and 8 columns × 3 base rows for items.
-- Incubators are shown directly above the unhatched egg grid as fixed drop targets without empty placeholder slots. Starting incubation requires the chosen unhatched egg and the chosen incubator.
-- The Event-Pet selector sits directly above the pet inventory as a fixed drop target with pet stat labels; it marks a pet for events without moving it out of the pet inventory.
-- Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a running incubation job, and writes a ledger row.
+- The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
+- The Event-Pet selector sits directly above the pet inventory as a fixed drop target with pet stat labels; it marks a pet for events without moving it out of the pet inventory. A trashcan-style fixed slot scraps a pet into Aufgebrochene Eier after confirmation.
+- Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.

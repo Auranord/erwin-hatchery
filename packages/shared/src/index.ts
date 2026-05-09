@@ -67,6 +67,8 @@ export type ActiveIncubationJob = {
   state: string;
   startedAt: string;
   requiredProgressSeconds: number;
+  progressSecondsAccumulated: number;
+  lastProgressedAt: string | null;
   progressSnapshot?: unknown;
 };
 
@@ -74,6 +76,7 @@ export type IncubatorSlotItem = {
   id: string;
   slotSource: string;
   slotLevel: number;
+  slotIndex: number | null;
   isAvailable: boolean;
   metadata: IncubatorMetadata;
   activeJob: ActiveIncubationJob | null;
