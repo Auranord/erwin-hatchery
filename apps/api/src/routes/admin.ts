@@ -4,7 +4,9 @@ import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
   adminActionLogs,
-  consumableItemStacks,
+  consumableInventorySlots,
+  equipmentInventorySlots,
+  hatInventorySlots,
   economyLedger,
   eggTypes,
   unhatchedEggs,
@@ -228,6 +230,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       unhatchedEggRows,
       petRows,
       consumableRows,
+      equipmentRows,
+      hatRows,
       resourceRows,
       incubatorSlotRows
     ] = await Promise.all([
@@ -260,8 +264,16 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
       db
         .select()
-        .from(consumableItemStacks)
-        .where(eq(consumableItemStacks.userId, userId)),
+        .from(consumableInventorySlots)
+        .where(eq(consumableInventorySlots.userId, userId)),
+      db
+        .select()
+        .from(equipmentInventorySlots)
+        .where(eq(equipmentInventorySlots.userId, userId)),
+      db
+        .select()
+        .from(hatInventorySlots)
+        .where(eq(hatInventorySlots.userId, userId)),
       db.select().from(resources).where(eq(resources.userId, userId)),
       db
         .select()
@@ -276,6 +288,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         unhatchedEggs: unhatchedEggRows,
         hatchedPets: petRows,
         consumables: consumableRows,
+        equipment: equipmentRows,
+        hats: hatRows,
         crackedEggResources: resourceRows,
         incubatorSlots: incubatorSlotRows
       }

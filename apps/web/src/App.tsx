@@ -137,9 +137,10 @@ type PetItem = {
 type ConsumableItem = {
   id: string;
   consumableTypeId: string;
-  amount: number;
-  stackLimit: number;
+  quantity: number;
 };
+type EquipmentItem = { id: string; equipmentTypeId: string };
+type HatItem = { id: string; hatTypeId: string };
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
@@ -147,13 +148,23 @@ type PlayerInventory = {
   unhatchedEggs: InventoryGrid<EggItem>;
   pets: InventoryGrid<PetItem>;
   consumables: InventoryGrid<ConsumableItem>;
+  equipment: InventoryGrid<EquipmentItem>;
+  hats: InventoryGrid<HatItem>;
 };
 type DragPayload =
   | { kind: 'incubator'; id: string }
   | { kind: 'egg'; id: string }
   | { kind: 'pet'; id: string }
-  | { kind: 'item'; id: string };
+  | { kind: 'consumable'; id: string }
+  | { kind: 'equipment'; id: string }
+  | { kind: 'hat'; id: string };
 type PetScrapTarget = { petId: string; label: string; rarity: string };
+type InventoryDiscardKind = 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat';
+type InventoryDiscardTarget = {
+  kind: InventoryDiscardKind;
+  id: string;
+  label: string;
+};
 
 type OverlayAlertEvent = {
   id: string;
@@ -243,6 +254,10 @@ export function App(): JSX.Element {
     null
   );
   const [isPetScrapSubmitting, setIsPetScrapSubmitting] = useState(false);
+  const [pendingInventoryDiscard, setPendingInventoryDiscard] =
+    useState<InventoryDiscardTarget | null>(null);
+  const [isInventoryDiscardSubmitting, setIsInventoryDiscardSubmitting] =
+    useState(false);
   const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [gameMessage, setGameMessage] = useState<string | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
@@ -439,9 +454,9 @@ export function App(): JSX.Element {
     }
   }
 
-  async function postInventoryMove(
+  async function postInventoryAction(
     endpoint: string,
-    payload: Record<string, string | number>
+    payload: Record<string, string | number | boolean>
   ): Promise<void> {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -458,6 +473,82 @@ export function App(): JSX.Element {
       );
     }
     await refreshOwnInventory();
+  }
+
+  async function postInventoryMove(
+    endpoint: string,
+    payload: Record<string, string | number>
+  ): Promise<void> {
+    await postInventoryAction(endpoint, payload);
+  }
+
+  async function discardInventoryItem(
+    target: InventoryDiscardTarget
+  ): Promise<void> {
+    const endpointByKind: Record<InventoryDiscardKind, string> = {
+      egg: '/api/game/inventory/egg-slots/discard',
+      pet: '/api/game/inventory/pet-slots/discard',
+      consumable: '/api/game/inventory/consumable-slots/discard',
+      equipment: '/api/game/inventory/equipment-slots/discard',
+      hat: '/api/game/inventory/hat-slots/discard'
+    };
+    const idKeyByKind: Record<InventoryDiscardKind, string> = {
+      egg: 'unhatchedEggId',
+      pet: 'petId',
+      consumable: 'consumableSlotId',
+      equipment: 'equipmentSlotId',
+      hat: 'hatSlotId'
+    };
+    await postInventoryAction(endpointByKind[target.kind], {
+      [idKeyByKind[target.kind]]: target.id,
+      confirm: true
+    });
+  }
+
+  function isInventoryDiscardKind(
+    kind: DragPayload['kind']
+  ): kind is InventoryDiscardKind {
+    return (
+      kind === 'egg' ||
+      kind === 'pet' ||
+      kind === 'consumable' ||
+      kind === 'equipment' ||
+      kind === 'hat'
+    );
+  }
+
+  function getInventoryDiscardLabel(payload: {
+    kind: InventoryDiscardKind;
+    id: string;
+  }): string {
+    if (payload.kind === 'egg') {
+      const egg = playerInventory?.unhatchedEggs.slots
+        .map((cell) => cell.item)
+        .find((item): item is EggItem => item?.id === payload.id);
+      return egg ? formatMysteryEggType(egg.eggTypeId) : 'dieses Ei';
+    }
+    if (payload.kind === 'pet') {
+      const pet = playerInventory?.pets.slots
+        .map((cell) => cell.item)
+        .find((item): item is PetItem => item?.id === payload.id);
+      return pet?.petTypeDisplayName ?? 'dieses Pet';
+    }
+    if (payload.kind === 'consumable') {
+      const consumable = playerInventory?.consumables.slots
+        .map((cell) => cell.item)
+        .find((item): item is ConsumableItem => item?.id === payload.id);
+      return consumable?.consumableTypeId ?? 'dieses Verbrauchbare';
+    }
+    if (payload.kind === 'equipment') {
+      const equipment = playerInventory?.equipment.slots
+        .map((cell) => cell.item)
+        .find((item): item is EquipmentItem => item?.id === payload.id);
+      return equipment?.equipmentTypeId ?? 'diese Ausrüstung';
+    }
+    const hat = playerInventory?.hats.slots
+      .map((cell) => cell.item)
+      .find((item): item is HatItem => item?.id === payload.id);
+    return hat?.hatTypeId ?? 'diesen Hut';
   }
 
   function showGameError(error: unknown): void {
@@ -481,8 +572,23 @@ export function App(): JSX.Element {
     }
   }
 
+  async function confirmInventoryDiscard(): Promise<void> {
+    if (!pendingInventoryDiscard || isInventoryDiscardSubmitting) return;
+
+    setIsInventoryDiscardSubmitting(true);
+    try {
+      await discardInventoryItem(pendingInventoryDiscard);
+      setPendingInventoryDiscard(null);
+      await refreshOwnInventory();
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setIsInventoryDiscardSubmitting(false);
+    }
+  }
+
   async function handleDropToSlot(
-    targetKind: 'incubator' | 'egg' | 'pet' | 'item' | 'trashcan',
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat' | 'trashcan' | 'discard',
     slotIndex: number,
     targetIncubatorId?: string
   ): Promise<void> {
@@ -500,7 +606,13 @@ export function App(): JSX.Element {
         await refreshOwnInventory();
         return;
       }
-      if (payload.kind === 'pet' && targetKind === 'trashcan') {
+      if (targetKind === 'discard' && isInventoryDiscardKind(payload.kind)) {
+        setPendingInventoryDiscard({
+          kind: payload.kind,
+          id: payload.id,
+          label: getInventoryDiscardLabel(payload)
+        });
+      } else if (payload.kind === 'pet' && targetKind === 'trashcan') {
         const pet = playerInventory?.pets.slots
           .map((cell) => cell.item)
           .find((item): item is PetItem => item?.id === payload.id);
@@ -519,9 +631,19 @@ export function App(): JSX.Element {
           petId: payload.id,
           toSlotIndex: slotIndex
         });
-      else if (payload.kind === 'item' && targetKind === 'item')
-        await postInventoryMove('/api/game/inventory/item-slots/move', {
-          itemStackId: payload.id,
+      else if (payload.kind === 'consumable' && targetKind === 'consumable')
+        await postInventoryMove('/api/game/inventory/consumable-slots/move', {
+          consumableSlotId: payload.id,
+          toSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'equipment' && targetKind === 'equipment')
+        await postInventoryMove('/api/game/inventory/equipment-slots/move', {
+          equipmentSlotId: payload.id,
+          toSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'hat' && targetKind === 'hat')
+        await postInventoryMove('/api/game/inventory/hat-slots/move', {
+          hatSlotId: payload.id,
           toSlotIndex: slotIndex
         });
     } catch (error) {
@@ -531,7 +653,7 @@ export function App(): JSX.Element {
 
   function selectOrRun(
     payload: DragPayload,
-    targetKind: 'incubator' | 'egg' | 'pet' | 'item' | 'trashcan',
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat' | 'trashcan' | 'discard',
     slotIndex: number,
     targetIncubatorId?: string
   ): void {
@@ -541,11 +663,11 @@ export function App(): JSX.Element {
     }
     setSelectedPayload(payload);
     if (payload.kind === 'egg') {
-      setGameMessage('Inkubator oder Ziel-Slot antippen.');
+      setGameMessage('Inkubator, Verwerfen-Slot oder Ziel-Slot antippen.');
     } else if (payload.kind === 'pet') {
       setGameMessage('Event-Slot, Verwerten-Slot oder Ziel-Slot antippen.');
     } else {
-      setGameMessage('Ziel-Slot antippen, um zu verschieben.');
+      setGameMessage('Verwerfen-Slot oder Ziel-Slot antippen.');
     }
   }
 
@@ -1376,6 +1498,45 @@ export function App(): JSX.Element {
     );
   }
 
+  function renderInventoryDiscardSlot(
+    columns: number,
+    acceptedKind: InventoryDiscardKind
+  ): JSX.Element {
+    const activePayload = dragPayload ?? selectedPayload;
+    const canDiscard = activePayload?.kind === acceptedKind;
+    return (
+      <div
+        className="inventory-grid inventory-discard-row"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
+        }}
+      >
+        <div
+          role="button"
+          tabIndex={0}
+          className={`inventory-slot inventory-discard-drop-target empty ${canDiscard ? 'select-target' : ''}`}
+          style={{ gridColumn: `${columns} / span 1` }}
+          onDragOver={(event) => {
+            if (canDiscard) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            if (canDiscard) void handleDropToSlot('discard', 0);
+          }}
+          onClick={() => {
+            if (canDiscard) void handleDropToSlot('discard', 0);
+          }}
+          aria-label="Gegenstand verwerfen"
+        >
+          <div className="slot-content inventory-discard-content">
+            <strong>Verwerfen</strong>
+            <span>Keine Belohnung</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderIncubatorInventory(
     inventory: IncubatorInventory
   ): JSX.Element {
@@ -1590,6 +1751,43 @@ export function App(): JSX.Element {
                     </div>
                   </div>
                 ) : null}
+                {pendingInventoryDiscard ? (
+                  <div className="modal-backdrop" role="presentation">
+                    <div
+                      className="confirm-modal"
+                      role="alertdialog"
+                      aria-modal="true"
+                      aria-labelledby="inventory-discard-confirm-title"
+                      aria-describedby="inventory-discard-confirm-description"
+                    >
+                      <strong id="inventory-discard-confirm-title">
+                        {pendingInventoryDiscard.label} wirklich verwerfen?
+                      </strong>
+                      <p id="inventory-discard-confirm-description">
+                        Der Gegenstand wird dauerhaft gelöscht. Du erhältst
+                        dafür keine Ressourcen oder andere Belohnungen.
+                      </p>
+                      <div className="confirm-actions">
+                        <button
+                          type="button"
+                          onClick={() => void confirmInventoryDiscard()}
+                          disabled={isInventoryDiscardSubmitting}
+                        >
+                          {isInventoryDiscardSubmitting
+                            ? 'Wird verworfen …'
+                            : 'Ja, verwerfen'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingInventoryDiscard(null)}
+                          disabled={isInventoryDiscardSubmitting}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="resource-summary">
                   <h3>Gezählte Vorräte</h3>
                   <p>
@@ -1656,7 +1854,12 @@ export function App(): JSX.Element {
                         <span>Bereit</span>
                       </div>
                     ),
-                    'egg-panel'
+                    'egg-panel',
+                    undefined,
+                    renderInventoryDiscardSlot(
+                      playerInventory.unhatchedEggs.dimensions.columns,
+                      'egg'
+                    )
                   )}
                   <section className="inventory-panel pet-panel">
                     <h3>Pets</h3>
@@ -1693,28 +1896,85 @@ export function App(): JSX.Element {
                     ),
                     'pet-grid-panel',
                     (pet) => (pet.selectedForEvent ? 'selected-event-pet' : ''),
-                    renderPetTrashSlot(playerInventory.pets.dimensions.columns)
+                    <>
+                      {renderPetTrashSlot(playerInventory.pets.dimensions.columns)}
+                      {renderInventoryDiscardSlot(
+                        playerInventory.pets.dimensions.columns,
+                        'pet'
+                      )}
+                    </>
                   )}
                   {renderGrid(
-                    'Items',
+                    'Verbrauchbares',
                     playerInventory.consumables,
-                    'item',
+                    'consumable',
                     (item) => (
                       <div
                         draggable
                         onDragStart={() =>
-                          setDragPayload({ kind: 'item', id: item.id })
+                          setDragPayload({ kind: 'consumable', id: item.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
                         className="slot-content"
                       >
                         <strong>{item.consumableTypeId}</strong>
-                        <span className="stack-badge">
-                          {item.amount}/{item.stackLimit}
-                        </span>
+                        <span className="stack-badge">Einzeln</span>
                       </div>
                     ),
-                    'item-panel'
+                    'item-panel',
+                    undefined,
+                    renderInventoryDiscardSlot(
+                      playerInventory.consumables.dimensions.columns,
+                      'consumable'
+                    )
+                  )}
+                  {renderGrid(
+                    'Ausrüstung',
+                    playerInventory.equipment,
+                    'equipment',
+                    (equipment) => (
+                      <div
+                        draggable
+                        onDragStart={() =>
+                          setDragPayload({ kind: 'equipment', id: equipment.id })
+                        }
+                        onDragEnd={() => setDragPayload(null)}
+                        className="slot-content"
+                      >
+                        <strong>{equipment.equipmentTypeId}</strong>
+                        <span>Einzeln</span>
+                      </div>
+                    ),
+                    'item-panel',
+                    undefined,
+                    renderInventoryDiscardSlot(
+                      playerInventory.equipment.dimensions.columns,
+                      'equipment'
+                    )
+                  )}
+                  {renderGrid(
+                    'Hüte',
+                    playerInventory.hats,
+                    'hat',
+                    (hat) => (
+                      <div
+                        draggable
+                        onDragStart={() =>
+                          setDragPayload({ kind: 'hat', id: hat.id })
+                        }
+                        onDragEnd={() => setDragPayload(null)}
+                        className="slot-content"
+                      >
+                        <strong>{hat.hatTypeId}</strong>
+                        <span>Einzeln</span>
+                      </div>
+                    ),
+                    'item-panel',
+                    undefined,
+                    renderInventoryDiscardSlot(
+                      playerInventory.hats.dimensions.columns,
+                      'hat'
+                    )
                   )}
                 </div>
               </>

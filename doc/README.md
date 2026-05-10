@@ -18,7 +18,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 6. Viewer chooses unhatched eggs to incubate.
 7. The incubator accepts queued eggs; countdown progress is accumulated only while the stream is live.
 8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
-9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity.
+9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity. Every slotted inventory, including pets, also has a `Verwerfen` slot for confirmed deletion without any resource reward; this is separate from pet verwerten.
 10. Admin starts a battle event from the admin panel. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
 11. Winners receive leaderboard points (3/2/1). Event is logged and selected pets are deselected after resolution.
 
@@ -32,7 +32,7 @@ Public without Twitch login:
 
 Requires Twitch login:
 
-- Inventory
+- Inventory, including separate consumable, equipment, and hat grids
 - Egg identification
 - Incubation
 - Pet selection
@@ -68,7 +68,7 @@ Last reevaluated: **2026-05-09**.
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated slotted player inventory, queue/incubate/finish hatch actions, pet event selection, and public leaderboard view
+- React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment/hat grids, queue/incubate/finish hatch actions, pet event selection, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route

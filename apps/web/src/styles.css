@@ -407,11 +407,13 @@ ul {
   font-weight: 700;
 }
 
-.pet-trash-row {
+.pet-trash-row,
+.inventory-discard-row {
   margin-top: 0.45rem;
 }
 
-.pet-trash-drop-target {
+.pet-trash-drop-target,
+.inventory-discard-drop-target {
   border-color: rgba(248, 113, 113, 0.78);
   background: linear-gradient(
     135deg,
@@ -422,12 +424,16 @@ ul {
 
 .pet-trash-drop-target:hover,
 .pet-trash-drop-target:focus-visible,
-.pet-trash-drop-target.select-target {
+.pet-trash-drop-target.select-target,
+.inventory-discard-drop-target:hover,
+.inventory-discard-drop-target:focus-visible,
+.inventory-discard-drop-target.select-target {
   border-color: rgba(252, 165, 165, 0.95);
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
 }
 
-.pet-trash-content strong {
+.pet-trash-content strong,
+.inventory-discard-content strong {
   color: #fecaca;
 }
 

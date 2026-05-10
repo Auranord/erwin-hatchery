@@ -3,7 +3,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, inArray, not, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
-  consumableItemStacks,
+  consumableInventorySlots,
+  equipmentInventorySlots,
+  hatInventorySlots,
   economyLedger,
   eggLootTableEntries,
   unhatchedEggs,
@@ -27,7 +29,6 @@ import {
 } from '../services/streamState.js';
 import {
   DEFAULT_INVENTORY_GRIDS,
-  getStackLimit,
   isSlotInsideGrid,
   type InventoryGridDimensions,
   type InventoryKind,
@@ -493,6 +494,8 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     unhatchedEggRows,
     petRows,
     consumableRows,
+    equipmentRows,
+    hatRows,
     resourceRows,
     slotRows,
     jobRows
@@ -549,13 +552,28 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
     db
       .select({
-        id: consumableItemStacks.id,
-        consumableTypeId: consumableItemStacks.consumableTypeId,
-        amount: consumableItemStacks.amount,
-        slotIndex: consumableItemStacks.slotIndex
+        id: consumableInventorySlots.id,
+        consumableTypeId: consumableInventorySlots.consumableTypeId,
+        slotIndex: consumableInventorySlots.slotIndex
       })
-      .from(consumableItemStacks)
-      .where(eq(consumableItemStacks.userId, userId)),
+      .from(consumableInventorySlots)
+      .where(eq(consumableInventorySlots.userId, userId)),
+    db
+      .select({
+        id: equipmentInventorySlots.id,
+        equipmentTypeId: equipmentInventorySlots.equipmentTypeId,
+        slotIndex: equipmentInventorySlots.slotIndex
+      })
+      .from(equipmentInventorySlots)
+      .where(eq(equipmentInventorySlots.userId, userId)),
+    db
+      .select({
+        id: hatInventorySlots.id,
+        hatTypeId: hatInventorySlots.hatTypeId,
+        slotIndex: hatInventorySlots.slotIndex
+      })
+      .from(hatInventorySlots)
+      .where(eq(hatInventorySlots.userId, userId)),
     db
       .select({
         resourceType: resources.resourceType,
@@ -606,10 +624,15 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     dimensionsByKind.get('unhatched_eggs')
   );
   const petDimensions = dimensionsFromRow('pets', dimensionsByKind.get('pets'));
-  const itemDimensions = dimensionsFromRow(
-    'items',
-    dimensionsByKind.get('items')
+  const consumableDimensions = dimensionsFromRow(
+    'consumables',
+    dimensionsByKind.get('consumables')
   );
+  const equipmentDimensions = dimensionsFromRow(
+    'equipment',
+    dimensionsByKind.get('equipment')
+  );
+  const hatDimensions = dimensionsFromRow('hats', dimensionsByKind.get('hats'));
   const jobsBySlot = new Map(jobRows.map((job) => [job.incubatorSlotId, job]));
 
   return {
@@ -693,17 +716,36 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       )
     },
     consumables: {
-      dimensions: itemDimensions,
+      dimensions: consumableDimensions,
       slots: cellsForGrid(
-        itemDimensions,
+        consumableDimensions,
         consumableRows.map((row) => ({
           slotIndex: row.slotIndex,
           item: {
             id: row.id,
             consumableTypeId: row.consumableTypeId,
-            amount: row.amount,
-            stackLimit: getStackLimit(row.consumableTypeId)
+            quantity: 1
           }
+        }))
+      )
+    },
+    equipment: {
+      dimensions: equipmentDimensions,
+      slots: cellsForGrid(
+        equipmentDimensions,
+        equipmentRows.map((row) => ({
+          slotIndex: row.slotIndex,
+          item: { id: row.id, equipmentTypeId: row.equipmentTypeId }
+        }))
+      )
+    },
+    hats: {
+      dimensions: hatDimensions,
+      slots: cellsForGrid(
+        hatDimensions,
+        hatRows.map((row) => ({
+          slotIndex: row.slotIndex,
+          item: { id: row.id, hatTypeId: row.hatTypeId }
         }))
       )
     }
@@ -718,7 +760,9 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     eggStats,
     jobStats,
     slotStats,
-    itemStats,
+    consumableStats,
+    equipmentStats,
+    hatStats,
     dimensionStats,
     userStats
   ] = await Promise.all([
@@ -770,12 +814,27 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     db
       .select({
         count: sql<number>`count(*)`,
-        updatedAt: sql<Date>`max(${consumableItemStacks.updatedAt})`,
-        slotSum: sql<number>`coalesce(sum(${consumableItemStacks.slotIndex}), 0)`,
-        amountSum: sql<number>`coalesce(sum(${consumableItemStacks.amount}), 0)`
+        updatedAt: sql<Date>`max(${consumableInventorySlots.updatedAt})`,
+        slotSum: sql<number>`coalesce(sum(${consumableInventorySlots.slotIndex}), 0)`
       })
-      .from(consumableItemStacks)
-      .where(eq(consumableItemStacks.userId, userId)),
+      .from(consumableInventorySlots)
+      .where(eq(consumableInventorySlots.userId, userId)),
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updatedAt: sql<Date>`max(${equipmentInventorySlots.updatedAt})`,
+        slotSum: sql<number>`coalesce(sum(${equipmentInventorySlots.slotIndex}), 0)`
+      })
+      .from(equipmentInventorySlots)
+      .where(eq(equipmentInventorySlots.userId, userId)),
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updatedAt: sql<Date>`max(${hatInventorySlots.updatedAt})`,
+        slotSum: sql<number>`coalesce(sum(${hatInventorySlots.slotIndex}), 0)`
+      })
+      .from(hatInventorySlots)
+      .where(eq(hatInventorySlots.userId, userId)),
     db
       .select({ updatedAt: sql<Date>`max(${inventoryDimensions.updatedAt})` })
       .from(inventoryDimensions)
@@ -814,10 +873,19 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     slotStats[0]?.count ?? 0,
     slotStats[0]?.slotSum ?? 0,
     slotStats[0]?.updatedAt ? toIsoTimestamp(slotStats[0].updatedAt) : '0',
-    itemStats[0]?.count ?? 0,
-    itemStats[0]?.slotSum ?? 0,
-    itemStats[0]?.amountSum ?? 0,
-    itemStats[0]?.updatedAt ? toIsoTimestamp(itemStats[0].updatedAt) : '0',
+    consumableStats[0]?.count ?? 0,
+    consumableStats[0]?.slotSum ?? 0,
+    consumableStats[0]?.updatedAt
+      ? toIsoTimestamp(consumableStats[0].updatedAt)
+      : '0',
+    equipmentStats[0]?.count ?? 0,
+    equipmentStats[0]?.slotSum ?? 0,
+    equipmentStats[0]?.updatedAt
+      ? toIsoTimestamp(equipmentStats[0].updatedAt)
+      : '0',
+    hatStats[0]?.count ?? 0,
+    hatStats[0]?.slotSum ?? 0,
+    hatStats[0]?.updatedAt ? toIsoTimestamp(hatStats[0].updatedAt) : '0',
     dimensionStats[0]?.updatedAt
       ? toIsoTimestamp(dimensionStats[0].updatedAt)
       : '0',
@@ -1871,34 +1939,329 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  app.post('/api/game/inventory/item-slots/move', async (request, reply) => {
+
+  app.post('/api/game/inventory/egg-slots/discard', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     const body = (request.body ?? {}) as {
-      itemStackId?: string;
-      toSlotIndex?: number;
+      unhatchedEggId?: string;
+      confirm?: boolean;
     };
-    if (!body.itemStackId || !Number.isInteger(body.toSlotIndex))
+    if (!body.unhatchedEggId || body.confirm !== true)
       return reply
         .code(400)
-        .send({ message: 'itemStackId and toSlotIndex are required' });
+        .send({ message: 'unhatchedEggId and confirm=true are required' });
+
+    const result = await db.transaction(async (tx) => {
+      const [egg] = await tx
+        .select({
+          id: unhatchedEggs.id,
+          eggTypeId: unhatchedEggs.eggTypeId,
+          slotIndex: unhatchedEggs.slotIndex
+        })
+        .from(unhatchedEggs)
+        .where(
+          and(
+            eq(unhatchedEggs.id, body.unhatchedEggId!),
+            eq(unhatchedEggs.ownerUserId, identity.userId),
+            eq(unhatchedEggs.state, 'ready_for_incubation')
+          )
+        )
+        .limit(1);
+      if (!egg) return { kind: 'not_found' as const };
+
+      await tx.delete(unhatchedEggs).where(eq(unhatchedEggs.id, egg.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_unhatched_egg_discarded',
+        sourceType: 'player_action',
+        sourceId: egg.id,
+        delta: {
+          unhatchedEggs: [
+            {
+              id: egg.id,
+              eggTypeId: egg.eggTypeId,
+              slotIndex: egg.slotIndex,
+              change: -1
+            }
+          ],
+          resources: []
+        }
+      });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok')
+      return reply.code(404).send({ message: 'Ei nicht gefunden.' });
+    return { ok: true };
+  });
+
+
+  app.post('/api/game/inventory/pet-slots/discard', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { petId?: string; confirm?: boolean };
+    if (!body.petId || body.confirm !== true)
+      return reply
+        .code(400)
+        .send({ message: 'petId and confirm=true are required' });
+
+    const result = await db.transaction(async (tx) => {
+      const [pet] = await tx
+        .select({
+          id: pets.id,
+          petTypeId: pets.petTypeId,
+          slotIndex: pets.slotIndex,
+          selectedForEvent: pets.selectedForEvent
+        })
+        .from(pets)
+        .where(
+          and(
+            eq(pets.id, body.petId!),
+            eq(pets.ownerUserId, identity.userId),
+            eq(pets.isScrapped, false)
+          )
+        )
+        .limit(1);
+      if (!pet) return { kind: 'not_found' as const };
+
+      const now = new Date();
+      await tx
+        .update(pets)
+        .set({
+          slotIndex: null,
+          selectedForEvent: false,
+          isScrapped: true,
+          scrappedAt: now
+        })
+        .where(eq(pets.id, pet.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_pet_discarded',
+        sourceType: 'player_action',
+        sourceId: pet.id,
+        delta: {
+          pets: [
+            {
+              id: pet.id,
+              petTypeId: pet.petTypeId,
+              slotIndex: pet.slotIndex,
+              selectedForEvent: pet.selectedForEvent,
+              change: -1
+            }
+          ],
+          resources: []
+        }
+      });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok')
+      return reply.code(404).send({ message: 'Pet nicht gefunden.' });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/consumable-slots/discard', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as {
+      consumableSlotId?: string;
+      confirm?: boolean;
+    };
+    if (!body.consumableSlotId || body.confirm !== true)
+      return reply
+        .code(400)
+        .send({ message: 'consumableSlotId and confirm=true are required' });
+
+    const result = await db.transaction(async (tx) => {
+      const [consumable] = await tx
+        .select({
+          id: consumableInventorySlots.id,
+          consumableTypeId: consumableInventorySlots.consumableTypeId,
+          slotIndex: consumableInventorySlots.slotIndex
+        })
+        .from(consumableInventorySlots)
+        .where(
+          and(
+            eq(consumableInventorySlots.id, body.consumableSlotId!),
+            eq(consumableInventorySlots.userId, identity.userId)
+          )
+        )
+        .limit(1);
+      if (!consumable) return { kind: 'not_found' as const };
+
+      await tx
+        .delete(consumableInventorySlots)
+        .where(eq(consumableInventorySlots.id, consumable.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_consumable_discarded',
+        sourceType: 'player_action',
+        sourceId: consumable.id,
+        delta: {
+          consumables: [
+            {
+              id: consumable.id,
+              consumableTypeId: consumable.consumableTypeId,
+              slotIndex: consumable.slotIndex,
+              change: -1
+            }
+          ],
+          resources: []
+        }
+      });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok')
+      return reply.code(404).send({ message: 'Verbrauchbares nicht gefunden.' });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/equipment-slots/discard', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as {
+      equipmentSlotId?: string;
+      confirm?: boolean;
+    };
+    if (!body.equipmentSlotId || body.confirm !== true)
+      return reply
+        .code(400)
+        .send({ message: 'equipmentSlotId and confirm=true are required' });
+
+    const result = await db.transaction(async (tx) => {
+      const [equipment] = await tx
+        .select({
+          id: equipmentInventorySlots.id,
+          equipmentTypeId: equipmentInventorySlots.equipmentTypeId,
+          slotIndex: equipmentInventorySlots.slotIndex
+        })
+        .from(equipmentInventorySlots)
+        .where(
+          and(
+            eq(equipmentInventorySlots.id, body.equipmentSlotId!),
+            eq(equipmentInventorySlots.userId, identity.userId)
+          )
+        )
+        .limit(1);
+      if (!equipment) return { kind: 'not_found' as const };
+
+      await tx
+        .delete(equipmentInventorySlots)
+        .where(eq(equipmentInventorySlots.id, equipment.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_equipment_discarded',
+        sourceType: 'player_action',
+        sourceId: equipment.id,
+        delta: {
+          equipment: [
+            {
+              id: equipment.id,
+              equipmentTypeId: equipment.equipmentTypeId,
+              slotIndex: equipment.slotIndex,
+              change: -1
+            }
+          ],
+          resources: []
+        }
+      });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok')
+      return reply.code(404).send({ message: 'Ausrüstung nicht gefunden.' });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/hat-slots/discard', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { hatSlotId?: string; confirm?: boolean };
+    if (!body.hatSlotId || body.confirm !== true)
+      return reply
+        .code(400)
+        .send({ message: 'hatSlotId and confirm=true are required' });
+
+    const result = await db.transaction(async (tx) => {
+      const [hat] = await tx
+        .select({
+          id: hatInventorySlots.id,
+          hatTypeId: hatInventorySlots.hatTypeId,
+          slotIndex: hatInventorySlots.slotIndex
+        })
+        .from(hatInventorySlots)
+        .where(
+          and(
+            eq(hatInventorySlots.id, body.hatSlotId!),
+            eq(hatInventorySlots.userId, identity.userId)
+          )
+        )
+        .limit(1);
+      if (!hat) return { kind: 'not_found' as const };
+
+      await tx.delete(hatInventorySlots).where(eq(hatInventorySlots.id, hat.id));
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_hat_discarded',
+        sourceType: 'player_action',
+        sourceId: hat.id,
+        delta: {
+          hats: [
+            {
+              id: hat.id,
+              hatTypeId: hat.hatTypeId,
+              slotIndex: hat.slotIndex,
+              change: -1
+            }
+          ],
+          resources: []
+        }
+      });
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind !== 'ok')
+      return reply.code(404).send({ message: 'Hut nicht gefunden.' });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/consumable-slots/move', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as {
+      consumableSlotId?: string;
+      toSlotIndex?: number;
+    };
+    if (!body.consumableSlotId || !Number.isInteger(body.toSlotIndex))
+      return reply
+        .code(400)
+        .send({ message: 'consumableSlotId and toSlotIndex are required' });
     const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
-      const dimensions = await getDimensionsInTx(tx, identity.userId, 'items');
+      const dimensions = await getDimensionsInTx(
+        tx,
+        identity.userId,
+        'consumables'
+      );
       if (!isSlotInsideGrid(toSlotIndex, dimensions))
         return { kind: 'slot_out_of_bounds' as const };
       const [source] = await tx
         .select({
-          id: consumableItemStacks.id,
-          consumableTypeId: consumableItemStacks.consumableTypeId,
-          amount: consumableItemStacks.amount,
-          slotIndex: consumableItemStacks.slotIndex
+          id: consumableInventorySlots.id,
+          slotIndex: consumableInventorySlots.slotIndex
         })
-        .from(consumableItemStacks)
+        .from(consumableInventorySlots)
         .where(
           and(
-            eq(consumableItemStacks.id, body.itemStackId!),
-            eq(consumableItemStacks.userId, identity.userId)
+            eq(consumableInventorySlots.id, body.consumableSlotId!),
+            eq(consumableInventorySlots.userId, identity.userId)
           )
         )
         .limit(1);
@@ -1906,74 +2269,44 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         return { kind: 'not_found' as const };
       const [destination] = await tx
         .select({
-          id: consumableItemStacks.id,
-          consumableTypeId: consumableItemStacks.consumableTypeId,
-          amount: consumableItemStacks.amount,
-          slotIndex: consumableItemStacks.slotIndex
+          id: consumableInventorySlots.id,
+          slotIndex: consumableInventorySlots.slotIndex
         })
-        .from(consumableItemStacks)
+        .from(consumableInventorySlots)
         .where(
           and(
-            eq(consumableItemStacks.userId, identity.userId),
-            eq(consumableItemStacks.slotIndex, toSlotIndex),
-            not(eq(consumableItemStacks.id, source.id))
+            eq(consumableInventorySlots.userId, identity.userId),
+            eq(consumableInventorySlots.slotIndex, toSlotIndex),
+            not(eq(consumableInventorySlots.id, source.id))
           )
         )
         .limit(1);
-      if (
-        destination &&
-        destination.consumableTypeId === source.consumableTypeId
-      ) {
-        const stackLimit = getStackLimit(source.consumableTypeId);
-        const moveAmount = Math.min(
-          source.amount,
-          Math.max(0, stackLimit - destination.amount)
-        );
-        if (moveAmount <= 0) return { kind: 'stack_full' as const };
+      await tx
+        .update(consumableInventorySlots)
+        .set({ slotIndex: null, updatedAt: new Date() })
+        .where(eq(consumableInventorySlots.id, source.id));
+      if (destination)
         await tx
-          .update(consumableItemStacks)
-          .set({
-            amount: destination.amount + moveAmount,
-            updatedAt: new Date()
-          })
-          .where(eq(consumableItemStacks.id, destination.id));
-        if (source.amount === moveAmount)
-          await tx
-            .delete(consumableItemStacks)
-            .where(eq(consumableItemStacks.id, source.id));
-        else
-          await tx
-            .update(consumableItemStacks)
-            .set({ amount: source.amount - moveAmount, updatedAt: new Date() })
-            .where(eq(consumableItemStacks.id, source.id));
-      } else {
-        await tx
-          .update(consumableItemStacks)
-          .set({ slotIndex: null, updatedAt: new Date() })
-          .where(eq(consumableItemStacks.id, source.id));
-        if (destination)
-          await tx
-            .update(consumableItemStacks)
-            .set({ slotIndex: source.slotIndex, updatedAt: new Date() })
-            .where(eq(consumableItemStacks.id, destination.id));
-        await tx
-          .update(consumableItemStacks)
-          .set({ slotIndex: toSlotIndex, updatedAt: new Date() })
-          .where(eq(consumableItemStacks.id, source.id));
-      }
+          .update(consumableInventorySlots)
+          .set({ slotIndex: source.slotIndex, updatedAt: new Date() })
+          .where(eq(consumableInventorySlots.id, destination.id));
+      await tx
+        .update(consumableInventorySlots)
+        .set({ slotIndex: toSlotIndex, updatedAt: new Date() })
+        .where(eq(consumableInventorySlots.id, source.id));
       await tx.insert(economyLedger).values({
         userId: identity.userId,
         actorUserId: identity.userId,
-        eventType: 'inventory_item_slot_moved',
+        eventType: 'inventory_consumable_slot_moved',
         sourceType: 'player_action',
         sourceId: source.id,
         delta: {
-          itemStacks: [
+          consumableSlots: [
             {
               id: source.id,
               fromSlotIndex: source.slotIndex,
               toSlotIndex,
-              destinationStackId: destination?.id ?? null
+              swappedWithSlotId: destination?.id ?? null
             }
           ]
         }
@@ -1983,6 +2316,58 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (result.kind !== 'ok')
       return reply.code(409).send({ message: result.kind });
     return { ok: true };
+  });
+
+  app.post('/api/game/inventory/equipment-slots/move', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { equipmentSlotId?: string; toSlotIndex?: number };
+    if (!body.equipmentSlotId || !Number.isInteger(body.toSlotIndex))
+      return reply.code(400).send({ message: 'equipmentSlotId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
+    const result = await db.transaction(async (tx) => {
+      const dimensions = await getDimensionsInTx(tx, identity.userId, 'equipment');
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      const [source] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.id, body.equipmentSlotId!), eq(equipmentInventorySlots.userId, identity.userId))).limit(1);
+      if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
+      const [destination] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.userId, identity.userId), eq(equipmentInventorySlots.slotIndex, toSlotIndex), not(eq(equipmentInventorySlots.id, source.id)))).limit(1);
+      await tx.update(equipmentInventorySlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, source.id));
+      if (destination) await tx.update(equipmentInventorySlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, destination.id));
+      await tx.update(equipmentInventorySlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, source.id));
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_equipment_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { equipmentSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
+      return { kind: 'ok' as const };
+    });
+    if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/hat-slots/move', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { hatSlotId?: string; toSlotIndex?: number };
+    if (!body.hatSlotId || !Number.isInteger(body.toSlotIndex))
+      return reply.code(400).send({ message: 'hatSlotId and toSlotIndex are required' });
+    const toSlotIndex = body.toSlotIndex as number;
+    const result = await db.transaction(async (tx) => {
+      const dimensions = await getDimensionsInTx(tx, identity.userId, 'hats');
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      const [source] = await tx.select({ id: hatInventorySlots.id, slotIndex: hatInventorySlots.slotIndex }).from(hatInventorySlots).where(and(eq(hatInventorySlots.id, body.hatSlotId!), eq(hatInventorySlots.userId, identity.userId))).limit(1);
+      if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
+      const [destination] = await tx.select({ id: hatInventorySlots.id, slotIndex: hatInventorySlots.slotIndex }).from(hatInventorySlots).where(and(eq(hatInventorySlots.userId, identity.userId), eq(hatInventorySlots.slotIndex, toSlotIndex), not(eq(hatInventorySlots.id, source.id)))).limit(1);
+      await tx.update(hatInventorySlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(hatInventorySlots.id, source.id));
+      if (destination) await tx.update(hatInventorySlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(hatInventorySlots.id, destination.id));
+      await tx.update(hatInventorySlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(hatInventorySlots.id, source.id));
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_hat_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { hatSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
+      return { kind: 'ok' as const };
+    });
+    if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
+    return { ok: true };
+  });
+
+  app.post('/api/game/inventory/item-slots/move', async (_request, reply) => {
+    return reply.code(410).send({
+      message: 'Item slots were split into consumable, equipment, and hat inventories.'
+    });
   });
 
   app.get('/api/game/inventory/stream', async (request, reply) => {

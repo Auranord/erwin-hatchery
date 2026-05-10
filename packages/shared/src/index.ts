@@ -8,7 +8,7 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
-export const INVENTORY_KINDS = ['incubators', 'unhatched_eggs', 'pets', 'items'] as const;
+export const INVENTORY_KINDS = ['incubators', 'unhatched_eggs', 'pets', 'consumables', 'equipment', 'hats'] as const;
 export type InventoryKind = (typeof INVENTORY_KINDS)[number];
 
 export type InventoryGridDimensions = {
@@ -25,21 +25,23 @@ export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; b
   incubators: { columns: 4, baseRows: 1, bonusRows: 0, upgradeRef: null },
   unhatched_eggs: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'unhatched_egg_inventory_rows' },
   pets: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'pet_inventory_rows' },
-  items: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'item_inventory_rows' }
+  consumables: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'consumable_inventory_rows' },
+  equipment: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'equipment_inventory_rows' },
+  hats: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'hat_inventory_rows' }
 };
 
-export const DEFAULT_ITEM_STACK_LIMIT = 99;
+export const DEFAULT_CONSUMABLE_STACK_LIMIT = 1;
 
-export const ITEM_STACK_LIMITS: Record<string, number> = {
-  default: DEFAULT_ITEM_STACK_LIMIT
+export const CONSUMABLE_STACK_LIMITS: Record<string, number> = {
+  default: DEFAULT_CONSUMABLE_STACK_LIMIT
 };
 
 export function getInventoryCapacity(dimensions: Pick<InventoryGridDimensions, 'columns' | 'rows'>): number {
   return dimensions.columns * dimensions.rows;
 }
 
-export function getStackLimit(itemTypeId: string): number {
-  return ITEM_STACK_LIMITS[itemTypeId] ?? DEFAULT_ITEM_STACK_LIMIT;
+export function getConsumableStackLimit(consumableTypeId: string): number {
+  return CONSUMABLE_STACK_LIMITS[consumableTypeId] ?? DEFAULT_CONSUMABLE_STACK_LIMIT;
 }
 
 export function isSlotInsideGrid(slotIndex: number, dimensions: Pick<InventoryGridDimensions, 'columns' | 'rows'>): boolean {
@@ -101,8 +103,17 @@ export type PetSlotItem = {
 export type ConsumableSlotItem = {
   id: string;
   consumableTypeId: string;
-  amount: number;
-  stackLimit: number;
+  quantity: number;
+};
+
+export type EquipmentSlotItem = {
+  id: string;
+  equipmentTypeId: string;
+};
+
+export type HatSlotItem = {
+  id: string;
+  hatTypeId: string;
 };
 
 export type SlottedGrid<T> = {
@@ -121,4 +132,6 @@ export type PlayerInventoryPayload = {
   unhatchedEggs: SlottedGrid<UnhatchedEggSlotItem>;
   pets: SlottedGrid<PetSlotItem>;
   consumables: SlottedGrid<ConsumableSlotItem>;
+  equipment: SlottedGrid<EquipmentSlotItem>;
+  hats: SlottedGrid<HatSlotItem>;
 };

@@ -382,24 +382,8 @@ export const consumableTypes = pgTable('consumable_types', {
   isActive: boolean('is_active').notNull().default(true)
 });
 
-export const consumableInventory = pgTable(
-  'consumable_inventory',
-  {
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id),
-    consumableTypeId: text('consumable_type_id')
-      .notNull()
-      .references(() => consumableTypes.id),
-    amount: integer('amount').notNull().default(0)
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.consumableTypeId] })
-  })
-);
-
-export const consumableItemStacks = pgTable(
-  'consumable_item_stacks',
+export const consumableInventorySlots = pgTable(
+  'consumable_inventory_slots',
   {
     id: uuid('id').defaultRandom().primaryKey(),
     userId: uuid('user_id')
@@ -408,7 +392,6 @@ export const consumableItemStacks = pgTable(
     consumableTypeId: text('consumable_type_id')
       .notNull()
       .references(() => consumableTypes.id),
-    amount: integer('amount').notNull().default(0),
     slotIndex: integer('slot_index'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -418,7 +401,82 @@ export const consumableItemStacks = pgTable(
       .defaultNow()
   },
   (table) => ({
-    userSlotUnique: uniqueIndex('consumable_item_stacks_user_slot_idx').on(
+    userSlotUnique: uniqueIndex('consumable_inventory_slots_user_slot_idx').on(
+      table.userId,
+      table.slotIndex
+    )
+  })
+);
+
+export const equipmentTypes = pgTable('equipment_types', {
+  id: text('id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  description: text('description').notNull(),
+  equipmentSlot: text('equipment_slot').notNull(),
+  config: jsonb('config').notNull().default({}),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+});
+
+export const equipmentInventorySlots = pgTable(
+  'equipment_inventory_slots',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    equipmentTypeId: text('equipment_type_id')
+      .notNull()
+      .references(() => equipmentTypes.id),
+    slotIndex: integer('slot_index'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+  },
+  (table) => ({
+    userSlotUnique: uniqueIndex('equipment_inventory_slots_user_slot_idx').on(
+      table.userId,
+      table.slotIndex
+    )
+  })
+);
+
+export const hatTypes = pgTable('hat_types', {
+  id: text('id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  description: text('description').notNull(),
+  config: jsonb('config').notNull().default({}),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+});
+
+export const hatInventorySlots = pgTable(
+  'hat_inventory_slots',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    hatTypeId: text('hat_type_id')
+      .notNull()
+      .references(() => hatTypes.id),
+    slotIndex: integer('slot_index'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+  },
+  (table) => ({
+    userSlotUnique: uniqueIndex('hat_inventory_slots_user_slot_idx').on(
       table.userId,
       table.slotIndex
     )
