@@ -94,7 +94,7 @@ type PetInstanceDefaults = {
 const DEFAULT_WALDWACHTEL_INSTANCE: PetInstanceDefaults = {
   rarityId: 'regular',
   classId: 'balanced',
-  elementId: 'nature'
+  elementId: 'earth'
 };
 
 const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
@@ -112,7 +112,7 @@ const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
   turmeule: {
     rarityId: 'regular',
     classId: 'striker',
-    elementId: 'shadow'
+    elementId: 'fire'
   },
   goldener_erwin: {
     rarityId: 'rare',

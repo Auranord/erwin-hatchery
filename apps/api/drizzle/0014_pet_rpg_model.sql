@@ -48,10 +48,10 @@ INSERT INTO pet_classes (id, label_de, description, related_enemy_stat) VALUES
 ON CONFLICT (id) DO UPDATE SET label_de = excluded.label_de, description = excluded.description, related_enemy_stat = excluded.related_enemy_stat;
 
 INSERT INTO elements (id, label_de, description, is_active) VALUES
-  ('nature', 'Natur', 'Natur-Element.', true),
-  ('air', 'Luft', 'Luft-Element.', true),
+  ('fire', 'Feuer', 'Feuer-Element.', true),
   ('water', 'Wasser', 'Wasser-Element.', true),
-  ('shadow', 'Schatten', 'Schatten-Element.', true),
+  ('air', 'Luft', 'Luft-Element.', true),
+  ('earth', 'Erde', 'Erde-Element.', true),
   ('light', 'Licht', 'Licht-Element.', true)
 ON CONFLICT (id) DO UPDATE SET label_de = excluded.label_de, description = excluded.description, is_active = true;
 
@@ -182,7 +182,7 @@ END;
 ALTER TABLE pets ALTER COLUMN class_id SET NOT NULL;
 
 ALTER TABLE pets ADD COLUMN IF NOT EXISTS element_id text;
-UPDATE pets SET element_id = coalesce(element_id, CASE species_id WHEN 'glitzer_spatz' THEN 'air' WHEN 'moorente' THEN 'water' WHEN 'turmeule' THEN 'shadow' WHEN 'goldener_erwin' THEN 'light' ELSE 'nature' END);
+UPDATE pets SET element_id = coalesce(element_id, CASE species_id WHEN 'glitzer_spatz' THEN 'air' WHEN 'moorente' THEN 'water' WHEN 'turmeule' THEN 'fire' WHEN 'goldener_erwin' THEN 'light' ELSE 'earth' END);
 ALTER TABLE pets ALTER COLUMN element_id SET NOT NULL;
 
 ALTER TABLE pets ADD COLUMN IF NOT EXISTS ability_id text;
