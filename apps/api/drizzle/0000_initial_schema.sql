@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS pet_classes (
   id text PRIMARY KEY,
   label_de text NOT NULL,
   description text NOT NULL DEFAULT '',
-  is_active boolean NOT NULL DEFAULT true
+  related_enemy_stat text NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS elements (
