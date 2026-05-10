@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -242,6 +242,8 @@ export function App(): JSX.Element {
   const [pendingPetScrap, setPendingPetScrap] = useState<PetScrapTarget | null>(
     null
   );
+  const [isPetScrapSubmitting, setIsPetScrapSubmitting] = useState(false);
+  const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [gameMessage, setGameMessage] = useState<string | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -337,6 +339,26 @@ export function App(): JSX.Element {
 
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
+
+  useEffect(() => {
+    if (!pendingPetScrap) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    petScrapConfirmButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isPetScrapSubmitting) {
+        setPendingPetScrap(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPetScrapSubmitting, pendingPetScrap]);
 
   async function refreshOwnInventory(): Promise<void> {
     const response = await fetch('/api/game/inventory', {
@@ -442,6 +464,21 @@ export function App(): JSX.Element {
     setGameMessage(
       error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
     );
+  }
+
+  async function confirmPetScrap(): Promise<void> {
+    if (!pendingPetScrap || isPetScrapSubmitting) return;
+
+    setIsPetScrapSubmitting(true);
+    try {
+      await scrapPet(pendingPetScrap.petId);
+      setPendingPetScrap(null);
+      await refreshOwnInventory();
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setIsPetScrapSubmitting(false);
+    }
   }
 
   async function handleDropToSlot(
@@ -1204,7 +1241,8 @@ export function App(): JSX.Element {
     kind: Exclude<DragPayload['kind'], 'incubator'>,
     renderItem: (item: T, slotIndex: number) => JSX.Element,
     className = '',
-    getItemClassName?: (item: T) => string
+    getItemClassName?: (item: T) => string,
+    renderAfterGrid?: JSX.Element
   ): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
@@ -1249,6 +1287,7 @@ export function App(): JSX.Element {
             </div>
           ))}
         </div>
+        {renderAfterGrid}
       </section>
     );
   }
@@ -1301,13 +1340,19 @@ export function App(): JSX.Element {
     );
   }
 
-  function renderPetTrashSlot(): JSX.Element {
+  function renderPetTrashSlot(columns: number): JSX.Element {
     return (
-      <section className="pet-trash-panel">
+      <div
+        className="inventory-grid pet-trash-row"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
+        }}
+      >
         <div
           role="button"
           tabIndex={0}
           className={`inventory-slot pet-trash-drop-target empty ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
+          style={{ gridColumn: `${columns} / span 1` }}
           onDragOver={(event) => {
             if ((dragPayload ?? selectedPayload)?.kind === 'pet')
               event.preventDefault();
@@ -1324,14 +1369,10 @@ export function App(): JSX.Element {
         >
           <div className="slot-content pet-trash-content">
             <strong>Verwerten</strong>
-            <span>Pet hier ablegen</span>
-            <span>Gibt Aufgebrochene Eier</span>
+            <span>Pet ablegen</span>
           </div>
         </div>
-        <p className="inventory-capacity">
-          Vor dem Löschen erscheint eine Bestätigung.
-        </p>
-      </section>
+      </div>
     );
   }
 
@@ -1511,38 +1552,41 @@ export function App(): JSX.Element {
                   </p>
                 ) : null}
                 {pendingPetScrap ? (
-                  <div
-                    className="confirm-panel"
-                    role="alertdialog"
-                    aria-modal="true"
-                    aria-label="Pet verwerten bestätigen"
-                  >
-                    <strong>{pendingPetScrap.label} wirklich verwerten?</strong>
-                    <p>
-                      Dieses Pet wird dauerhaft gelöscht und du erhältst
-                      Aufgebrochene Eier abhängig von der Seltenheit (
-                      {pendingPetScrap.rarity}).
-                    </p>
-                    <div className="confirm-actions">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void scrapPet(pendingPetScrap.petId)
-                            .then(async () => {
-                              setPendingPetScrap(null);
-                              await refreshOwnInventory();
-                            })
-                            .catch(showGameError)
-                        }
-                      >
-                        Ja, verwerten
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPendingPetScrap(null)}
-                      >
-                        Abbrechen
-                      </button>
+                  <div className="modal-backdrop" role="presentation">
+                    <div
+                      className="confirm-modal"
+                      role="alertdialog"
+                      aria-modal="true"
+                      aria-labelledby="pet-scrap-confirm-title"
+                      aria-describedby="pet-scrap-confirm-description"
+                    >
+                      <strong id="pet-scrap-confirm-title">
+                        {pendingPetScrap.label} wirklich verwerten?
+                      </strong>
+                      <p id="pet-scrap-confirm-description">
+                        Dieses Pet wird dauerhaft gelöscht und du erhältst
+                        Aufgebrochene Eier abhängig von der Seltenheit (
+                        {pendingPetScrap.rarity}).
+                      </p>
+                      <div className="confirm-actions">
+                        <button
+                          ref={petScrapConfirmButtonRef}
+                          type="button"
+                          onClick={() => void confirmPetScrap()}
+                          disabled={isPetScrapSubmitting}
+                        >
+                          {isPetScrapSubmitting
+                            ? 'Wird verwertet …'
+                            : 'Ja, verwerten'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingPetScrap(null)}
+                          disabled={isPetScrapSubmitting}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : null}
@@ -1621,7 +1665,6 @@ export function App(): JSX.Element {
                       Event-Slot wählen.
                     </p>
                     {renderEventPetSelectionSlot(selectedEventPet)}
-                    {renderPetTrashSlot()}
                   </section>
                   {renderGrid(
                     'Pet-Inventar',
@@ -1649,7 +1692,8 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'pet-grid-panel',
-                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : '')
+                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : ''),
+                    renderPetTrashSlot(playerInventory.pets.dimensions.columns)
                   )}
                   {renderGrid(
                     'Items',
