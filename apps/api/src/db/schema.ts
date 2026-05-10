@@ -251,6 +251,9 @@ export const petSpecies = pgTable('pet_species', {
   defaultSpd: integer('default_spd').notNull(),
   defaultGain: integer('default_gain').notNull(),
   defaultPow: integer('default_pow').notNull(),
+  defaultAbilityId: text('default_ability_id')
+    .notNull()
+    .references(() => petAbilities.id),
   assetKey: text('asset_key').notNull(),
   isActive: boolean('is_active').notNull().default(true)
 });
@@ -391,6 +394,23 @@ export const incubationJobs = pgTable('incubation_jobs', {
   progressSnapshot: jsonb('progress_snapshot').notNull()
 });
 
+export const petTraits = pgTable('pet_traits', {
+  id: text('id').primaryKey(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  hpModifier: integer('hp_modifier').notNull().default(0),
+  atkModifier: integer('atk_modifier').notNull().default(0),
+  defModifier: integer('def_modifier').notNull().default(0),
+  spdModifier: integer('spd_modifier').notNull().default(0),
+  gainModifier: integer('gain_modifier').notNull().default(0),
+  powModifier: integer('pow_modifier').notNull().default(0),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamps.updatedAt
+});
+
 export const pets = pgTable(
   'pets',
   {
@@ -442,6 +462,24 @@ export const pets = pgTable(
       table.ownerUserId,
       table.slotIndex
     )
+  })
+);
+
+export const petTraitAssignments = pgTable(
+  'pet_trait_assignments',
+  {
+    petId: uuid('pet_id')
+      .notNull()
+      .references(() => pets.id),
+    traitId: text('trait_id')
+      .notNull()
+      .references(() => petTraits.id),
+    assignedAt: timestamp('assigned_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.petId, table.traitId] })
   })
 );
 

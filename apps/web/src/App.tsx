@@ -121,6 +121,17 @@ type IncubatorItem = {
   } | null;
 };
 type EggItem = { id: string; eggTypeId: string; state: string };
+type PetTrait = {
+  id: string;
+  labelDe: string;
+  description: string;
+  hpModifier: number;
+  atkModifier: number;
+  defModifier: number;
+  spdModifier: number;
+  gainModifier: number;
+  powModifier: number;
+};
 type PetItem = {
   id: string;
   speciesId: string;
@@ -141,6 +152,7 @@ type PetItem = {
   baseGain: number;
   basePow: number;
   equippedHatId: string | null;
+  traits: PetTrait[];
   selectedForEvent: boolean;
   createdAt: string;
 };
@@ -1896,6 +1908,15 @@ export function App(): JSX.Element {
                         <span>
                           {pet.rarityLabelDe} · {pet.classLabelDe}
                         </span>
+                        <span>Fähigkeit: {pet.abilityLabelDe}</span>
+                        {pet.traits.length > 0 ? (
+                          <span>
+                            Traits:{' '}
+                            {pet.traits
+                              .map((trait) => trait.labelDe)
+                              .join(', ')}
+                          </span>
+                        ) : null}
                         <span>
                           HP {pet.baseHp} · ATK {pet.baseAtk}
                         </span>

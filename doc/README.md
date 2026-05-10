@@ -25,9 +25,9 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 ## Pet RPG model direction
 
-- `pet_species` defines species templates and default stats; `pets` stores owned instances with permanent base stats created from species defaults plus hatch variance and later training.
+- `pet_species` defines species templates, default stats, and the default ability; `pets` stores owned instances with permanent base stats and an individual `ability_id` copied from the species at hatch so later training can change that one pet without changing the species template.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
-- Each pet has exactly one class, one element, one ability, and may equip one cosmetic hat. Hats are cosmetic only; gems are out of scope for this pass.
+- Each pet has exactly one class, one element, one individual ability, a list of assigned traits, and may equip one cosmetic hat. Traits are data objects with positive or negative modifiers for each base stat (HP/ATK/DEF/SPD/GAIN/POW). Hats are cosmetic only; gems are out of scope for this pass.
 - Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access

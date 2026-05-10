@@ -86,6 +86,18 @@ export type IncubatorSlotItem = {
 
 export type UnhatchedEggSlotItem = { id: string; eggTypeId: string; state: string };
 
+export type PetTrait = {
+  id: string;
+  labelDe: string;
+  description: string;
+  hpModifier: number;
+  atkModifier: number;
+  defModifier: number;
+  spdModifier: number;
+  gainModifier: number;
+  powModifier: number;
+};
+
 export type PetSlotItem = {
   id: string;
   speciesId: string;
@@ -106,6 +118,7 @@ export type PetSlotItem = {
   baseGain: number;
   basePow: number;
   equippedHatId: string | null;
+  traits: PetTrait[];
   selectedForEvent: boolean;
   createdAt: string;
 };

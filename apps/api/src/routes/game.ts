@@ -21,6 +21,8 @@ import {
   petClasses,
   petRarities,
   petSpecies,
+  petTraitAssignments,
+  petTraits,
   leaderboardScores,
   users,
   gameEvents
@@ -87,41 +89,35 @@ type PetInstanceDefaults = {
   rarityId: string;
   classId: string;
   elementId: string;
-  abilityId: string;
 };
 
 const DEFAULT_WALDWACHTEL_INSTANCE: PetInstanceDefaults = {
   rarityId: 'regular',
-  classId: 'drainer',
-  elementId: 'nature',
-  abilityId: 'peck_burst'
+  classId: 'balanced',
+  elementId: 'nature'
 };
 
 const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
   waldwachtel: DEFAULT_WALDWACHTEL_INSTANCE,
   glitzer_spatz: {
     rarityId: 'regular',
-    classId: 'saboteur',
-    elementId: 'air',
-    abilityId: 'glimmer_dash'
+    classId: 'scout',
+    elementId: 'air'
   },
   moorente: {
     rarityId: 'regular',
-    classId: 'protector',
-    elementId: 'water',
-    abilityId: 'mud_guard'
+    classId: 'guardian',
+    elementId: 'water'
   },
   turmeule: {
     rarityId: 'regular',
-    classId: 'sunderer',
-    elementId: 'shadow',
-    abilityId: 'owl_strike'
+    classId: 'striker',
+    elementId: 'shadow'
   },
   goldener_erwin: {
     rarityId: 'rare',
-    classId: 'nullifier',
-    elementId: 'light',
-    abilityId: 'golden_crowl'
+    classId: 'hero',
+    elementId: 'light'
   }
 };
 
@@ -676,6 +672,36 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         )
       )
   ]);
+  const traitRows = petRows.length
+    ? await db
+        .select({
+          petId: petTraitAssignments.petId,
+          id: petTraits.id,
+          labelDe: petTraits.labelDe,
+          description: petTraits.description,
+          hpModifier: petTraits.hpModifier,
+          atkModifier: petTraits.atkModifier,
+          defModifier: petTraits.defModifier,
+          spdModifier: petTraits.spdModifier,
+          gainModifier: petTraits.gainModifier,
+          powModifier: petTraits.powModifier
+        })
+        .from(petTraitAssignments)
+        .innerJoin(petTraits, eq(petTraitAssignments.traitId, petTraits.id))
+        .where(
+          inArray(
+            petTraitAssignments.petId,
+            petRows.map((row) => row.id)
+          )
+        )
+    : [];
+  const traitsByPetId = new Map<string, typeof traitRows>();
+  for (const trait of traitRows) {
+    const existingTraits = traitsByPetId.get(trait.petId) ?? [];
+    existingTraits.push(trait);
+    traitsByPetId.set(trait.petId, existingTraits);
+  }
+
   const dimensionsByKind = new Map(
     dimensionRows.map((row) => [row.inventoryKind as InventoryKind, row])
   );
@@ -779,6 +805,9 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             baseGain: row.baseGain,
             basePow: row.basePow,
             equippedHatId: row.equippedHatId,
+            traits: (traitsByPetId.get(row.id) ?? []).map(
+              ({ petId: _petId, ...trait }) => trait
+            ),
             selectedForEvent: row.selectedForEvent,
             createdAt: toIsoTimestamp(row.createdAt)
           }
@@ -1677,7 +1706,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           defaultDef: petSpecies.defaultDef,
           defaultSpd: petSpecies.defaultSpd,
           defaultGain: petSpecies.defaultGain,
-          defaultPow: petSpecies.defaultPow
+          defaultPow: petSpecies.defaultPow,
+          defaultAbilityId: petSpecies.defaultAbilityId
         })
         .from(petSpecies)
         .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
@@ -1695,7 +1725,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           rarityId: instanceDefaults.rarityId,
           classId: instanceDefaults.classId,
           elementId: instanceDefaults.elementId,
-          abilityId: instanceDefaults.abilityId,
+          abilityId: petSpeciesRow.defaultAbilityId,
           baseHp: petSpeciesRow.defaultHp,
           baseAtk: petSpeciesRow.defaultAtk,
           baseDef: petSpeciesRow.defaultDef,

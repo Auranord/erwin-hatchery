@@ -99,7 +99,7 @@ The generated pet has:
 
 - pet species
 - permanent base stats derived from species defaults plus hatch variance
-- exactly one rarity, class, element, and ability assigned to the owned pet instance by server-side hatch rules
+- exactly one rarity, class, element, and individual ability assigned to the owned pet instance by server-side hatch rules; the initial ability is copied from the species default and can be changed later by training
 - unique pet instance ID
 - owner
 - creation/hatch metadata
@@ -134,11 +134,12 @@ MVP has 4 regular species and 1 rare species.
 
 Definitions:
 
-- `pet_species` defines species templates and default stats.
-- `pets` stores owned pet instances with their own permanent base stats.
-- A hatched pet starts from species defaults plus server-side hatch variance. Later training may permanently change the owned pet's base stats without changing the species template.
+- `pet_species` defines species templates, default stats, and the species default ability.
+- `pets` stores owned pet instances with their own permanent base stats and individual ability.
+- A hatched pet starts from species defaults plus server-side hatch variance and copies the species default ability into `pets.ability_id`. Later training may permanently change the owned pet's base stats or ability without changing the species template.
+- `pet_traits` stores reusable trait objects with positive or negative modifiers for HP, ATK, DEF, SPD, GAIN, and POW; `pet_trait_assignments` stores each pet's trait list.
 - Rarity is not a stat multiplier. `pet_rarities` represents rarity rank, display/economy metadata, future combine progression, and recycle value only.
-- Each pet has exactly one class, one element, and one ability.
+- Each pet has exactly one class, one element, and one individual ability.
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
 - Gems are not equipped on pets and should not be implemented for this pass.
 

@@ -111,14 +111,7 @@
       "idx": 15,
       "version": "7",
       "when": 1791000000000,
-      "tag": "0015_pet_class_enemy_stat",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1792000000000,
-      "tag": "0016_pet_classes_remove_legacy_active",
+      "tag": "0015_species_default_abilities_and_traits",
       "breakpoints": true
     }
   ]
