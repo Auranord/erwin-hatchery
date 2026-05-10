@@ -607,10 +607,10 @@ export function App(): JSX.Element {
         return;
       }
       if (targetKind === 'discard' && isInventoryDiscardKind(payload.kind)) {
+        const discardTarget = { kind: payload.kind, id: payload.id };
         setPendingInventoryDiscard({
-          kind: payload.kind,
-          id: payload.id,
-          label: getInventoryDiscardLabel(payload)
+          ...discardTarget,
+          label: getInventoryDiscardLabel(discardTarget)
         });
       } else if (payload.kind === 'pet' && targetKind === 'trashcan') {
         const pet = playerInventory?.pets.slots
