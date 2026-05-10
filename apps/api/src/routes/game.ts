@@ -83,6 +83,48 @@ type OverlayAlertEvent = {
 const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
+type PetInstanceDefaults = {
+  rarityId: string;
+  classId: string;
+  elementId: string;
+  abilityId: string;
+};
+
+const DEFAULT_WALDWACHTEL_INSTANCE: PetInstanceDefaults = {
+  rarityId: 'regular',
+  classId: 'balanced',
+  elementId: 'nature',
+  abilityId: 'peck_burst'
+};
+
+const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
+  waldwachtel: DEFAULT_WALDWACHTEL_INSTANCE,
+  glitzer_spatz: {
+    rarityId: 'regular',
+    classId: 'scout',
+    elementId: 'air',
+    abilityId: 'glimmer_dash'
+  },
+  moorente: {
+    rarityId: 'regular',
+    classId: 'guardian',
+    elementId: 'water',
+    abilityId: 'mud_guard'
+  },
+  turmeule: {
+    rarityId: 'regular',
+    classId: 'striker',
+    elementId: 'shadow',
+    abilityId: 'owl_strike'
+  },
+  goldener_erwin: {
+    rarityId: 'rare',
+    classId: 'hero',
+    elementId: 'light',
+    abilityId: 'golden_crowl'
+  }
+};
+
 const PET_SCRAP_REWARD_BY_RARITY: Record<string, number> = {
   common: 1,
   uncommon: 3,
@@ -1641,7 +1683,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
         .limit(1);
       if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
-      const instanceDefaults = DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ?? DEFAULT_PET_INSTANCE_BY_SPECIES.waldwachtel!;
+      const instanceDefaults =
+        DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ??
+        DEFAULT_WALDWACHTEL_INSTANCE;
 
       const [newPet] = await tx
         .insert(pets)
