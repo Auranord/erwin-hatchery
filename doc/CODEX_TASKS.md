@@ -201,7 +201,7 @@ Acceptance:
 - Do not use rarity as a stat multiplier; `pet_rarities` is for rank, display/economy metadata, combine progression, and recycle value only.
 - Each pet has exactly one class, one element, and one ability. Each pet may equip one cosmetic hat; hats never affect combat stats.
 - Do not implement gems for this pass.
-- Keep current AP, attacks made, boss class stacks, and boss element stacks on boss-event participant runtime state, not on pets.
+- Keep current AP, current HP, attacks made, effective stats, boss class stacks, and boss element stacks on boss-event participant runtime state, not on pets.
 - Future ability rules are documentation-only for now: `pet_abilities.ap_required` is the AP auto-trigger threshold; trigger when current AP and minimum attacks are met; attacks grant 20 base AP; GAIN modifies AP gained; POW scales ability effects.
 - Do not implement boss-event battle logic in code until explicitly requested.
 

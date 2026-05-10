@@ -28,7 +28,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 - `pet_species` defines species templates and default stats; `pets` stores owned instances with permanent base stats created from species defaults plus hatch variance and later training.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
 - Each pet has exactly one class, one element, one ability, and may equip one cosmetic hat. Hats are cosmetic only; gems are out of scope for this pass.
-- Future boss-event AP, attack counts, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
+- Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
 

@@ -158,7 +158,7 @@ Battle resolution must be revertible in MVP.
 - Rarity must not be used as a hidden stat multiplier. It may define rank, display/economy metadata, combine progression, and recycle value only.
 - Cosmetic hats must not affect combat stats, AP gain, ability effects, or boss-event stack values.
 - Gems are out of scope for this pass and must not be exposed as paid or random combat equipment.
-- Future boss-event AP, attacks made, class stacks, and element stacks are runtime event state, not permanent pet state.
+- Future boss-event AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime event state, not permanent pet state.
 
 ## References for implementation research
 

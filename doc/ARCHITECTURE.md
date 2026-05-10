@@ -105,7 +105,7 @@ The frontend must never decide final outcomes. It only sends user intent to the 
 
 The backend remains authoritative for hatch generation and later training. `pet_species` stores species templates/default stats, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance. Rarity metadata is limited to rank, display/economy metadata, combine progression, and recycle value; it must not be used as a stat multiplier. Each pet has exactly one class, one element, and one ability, and may equip one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Gems are intentionally out of scope for this pass.
 
-Future boss-event state such as current AP, attacks made, class stacks, and element stacks belongs on event participant runtime state, not on pet rows. Ability trigger logic is documented for later implementation only: attacks grant 20 base AP, GAIN modifies AP gained per attack, POW scales ability effects, and abilities auto-trigger when AP and minimum-attack requirements are met.
+Future boss-event state such as current AP, current HP, attacks made, effective stats, class stacks, and element stacks belongs on event participant runtime state, not on pet rows. Ability trigger logic is documented for later implementation only: attacks grant 20 base AP, GAIN modifies AP gained per attack, POW scales ability effects, and abilities auto-trigger when AP and minimum-attack requirements are met.
 
 ## Realtime MVP
 

@@ -232,7 +232,7 @@ Config table for rarity rank and economy/display metadata. Rarity is not a stat 
 
 ```text
 id text primary key -- regular, rare, epic, legendary
-display_name text not null
+label_de text not null
 rank integer not null unique
 display_config jsonb not null default '{}' -- colors, badges, labels
 economy_config jsonb not null default '{}' -- non-random shop/pricing metadata
@@ -249,26 +249,20 @@ Config table for the exactly-one class assigned to each pet. Class metadata is s
 
 ```text
 id text primary key
-display_name text not null
-description text nullable
-display_config jsonb not null default '{}'
+label_de text not null
+description text not null default ''
 is_active boolean not null default true
-created_at timestamp
-updated_at timestamp
 ```
 
-### pet_elements
+### elements
 
 Config table for the exactly-one element assigned to each pet. Element metadata is static pet identity data. Boss element stacks are runtime boss-event state and are not stored on `pets`.
 
 ```text
 id text primary key
-display_name text not null
-description text nullable
-display_config jsonb not null default '{}'
+label_de text not null
+description text not null default ''
 is_active boolean not null default true
-created_at timestamp
-updated_at timestamp
 ```
 
 ### pet_abilities
@@ -277,8 +271,8 @@ Config table for automatic pet abilities. Current AP is runtime boss-event parti
 
 ```text
 id text primary key
-display_name text not null
-description text not null
+label_de text not null
+description text not null default ''
 ap_required integer not null -- AP required to auto-trigger
 min_attacks_required integer not null default 0 -- attacks required before auto-trigger is allowed
 effect_type text not null
@@ -297,15 +291,12 @@ Config table for species templates and default stats. Species defaults are the s
 ```text
 id text primary key
 display_name text not null
-rarity_id text not null references pet_rarities(id)
-default_class_id text not null references pet_classes(id)
-default_element_id text not null references pet_elements(id)
-default_ability_id text not null references pet_abilities(id)
-role text not null
+label_de text not null
+description text not null default ''
 default_hp integer not null
-default_attack integer not null
-default_defense integer not null
-default_speed integer not null
+default_atk integer not null
+default_def integer not null
+default_spd integer not null
 default_gain integer not null
 default_pow integer not null
 asset_key text not null
@@ -321,21 +312,21 @@ Unique owned pet instances. A pet is created from its species defaults plus hatc
 ```text
 id uuid primary key
 owner_user_id uuid references users(id)
-pet_species_id text not null references pet_species(id)
-rarity_id text not null references pet_rarities(id) -- copied from species at hatch for stable economy/display
+species_id text not null references pet_species(id)
+rarity_id text not null references pet_rarities(id)
 class_id text not null references pet_classes(id)
-element_id text not null references pet_elements(id)
+element_id text not null references elements(id)
 ability_id text not null references pet_abilities(id)
-display_name text nullable
+nickname text nullable
 base_hp integer not null
-base_attack integer not null
-base_defense integer not null
-base_speed integer not null
+base_atk integer not null
+base_def integer not null
+base_spd integer not null
 base_gain integer not null
 base_pow integer not null
 hatch_variance jsonb not null -- source rolls used to derive initial permanent base stats
 training_adjustments jsonb not null default '{}' -- future additive/permanent training changes
-equipped_hat_inventory_slot_id uuid nullable unique references hat_inventory_slots(id)
+equipped_hat_id text nullable references hats(id)
 source_unhatched_egg_id uuid references unhatched_eggs(id)
 is_favorite boolean not null default false
 selected_for_event boolean not null default false
@@ -349,12 +340,12 @@ Pet invariants:
 
 - Every pet has exactly one class, one element, and one ability.
 - `pet_species` defines defaults; `pets` stores the owned instance and its own permanent base stats.
-- Hatch generation starts from species defaults, applies hatch variance, copies species rarity/class/element/ability unless a future explicit rule overrides them, and writes an immutable ledger row.
+- Hatch generation starts from species defaults, applies hatch variance, assigns the owned pet instance rarity/class/element/ability from explicit server-side hatch rules, and writes an immutable ledger row.
 - Training may later modify `base_*` values or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
 - Gems are intentionally not part of the pet equipment model in this pass. Do not add gem equip slots or gem combat effects yet.
-- Current AP, attacks made, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
+- Current AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
 
 Future fields can include level, experience, fusion count, and richer training history.
 
@@ -398,9 +389,9 @@ created_at timestamp
 updated_at timestamp
 unique(user_id, slot_index)
 
-hat_types:
+hats:
 id text primary key
-display_name text
+label_de text
 description text
 config jsonb -- cosmetic display/positioning metadata only; no stat effects
 is_active boolean
@@ -409,7 +400,7 @@ created_at timestamp
 hat_inventory_slots:
 id uuid primary key
 user_id uuid references users(id)
-hat_type_id text references hat_types(id)
+hat_id text references hats(id)
 slot_index integer nullable
 created_at timestamp
 updated_at timestamp
@@ -429,7 +420,7 @@ updated_at timestamp
 
 ## Battle/event tables
 
-Boss-event combat formulas are documentation-only for this pass. Do not implement battle logic in code yet. Runtime AP, attacks made, class stacks, element stacks, and temporary effects belong on participant runtime state, not on `pets`.
+Boss-event combat formulas are documentation-only for this pass. Do not implement battle logic in code yet. Runtime AP, current HP, attacks made, effective stats, class stacks, element stacks, and temporary effects belong on participant runtime state, not on `pets`.
 
 ### game_events
 
@@ -453,7 +444,7 @@ user_id uuid references users(id)
 pet_id uuid references pets(id)
 placement integer nullable
 points_awarded integer not null default 0
-runtime_state jsonb not null default '{}' -- boss-event state: current_ap, attacks_made, class stacks, element stacks, temporary effects
+runtime_state jsonb not null default '{}' -- boss-event state: current_ap, current_hp, attacks_made, effective_stats, class stacks, element stacks, temporary effects
 created_at timestamp
 ```
 
@@ -479,7 +470,7 @@ turmeule         Turmeule         regular striker         class=striker  element
 goldener_erwin   Goldener Erwin   rare    rare_allrounder   class=hero     element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
 ```
 
-Seed `pet_rarities`, `pet_classes`, `pet_elements`, and `pet_abilities` before seeding `pet_species`. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
+Seed `pet_rarities`, `pet_classes`, `elements`, `pet_abilities`, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
 
 ### Egg type
 

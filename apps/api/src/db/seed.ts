@@ -1,6 +1,15 @@
 import { db, pool } from './client.js';
 import { inArray, sql } from 'drizzle-orm';
-import { eggLootTableEntries, eggTypes, petTypes } from './schema.js';
+import {
+  eggLootTableEntries,
+  eggTypes,
+  elements,
+  hats,
+  petAbilities,
+  petClasses,
+  petRarities,
+  petSpecies
+} from './schema.js';
 
 const SEEDED_EGG_TYPE_IDS = ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'] as const;
 
@@ -9,11 +18,11 @@ const BASE_LOOT_ENTRIES = [
   { weight: 2200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 20 },
   { weight: 1200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 35 },
   { weight: 600, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 60 },
-  { weight: 800, outcomeType: 'pet', petTypeId: 'waldwachtel' },
-  { weight: 800, outcomeType: 'pet', petTypeId: 'glitzer_spatz' },
-  { weight: 700, outcomeType: 'pet', petTypeId: 'moorente' },
-  { weight: 700, outcomeType: 'pet', petTypeId: 'turmeule' },
-  { weight: 200, outcomeType: 'pet', petTypeId: 'goldener_erwin' }
+  { weight: 800, outcomeType: 'pet', petSpeciesId: 'waldwachtel' },
+  { weight: 800, outcomeType: 'pet', petSpeciesId: 'glitzer_spatz' },
+  { weight: 700, outcomeType: 'pet', petSpeciesId: 'moorente' },
+  { weight: 700, outcomeType: 'pet', petSpeciesId: 'turmeule' },
+  { weight: 200, outcomeType: 'pet', petSpeciesId: 'goldener_erwin' }
 ] as const;
 
 async function seed(): Promise<void> {
@@ -35,14 +44,47 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.insert(petTypes).values([
-    { id: 'waldwachtel', displayName: 'Waldwachtel', rarity: 'regular', role: 'balanced', baseHp: 100, baseAttack: 10, baseDefense: 8, baseSpeed: 12, assetKey: 'pet_waldwachtel', isActive: true },
-    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', rarity: 'regular', role: 'fast', baseHp: 80, baseAttack: 8, baseDefense: 5, baseSpeed: 18, assetKey: 'pet_glitzer_spatz', isActive: true },
-    { id: 'moorente', displayName: 'Moorente', rarity: 'regular', role: 'tank', baseHp: 120, baseAttack: 7, baseDefense: 12, baseSpeed: 7, assetKey: 'pet_moorente', isActive: true },
-    { id: 'turmeule', displayName: 'Turmeule', rarity: 'regular', role: 'striker', baseHp: 90, baseAttack: 14, baseDefense: 7, baseSpeed: 10, assetKey: 'pet_turmeule', isActive: true },
-    { id: 'goldener_erwin', displayName: 'Goldener Erwin', rarity: 'rare', role: 'allrounder', baseHp: 110, baseAttack: 13, baseDefense: 10, baseSpeed: 13, assetKey: 'pet_goldener_erwin', isActive: true }
+  await db.insert(petRarities).values([
+    { id: 'regular', labelDe: 'Gewöhnlich', rank: 1, recycleCrackedEggs: 10, isActive: true },
+    { id: 'rare', labelDe: 'Selten', rank: 2, recycleCrackedEggs: 35, isActive: true }
+  ]).onConflictDoUpdate({ target: petRarities.id, set: { isActive: true } });
+
+  await db.insert(petClasses).values([
+    { id: 'balanced', labelDe: 'Ausgeglichen', description: 'Flexible Basisklasse.', isActive: true },
+    { id: 'scout', labelDe: 'Späher', description: 'Schnelle Basisklasse.', isActive: true },
+    { id: 'guardian', labelDe: 'Wächter', description: 'Robuste Basisklasse.', isActive: true },
+    { id: 'striker', labelDe: 'Angreifer', description: 'Offensive Basisklasse.', isActive: true },
+    { id: 'hero', labelDe: 'Held', description: 'Besondere Allrounder-Klasse.', isActive: true }
+  ]).onConflictDoUpdate({ target: petClasses.id, set: { isActive: true } });
+
+  await db.insert(elements).values([
+    { id: 'nature', labelDe: 'Natur', description: 'Natur-Element.', isActive: true },
+    { id: 'air', labelDe: 'Luft', description: 'Luft-Element.', isActive: true },
+    { id: 'water', labelDe: 'Wasser', description: 'Wasser-Element.', isActive: true },
+    { id: 'shadow', labelDe: 'Schatten', description: 'Schatten-Element.', isActive: true },
+    { id: 'light', labelDe: 'Licht', description: 'Licht-Element.', isActive: true }
+  ]).onConflictDoUpdate({ target: elements.id, set: { isActive: true } });
+
+  await db.insert(petAbilities).values([
+    { id: 'peck_burst', labelDe: 'Pick-Salve', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true },
+    { id: 'glimmer_dash', labelDe: 'Glitzer-Sprint', description: 'Automatische Basisfähigkeit.', apRequired: 80, minAttacksRequired: 2, effectType: 'damage', isActive: true },
+    { id: 'mud_guard', labelDe: 'Moorwache', description: 'Automatische Basisfähigkeit.', apRequired: 120, minAttacksRequired: 1, effectType: 'shield', isActive: true },
+    { id: 'owl_strike', labelDe: 'Eulenschlag', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true },
+    { id: 'golden_crowl', labelDe: 'Goldruf', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true }
+  ]).onConflictDoUpdate({ target: petAbilities.id, set: { isActive: true } });
+
+  await db.insert(hats).values([
+    { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
+  ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
+
+  await db.insert(petSpecies).values([
+    { id: 'waldwachtel', displayName: 'Waldwachtel', labelDe: 'Waldwachtel', description: 'Gemütliche Waldwachtel.', defaultHp: 100, defaultAtk: 10, defaultDef: 8, defaultSpd: 12, defaultGain: 100, defaultPow: 100, assetKey: 'pet_waldwachtel', isActive: true },
+    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', labelDe: 'Glitzer-Spatz', description: 'Funkelnder schneller Spatz.', defaultHp: 80, defaultAtk: 8, defaultDef: 5, defaultSpd: 18, defaultGain: 115, defaultPow: 90, assetKey: 'pet_glitzer_spatz', isActive: true },
+    { id: 'moorente', displayName: 'Moorente', labelDe: 'Moorente', description: 'Zähe Ente aus dem Moor.', defaultHp: 120, defaultAtk: 7, defaultDef: 12, defaultSpd: 7, defaultGain: 90, defaultPow: 105, assetKey: 'pet_moorente', isActive: true },
+    { id: 'turmeule', displayName: 'Turmeule', labelDe: 'Turmeule', description: 'Wachsame Eule vom Turm.', defaultHp: 90, defaultAtk: 14, defaultDef: 7, defaultSpd: 10, defaultGain: 100, defaultPow: 115, assetKey: 'pet_turmeule', isActive: true },
+    { id: 'goldener_erwin', displayName: 'Goldener Erwin', labelDe: 'Goldener Erwin', description: 'Legendär glänzender Erwin.', defaultHp: 110, defaultAtk: 13, defaultDef: 10, defaultSpd: 13, defaultGain: 105, defaultPow: 110, assetKey: 'pet_goldener_erwin', isActive: true }
   ]).onConflictDoUpdate({
-    target: petTypes.id,
+    target: petSpecies.id,
     set: { isActive: true }
   });
 
@@ -56,13 +98,12 @@ async function seed(): Promise<void> {
         outcomeType: entry.outcomeType,
         resourceType: 'resourceType' in entry ? entry.resourceType : null,
         resourceAmount: 'resourceAmount' in entry ? entry.resourceAmount : null,
-        petTypeId: 'petTypeId' in entry ? entry.petTypeId : null,
-        isActive: true
+        petSpeciesId: 'petSpeciesId' in entry ? entry.petSpeciesId : null
       }))
     )
   );
 
-  console.info('Seed completed for egg types, pet types, and loot tables.');
+  console.info('Seed completed for egg types, pet RPG definitions, pet species, and loot tables.');
 }
 
 void seed()

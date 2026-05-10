@@ -247,7 +247,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         .select({
           id: unhatchedEggs.id,
           eggTypeId: unhatchedEggs.eggTypeId,
-          hiddenPetTypeId: unhatchedEggs.hiddenPetTypeId,
+          hiddenPetSpeciesId: unhatchedEggs.hiddenPetSpeciesId,
           state: unhatchedEggs.state,
           slotIndex: unhatchedEggs.slotIndex
         })
@@ -256,7 +256,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       db
         .select({
           id: pets.id,
-          petTypeId: pets.petTypeId,
+          speciesId: pets.speciesId,
           slotIndex: pets.slotIndex,
           createdAt: pets.createdAt
         })
@@ -574,7 +574,15 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
           userId: pet.ownerUserId,
           petId: pet.id,
           placement: score.placement,
-          pointsAwarded: score.pointsAwarded
+          pointsAwarded: score.pointsAwarded,
+          runtimeState: {
+            current_ap: 0,
+            current_hp: null,
+            attacks_made: 0,
+            effective_stats: null,
+            class_stacks: {},
+            element_stacks: {}
+          }
         });
 
         await tx

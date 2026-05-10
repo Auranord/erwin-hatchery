@@ -99,7 +99,7 @@ The generated pet has:
 
 - pet species
 - permanent base stats derived from species defaults plus hatch variance
-- exactly one class, one element, and one ability copied from the species defaults unless a future explicit rule overrides them
+- exactly one rarity, class, element, and ability assigned to the owned pet instance by server-side hatch rules
 - unique pet instance ID
 - owner
 - creation/hatch metadata
@@ -142,7 +142,7 @@ Definitions:
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
 - Gems are not equipped on pets and should not be implemented for this pass.
 
-Suggested initial pet species:
+Suggested initial hatch assignments for the initial pet species:
 
 | Pet species    |  Rarity | Role             | Class    | Element | Ability     |  HP | Attack | Defense | Speed | GAIN | POW |
 | -------------- | ------: | ---------------- | -------- | ------- | ----------- | --: | -----: | ------: | ----: | ---: | --: |
@@ -244,7 +244,7 @@ Future battle versions can use pet stats, consumables, cosmetic hats, training, 
 
 Future boss-event RPG rules:
 
-- Current AP is runtime state on boss-event participant state, not on the pet.
+- Current AP, current HP, attacks made, and effective stats are runtime state on boss-event participant state, not on the pet.
 - Boss class stacks and boss element stacks are runtime boss-event state, not pet state.
 - `pet_abilities.ap_required` defines the AP needed to automatically trigger an ability.
 - Abilities auto-trigger when `current_ap >= ability.ap_required` and `attacks_made >= ability.min_attacks_required`.

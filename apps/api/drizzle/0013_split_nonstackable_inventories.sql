@@ -26,10 +26,10 @@ CREATE TABLE "equipment_inventory_slots" (
   "updated_at" timestamp with time zone NOT NULL DEFAULT now()
 );
 
-CREATE TABLE "hat_types" (
+CREATE TABLE IF NOT EXISTS "hats" (
   "id" text PRIMARY KEY NOT NULL,
-  "display_name" text NOT NULL,
-  "description" text NOT NULL,
+  "label_de" text NOT NULL,
+  "description" text NOT NULL DEFAULT '',
   "config" jsonb NOT NULL DEFAULT '{}'::jsonb,
   "is_active" boolean NOT NULL DEFAULT true,
   "created_at" timestamp with time zone NOT NULL DEFAULT now()
@@ -38,7 +38,7 @@ CREATE TABLE "hat_types" (
 CREATE TABLE "hat_inventory_slots" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "user_id" uuid NOT NULL REFERENCES "users"("id"),
-  "hat_type_id" text NOT NULL REFERENCES "hat_types"("id"),
+  "hat_id" text NOT NULL REFERENCES "hats"("id"),
   "slot_index" integer,
   "created_at" timestamp with time zone NOT NULL DEFAULT now(),
   "updated_at" timestamp with time zone NOT NULL DEFAULT now()

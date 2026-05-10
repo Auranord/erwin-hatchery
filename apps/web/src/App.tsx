@@ -105,7 +105,7 @@ type IncubatorItem = {
   isAvailable: boolean;
   metadata: {
     speedMultiplierBasisPoints: number;
-    rarityBonusBasisPoints: number;
+    specialBonusBasisPoints: number;
     fuelBehavior: string;
     specialEffectConfig: unknown;
   };
@@ -123,14 +123,24 @@ type IncubatorItem = {
 type EggItem = { id: string; eggTypeId: string; state: string };
 type PetItem = {
   id: string;
-  petTypeId: string;
-  petTypeDisplayName: string;
-  rarity: string;
-  role: string;
-  hp: number;
-  attack: number;
-  defense: number;
-  speed: number;
+  speciesId: string;
+  speciesDisplayName: string;
+  rarityId: string;
+  rarityLabelDe: string;
+  classId: string;
+  classLabelDe: string;
+  elementId: string;
+  elementLabelDe: string;
+  abilityId: string;
+  abilityLabelDe: string;
+  nickname: string | null;
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
+  baseSpd: number;
+  baseGain: number;
+  basePow: number;
+  equippedHatId: string | null;
   selectedForEvent: boolean;
   createdAt: string;
 };
@@ -140,7 +150,7 @@ type ConsumableItem = {
   quantity: number;
 };
 type EquipmentItem = { id: string; equipmentTypeId: string };
-type HatItem = { id: string; hatTypeId: string };
+type HatItem = { id: string; hatId: string };
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
@@ -539,7 +549,7 @@ export function App(): JSX.Element {
     const hat = playerInventory?.hats.slots
       .map((cell) => cell.item)
       .find((item): item is HatItem => item?.id === payload.id);
-    return hat?.hatTypeId ?? 'diesen Hut';
+    return hat?.hatId ?? 'diesen Hut';
   }
 
   function showGameError(error: unknown): void {
@@ -609,8 +619,8 @@ export function App(): JSX.Element {
           .find((item): item is PetItem => item?.id === payload.id);
         setPendingPetScrap({
           petId: payload.id,
-          label: pet?.petTypeDisplayName ?? 'dieses Pet',
-          rarity: pet?.rarity ?? 'unbekannt'
+          label: pet?.speciesDisplayName ?? 'dieses Pet',
+          rarity: pet?.rarityLabelDe ?? 'unbekannt'
         });
       } else if (payload.kind === 'egg' && targetKind === 'egg')
         await postInventoryMove('/api/game/inventory/egg-slots/move', {
@@ -1428,7 +1438,7 @@ export function App(): JSX.Element {
         >
           {selectedPet ? (
             <div className="slot-content">
-              <strong>{selectedPet.petTypeDisplayName}</strong>
+              <strong>{selectedPet.speciesDisplayName}</strong>
               <span>Event-Pet</span>
             </div>
           ) : (
@@ -1438,15 +1448,15 @@ export function App(): JSX.Element {
         <div className="event-pet-details">
           <span className="event-pet-label">Event-Auswahl</span>
           <strong>
-            {selectedPet?.petTypeDisplayName ?? 'Kein Pet ausgewählt'}
+            {selectedPet?.speciesDisplayName ?? 'Kein Pet ausgewählt'}
           </strong>
           <div className="event-pet-stat-grid">
-            <span>Seltenheit: {selectedPet?.rarity ?? '—'}</span>
-            <span>Rolle: {selectedPet?.role ?? '—'}</span>
-            <span>HP: {selectedPet?.hp ?? '—'}</span>
-            <span>ATK: {selectedPet?.attack ?? '—'}</span>
-            <span>DEF: {selectedPet?.defense ?? '—'}</span>
-            <span>SPD: {selectedPet?.speed ?? '—'}</span>
+            <span>Seltenheit: {selectedPet?.rarityLabelDe ?? '—'}</span>
+            <span>Klasse: {selectedPet?.classLabelDe ?? '—'}</span>
+            <span>HP: {selectedPet?.baseHp ?? '—'}</span>
+            <span>ATK: {selectedPet?.baseAtk ?? '—'}</span>
+            <span>DEF: {selectedPet?.baseDef ?? '—'}</span>
+            <span>SPD: {selectedPet?.baseSpd ?? '—'}</span>
           </div>
         </div>
       </section>
@@ -1882,12 +1892,12 @@ export function App(): JSX.Element {
                         onDragEnd={() => setDragPayload(null)}
                         className="slot-content"
                       >
-                        <strong>{pet.petTypeDisplayName}</strong>
+                        <strong>{pet.speciesDisplayName}</strong>
                         <span>
-                          {pet.rarity} · {pet.role}
+                          {pet.rarityLabelDe} · {pet.classLabelDe}
                         </span>
                         <span>
-                          HP {pet.hp} · ATK {pet.attack}
+                          HP {pet.baseHp} · ATK {pet.baseAtk}
                         </span>
                         {pet.selectedForEvent ? (
                           <span className="event-pet-badge">Event-Pet</span>
@@ -1959,7 +1969,7 @@ export function App(): JSX.Element {
                         onDragEnd={() => setDragPayload(null)}
                         className="slot-content"
                       >
-                        <strong>{hat.hatTypeId}</strong>
+                        <strong>{hat.hatId}</strong>
                         <span>Einzeln</span>
                       </div>
                     ),
