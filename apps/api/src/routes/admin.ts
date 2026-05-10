@@ -448,7 +448,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
       const eggTypeCandidates = requestedEggTypeId
         ? [requestedEggTypeId]
-        : ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'];
+        : ['beta_egg'];
       const availableEggTypes = await db
         .select({ id: eggTypes.id, isActive: eggTypes.isActive })
         .from(eggTypes);

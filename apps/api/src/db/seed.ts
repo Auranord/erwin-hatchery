@@ -12,26 +12,147 @@ import {
   petTraits
 } from './schema.js';
 
-const SEEDED_EGG_TYPE_IDS = ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'] as const;
+const BETA_EGG_TYPE_ID = 'beta_egg';
+const LEGACY_SEEDED_EGG_TYPE_IDS = [
+  'common_mystery_egg',
+  'uncommon_mystery_egg',
+  'rare_mystery_egg'
+] as const;
+const PLACEHOLDER_ABILITY_IDS = [
+  'peck_burst',
+  'glimmer_dash',
+  'mud_guard',
+  'owl_strike',
+  'golden_crowl'
+] as const;
+const PLACEHOLDER_TRAIT_IDS = ['sturdy', 'sharp', 'focused'] as const;
 
-const BASE_LOOT_ENTRIES = [
-  { weight: 2800, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 10 },
-  { weight: 2200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 20 },
-  { weight: 1200, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 35 },
-  { weight: 600, outcomeType: 'resource', resourceType: 'cracked_eggs', resourceAmount: 60 },
-  { weight: 800, outcomeType: 'pet', petSpeciesId: 'waldwachtel' },
-  { weight: 800, outcomeType: 'pet', petSpeciesId: 'glitzer_spatz' },
-  { weight: 700, outcomeType: 'pet', petSpeciesId: 'moorente' },
-  { weight: 700, outcomeType: 'pet', petSpeciesId: 'turmeule' },
-  { weight: 200, outcomeType: 'pet', petSpeciesId: 'goldener_erwin' }
+const DEFAULT_ABILITY_ID = 'beta_instinct';
+
+const PET_RARITIES = [
+  { id: 'common', labelDe: 'Gewöhnlich', rank: 1, recycleCrackedEggs: 1, isActive: true },
+  { id: 'uncommon', labelDe: 'Ungewöhnlich', rank: 2, recycleCrackedEggs: 3, isActive: true },
+  { id: 'rare', labelDe: 'Selten', rank: 3, recycleCrackedEggs: 8, isActive: true },
+  { id: 'epic', labelDe: 'Episch', rank: 4, recycleCrackedEggs: 20, isActive: true },
+  { id: 'legendary', labelDe: 'Legendär', rank: 5, recycleCrackedEggs: 50, isActive: true }
 ] as const;
 
+type RarityId = (typeof PET_RARITIES)[number]['id'];
+type ClassId = 'protector' | 'sunderer' | 'saboteur' | 'drainer' | 'nullifier';
+type ElementId = 'fire' | 'water' | 'air' | 'earth' | 'light';
+
+type SeedPet = {
+  code: string;
+  displayName: string;
+  rarity: RarityId;
+  weight: number;
+  element: ElementId;
+  classId: ClassId;
+};
+
+const PET_POOL = [
+  { code: 'glutfink', displayName: 'Glutfink', rarity: 'common', weight: 70, element: 'fire', classId: 'nullifier' },
+  { code: 'bachente', displayName: 'Bachente', rarity: 'common', weight: 70, element: 'water', classId: 'nullifier' },
+  { code: 'windlerche', displayName: 'Windlerche', rarity: 'common', weight: 70, element: 'air', classId: 'nullifier' },
+  { code: 'kieseltaube', displayName: 'Kieseltaube', rarity: 'common', weight: 70, element: 'earth', classId: 'protector' },
+  { code: 'funkenmeise', displayName: 'Funkenmeise', rarity: 'common', weight: 70, element: 'fire', classId: 'protector' },
+  { code: 'schilfreiher', displayName: 'Schilfreiher', rarity: 'common', weight: 70, element: 'water', classId: 'sunderer' },
+  { code: 'mooswachtel', displayName: 'Mooswachtel', rarity: 'common', weight: 70, element: 'air', classId: 'sunderer' },
+  { code: 'erdspatz', displayName: 'Erdspatz', rarity: 'common', weight: 70, element: 'earth', classId: 'saboteur' },
+  { code: 'rauchsegler', displayName: 'Rauchsegler', rarity: 'common', weight: 70, element: 'fire', classId: 'saboteur' },
+  { code: 'tropfenmoewe', displayName: 'Tropfenmöwe', rarity: 'common', weight: 70, element: 'water', classId: 'drainer' },
+  { code: 'wolkenzaunkoenig', displayName: 'Wolkenzaunkönig', rarity: 'common', weight: 70, element: 'air', classId: 'drainer' },
+  { code: 'knollenhuhn', displayName: 'Knollenhuhn', rarity: 'common', weight: 70, element: 'earth', classId: 'drainer' },
+  { code: 'kerzenkauz', displayName: 'Kerzenkauz', rarity: 'uncommon', weight: 30, element: 'fire', classId: 'protector' },
+  { code: 'perlentaucher', displayName: 'Perlentaucher', rarity: 'uncommon', weight: 30, element: 'water', classId: 'protector' },
+  { code: 'sturmschwalbe', displayName: 'Sturmschwalbe', rarity: 'uncommon', weight: 30, element: 'air', classId: 'sunderer' },
+  { code: 'lehmspecht', displayName: 'Lehmspecht', rarity: 'uncommon', weight: 30, element: 'earth', classId: 'sunderer' },
+  { code: 'kupferfasan', displayName: 'Kupferfasan', rarity: 'uncommon', weight: 30, element: 'fire', classId: 'sunderer' },
+  { code: 'regenkranich', displayName: 'Regenkranich', rarity: 'uncommon', weight: 30, element: 'water', classId: 'saboteur' },
+  { code: 'boeenfalke', displayName: 'Böenfalke', rarity: 'uncommon', weight: 30, element: 'air', classId: 'saboteur' },
+  { code: 'wurzelrabe', displayName: 'Wurzelrabe', rarity: 'uncommon', weight: 30, element: 'earth', classId: 'saboteur' },
+  { code: 'phoenixkueken', displayName: 'Phönixküken', rarity: 'rare', weight: 14, element: 'fire', classId: 'nullifier' },
+  { code: 'mondreiher', displayName: 'Mondreiher', rarity: 'rare', weight: 14, element: 'water', classId: 'nullifier' },
+  { code: 'himmelsgreifchen', displayName: 'Himmelsgreifchen', rarity: 'rare', weight: 14, element: 'air', classId: 'protector' },
+  { code: 'runenwachtel', displayName: 'Runenwachtel', rarity: 'rare', weight: 14, element: 'air', classId: 'protector' },
+  { code: 'kristallkraehe', displayName: 'Kristallkrähe', rarity: 'rare', weight: 14, element: 'earth', classId: 'drainer' },
+  { code: 'obsidianule', displayName: 'Obsidianule', rarity: 'rare', weight: 14, element: 'earth', classId: 'drainer' },
+  { code: 'sonnenroc', displayName: 'Sonnenroc', rarity: 'epic', weight: 11, element: 'fire', classId: 'sunderer' },
+  { code: 'tiefseealk', displayName: 'Tiefseealk', rarity: 'epic', weight: 11, element: 'water', classId: 'saboteur' },
+  { code: 'bergwyrm_kondor', displayName: 'Bergwyrm-Kondor', rarity: 'epic', weight: 11, element: 'earth', classId: 'drainer' },
+  { code: 'lichtseraph', displayName: 'Lichtseraph', rarity: 'legendary', weight: 3, element: 'light', classId: 'nullifier' }
+] as const satisfies readonly SeedPet[];
+
+function statValueForRarity(rarity: RarityId): number {
+  const rarityRank = PET_RARITIES.find((entry) => entry.id === rarity)?.rank;
+  if (!rarityRank) throw new Error(`Unknown rarity ${rarity}`);
+  return 10 + (rarityRank - 1) * 2;
+}
+
+function countBy<T extends string>(values: readonly T[]): Record<T, number> {
+  return values.reduce(
+    (counts, value) => ({ ...counts, [value]: (counts[value] ?? 0) + 1 }),
+    {} as Record<T, number>
+  );
+}
+
+function assertCount(counts: Record<string, number>, key: string, expected: number): void {
+  const actual = counts[key] ?? 0;
+  if (actual !== expected) {
+    throw new Error(`Invalid seed data: expected ${key} count ${expected}, got ${actual}`);
+  }
+}
+
+function validatePetPool(): void {
+  const totalWeight = PET_POOL.reduce((sum, pet) => sum + pet.weight, 0);
+  if (totalWeight !== 1200) {
+    throw new Error(`Invalid seed data: expected total weight 1200, got ${totalWeight}`);
+  }
+
+  const rarityWeights = PET_POOL.reduce<Record<string, number>>((totals, pet) => {
+    totals[pet.rarity] = (totals[pet.rarity] ?? 0) + pet.weight;
+    return totals;
+  }, {});
+  assertCount(rarityWeights, 'common', 840);
+  assertCount(rarityWeights, 'uncommon', 240);
+  assertCount(rarityWeights, 'rare', 84);
+  assertCount(rarityWeights, 'epic', 33);
+  assertCount(rarityWeights, 'legendary', 3);
+
+  const classCounts = countBy(PET_POOL.map((pet) => pet.classId));
+  for (const classId of ['protector', 'sunderer', 'saboteur', 'drainer', 'nullifier'] as const) {
+    assertCount(classCounts, classId, 6);
+  }
+
+  const elementCounts = countBy(PET_POOL.map((pet) => pet.element));
+  assertCount(elementCounts, 'fire', 7);
+  assertCount(elementCounts, 'water', 7);
+  assertCount(elementCounts, 'air', 7);
+  assertCount(elementCounts, 'earth', 8);
+  assertCount(elementCounts, 'light', 1);
+
+  const nonLegendaryLightPets = PET_POOL.filter(
+    (pet) => pet.element === 'light' && pet.rarity !== 'legendary'
+  );
+  if (nonLegendaryLightPets.length > 0) {
+    throw new Error('Invalid seed data: light element must be legendary-only');
+  }
+}
+
 async function seed(): Promise<void> {
-  await db.insert(eggTypes).values([
-    { id: 'common_mystery_egg', displayName: 'Gewöhnliches Mystery Ei', baseIncubationSeconds: 14400, twitchRewardCost: 1000, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true },
-    { id: 'uncommon_mystery_egg', displayName: 'Ungewöhnliches Mystery Ei', baseIncubationSeconds: 21600, twitchRewardCost: 2500, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true },
-    { id: 'rare_mystery_egg', displayName: 'Seltenes Mystery Ei', baseIncubationSeconds: 28800, twitchRewardCost: 5000, twitchRewardBackgroundColor: '#9147ff', twitchRewardGlobalCooldownMinutes: 0, twitchRewardMaxPerStream: 0, twitchRewardMaxPerUserPerStream: 1, isActive: true }
-  ]).onConflictDoUpdate({
+  validatePetPool();
+
+  await db.insert(eggTypes).values({
+    id: BETA_EGG_TYPE_ID,
+    displayName: 'Beta Ei',
+    baseIncubationSeconds: 14400,
+    twitchRewardCost: 1000,
+    twitchRewardBackgroundColor: '#9147ff',
+    twitchRewardGlobalCooldownMinutes: 0,
+    twitchRewardMaxPerStream: 0,
+    twitchRewardMaxPerUserPerStream: 1,
+    isActive: true
+  }).onConflictDoUpdate({
     target: eggTypes.id,
     set: {
       displayName: sql`excluded.display_name`,
@@ -45,17 +166,26 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.insert(petRarities).values([
-    { id: 'regular', labelDe: 'Gewöhnlich', rank: 1, recycleCrackedEggs: 10, isActive: true },
-    { id: 'rare', labelDe: 'Selten', rank: 2, recycleCrackedEggs: 35, isActive: true }
-  ]).onConflictDoUpdate({ target: petRarities.id, set: { isActive: true } });
+  await db.update(eggTypes).set({ isActive: false }).where(inArray(eggTypes.id, [...LEGACY_SEEDED_EGG_TYPE_IDS]));
+
+  await db.insert(petRarities).values(PET_RARITIES).onConflictDoUpdate({
+    target: petRarities.id,
+    set: {
+      labelDe: sql`excluded.label_de`,
+      rank: sql`excluded.rank`,
+      recycleCrackedEggs: sql`excluded.recycle_cracked_eggs`,
+      isActive: true
+    }
+  });
+
+  await db.update(petRarities).set({ isActive: false }).where(inArray(petRarities.id, ['regular']));
 
   await db.insert(petClasses).values([
-    { id: 'protector', labelDe: 'Beschützer', description: 'Schützt das Team, indem er gegnerischen Angriffsdruck bindet.', relatedEnemyStat: 'ATK' },
-    { id: 'sunderer', labelDe: 'Spalter', description: 'Bricht zähe Verteidigungen auf und zielt auf gegnerische DEF.', relatedEnemyStat: 'DEF' },
-    { id: 'saboteur', labelDe: 'Saboteur', description: 'Stört schnelle Gegner und zielt auf gegnerische SPD.', relatedEnemyStat: 'SPD' },
-    { id: 'drainer', labelDe: 'Entlader', description: 'Bremst den gegnerischen AP-Aufbau und zielt auf GAIN.', relatedEnemyStat: 'GAIN' },
-    { id: 'nullifier', labelDe: 'Bannbrecher', description: 'Schwächt gegnerische Fähigkeitseffekte und zielt auf POW.', relatedEnemyStat: 'POW' }
+    { id: 'protector', labelDe: 'Beschützer', description: 'Senkt gegnerischen ATK.', relatedEnemyStat: 'ATK' },
+    { id: 'sunderer', labelDe: 'Spalter', description: 'Senkt gegnerische DEF.', relatedEnemyStat: 'DEF' },
+    { id: 'saboteur', labelDe: 'Saboteur', description: 'Senkt gegnerische SPD.', relatedEnemyStat: 'SPD' },
+    { id: 'drainer', labelDe: 'Entlader', description: 'Senkt gegnerischen GAIN.', relatedEnemyStat: 'GAIN' },
+    { id: 'nullifier', labelDe: 'Bannbrecher', description: 'Senkt gegnerischen POW.', relatedEnemyStat: 'POW' }
   ]).onConflictDoUpdate({
     target: petClasses.id,
     set: {
@@ -72,7 +202,7 @@ async function seed(): Promise<void> {
     { id: 'water', labelDe: 'Wasser', description: 'Wasser-Element.', isActive: true },
     { id: 'air', labelDe: 'Luft', description: 'Luft-Element.', isActive: true },
     { id: 'earth', labelDe: 'Erde', description: 'Erde-Element.', isActive: true },
-    { id: 'light', labelDe: 'Licht', description: 'Licht-Element.', isActive: true }
+    { id: 'light', labelDe: 'Licht', description: 'Legendäres Licht-Element.', isActive: true }
   ]).onConflictDoUpdate({
     target: elements.id,
     set: {
@@ -84,54 +214,86 @@ async function seed(): Promise<void> {
 
   await db.delete(elements).where(inArray(elements.id, ['nature', 'shadow']));
 
-  await db.insert(petAbilities).values([
-    { id: 'peck_burst', labelDe: 'Pick-Salve', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true },
-    { id: 'glimmer_dash', labelDe: 'Glitzer-Sprint', description: 'Automatische Basisfähigkeit.', apRequired: 80, minAttacksRequired: 2, effectType: 'damage', isActive: true },
-    { id: 'mud_guard', labelDe: 'Moorwache', description: 'Automatische Basisfähigkeit.', apRequired: 120, minAttacksRequired: 1, effectType: 'shield', isActive: true },
-    { id: 'owl_strike', labelDe: 'Eulenschlag', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true },
-    { id: 'golden_crowl', labelDe: 'Goldruf', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true }
-  ]).onConflictDoUpdate({ target: petAbilities.id, set: { isActive: true } });
+  await db.insert(petAbilities).values({
+    id: DEFAULT_ABILITY_ID,
+    labelDe: 'Beta-Instinkt',
+    description: 'Einheitliche Platzhalterfähigkeit für alle MVP-Pets.',
+    apRequired: 100,
+    minAttacksRequired: 1,
+    effectType: 'placeholder',
+    isActive: true
+  }).onConflictDoUpdate({
+    target: petAbilities.id,
+    set: {
+      labelDe: sql`excluded.label_de`,
+      description: sql`excluded.description`,
+      apRequired: sql`excluded.ap_required`,
+      minAttacksRequired: sql`excluded.min_attacks_required`,
+      effectType: sql`excluded.effect_type`,
+      isActive: true
+    }
+  });
 
-  await db.insert(petTraits).values([
-    { id: 'sturdy', labelDe: 'Robust', description: 'Mehr HP, etwas weniger SPD.', hpModifier: 10, atkModifier: 0, defModifier: 0, spdModifier: -2, gainModifier: 0, powModifier: 0, isActive: true },
-    { id: 'sharp', labelDe: 'Scharfsinnig', description: 'Mehr ATK, etwas weniger DEF.', hpModifier: 0, atkModifier: 2, defModifier: -2, spdModifier: 0, gainModifier: 0, powModifier: 0, isActive: true },
-    { id: 'focused', labelDe: 'Fokussiert', description: 'Mehr POW, etwas weniger GAIN.', hpModifier: 0, atkModifier: 0, defModifier: 0, spdModifier: 0, gainModifier: -5, powModifier: 10, isActive: true }
-  ]).onConflictDoUpdate({ target: petTraits.id, set: { isActive: true } });
+  await db.update(petAbilities).set({ isActive: false }).where(inArray(petAbilities.id, [...PLACEHOLDER_ABILITY_IDS]));
+  await db.update(petTraits).set({ isActive: false }).where(inArray(petTraits.id, [...PLACEHOLDER_TRAIT_IDS]));
 
   await db.insert(hats).values([
     { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
   ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
 
-  await db.insert(petSpecies).values([
-    { id: 'waldwachtel', displayName: 'Waldwachtel', labelDe: 'Waldwachtel', description: 'Gemütliche Waldwachtel.', defaultHp: 100, defaultAtk: 10, defaultDef: 8, defaultSpd: 12, defaultGain: 100, defaultPow: 100, defaultAbilityId: 'peck_burst', assetKey: 'pet_waldwachtel', isActive: true },
-    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', labelDe: 'Glitzer-Spatz', description: 'Funkelnder schneller Spatz.', defaultHp: 80, defaultAtk: 8, defaultDef: 5, defaultSpd: 18, defaultGain: 115, defaultPow: 90, defaultAbilityId: 'glimmer_dash', assetKey: 'pet_glitzer_spatz', isActive: true },
-    { id: 'moorente', displayName: 'Moorente', labelDe: 'Moorente', description: 'Zähe Ente aus dem Moor.', defaultHp: 120, defaultAtk: 7, defaultDef: 12, defaultSpd: 7, defaultGain: 90, defaultPow: 105, defaultAbilityId: 'mud_guard', assetKey: 'pet_moorente', isActive: true },
-    { id: 'turmeule', displayName: 'Turmeule', labelDe: 'Turmeule', description: 'Wachsame Eule vom Turm.', defaultHp: 90, defaultAtk: 14, defaultDef: 7, defaultSpd: 10, defaultGain: 100, defaultPow: 115, defaultAbilityId: 'owl_strike', assetKey: 'pet_turmeule', isActive: true },
-    { id: 'goldener_erwin', displayName: 'Goldener Erwin', labelDe: 'Goldener Erwin', description: 'Legendär glänzender Erwin.', defaultHp: 110, defaultAtk: 13, defaultDef: 10, defaultSpd: 13, defaultGain: 105, defaultPow: 110, defaultAbilityId: 'golden_crowl', assetKey: 'pet_goldener_erwin', isActive: true }
-  ]).onConflictDoUpdate({
+  await db.insert(petSpecies).values(
+    PET_POOL.map((pet) => {
+      const statValue = statValueForRarity(pet.rarity);
+      return {
+        id: pet.code,
+        displayName: pet.displayName,
+        labelDe: pet.displayName,
+        description: `${pet.displayName} aus dem Beta-Petpool.`,
+        defaultHp: statValue * 10,
+        defaultAtk: statValue,
+        defaultDef: statValue,
+        defaultSpd: statValue,
+        defaultGain: statValue,
+        defaultPow: statValue,
+        defaultAbilityId: DEFAULT_ABILITY_ID,
+        assetKey: `pet_${pet.code}`,
+        isActive: true
+      };
+    })
+  ).onConflictDoUpdate({
     target: petSpecies.id,
     set: {
+      displayName: sql`excluded.display_name`,
+      labelDe: sql`excluded.label_de`,
+      description: sql`excluded.description`,
+      defaultHp: sql`excluded.default_hp`,
+      defaultAtk: sql`excluded.default_atk`,
+      defaultDef: sql`excluded.default_def`,
+      defaultSpd: sql`excluded.default_spd`,
+      defaultGain: sql`excluded.default_gain`,
+      defaultPow: sql`excluded.default_pow`,
       defaultAbilityId: sql`excluded.default_ability_id`,
+      assetKey: sql`excluded.asset_key`,
       isActive: true
     }
   });
 
-  await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [...SEEDED_EGG_TYPE_IDS]));
+  await db.update(petSpecies).set({ isActive: false }).where(inArray(petSpecies.id, ['waldwachtel', 'glitzer_spatz', 'moorente', 'turmeule', 'goldener_erwin']));
+
+  await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [BETA_EGG_TYPE_ID, ...LEGACY_SEEDED_EGG_TYPE_IDS]));
 
   await db.insert(eggLootTableEntries).values(
-    SEEDED_EGG_TYPE_IDS.flatMap((eggTypeId) =>
-      BASE_LOOT_ENTRIES.map((entry) => ({
-        eggTypeId,
-        weight: entry.weight,
-        outcomeType: entry.outcomeType,
-        resourceType: 'resourceType' in entry ? entry.resourceType : null,
-        resourceAmount: 'resourceAmount' in entry ? entry.resourceAmount : null,
-        petSpeciesId: 'petSpeciesId' in entry ? entry.petSpeciesId : null
-      }))
-    )
+    PET_POOL.map((pet) => ({
+      eggTypeId: BETA_EGG_TYPE_ID,
+      weight: pet.weight,
+      outcomeType: 'pet',
+      resourceType: null,
+      resourceAmount: null,
+      petSpeciesId: pet.code
+    }))
   );
 
-  console.info('Seed completed for egg types, pet RPG definitions, pet species, and loot tables.');
+  console.info('Seed completed for Beta Ei, MVP pet pool, and weighted pet loot table.');
 }
 
 void seed()

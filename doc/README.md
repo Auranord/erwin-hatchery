@@ -27,7 +27,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 - `pet_species` defines species templates, default stats, and the default ability; `pets` stores owned instances with permanent base stats and an individual `ability_id` copied from the species at hatch so later training can change that one pet without changing the species template.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
-- Each pet has exactly one class, one element, one individual ability, a list of assigned traits, and may equip one cosmetic hat. Traits are data objects with positive or negative modifiers for each base stat (HP/ATK/DEF/SPD/GAIN/POW). Hats are cosmetic only; gems are out of scope for this pass.
+- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` placeholder ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only; gems are out of scope for this pass.
 - Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
@@ -94,7 +94,7 @@ Still pending for later milestones:
 
 ## Admin testing seed dependency
 
-Admin test mystery egg grants allow active or inactive mystery egg types in `egg_types`; inactivity is informational only for admin grants. The expected seeded defaults are `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
+Admin test mystery egg grants allow active or inactive mystery egg types in `egg_types`; inactivity is informational only for admin grants. The expected seeded default is the single active `beta_egg` (`Beta Ei`).
 
 Operators should verify seed state with the admin active egg type endpoint before testing grants:
 
@@ -129,7 +129,7 @@ pnpm build
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for reward IDs that are mapped to active egg types in the database.
 - Creates a provisional user by Twitch user ID when needed.
 - Resolves mystery egg outcome at redemption time and stores unhatched egg immediately.
-- Increments `common_mystery_egg` inventory by +1 and writes immutable `economy_ledger` entry.
+- Increments the configured active egg inventory, currently `beta_egg`, by +1 and writes an immutable `economy_ledger` entry.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
 ## EventSub subscription auto-sync (Milestone 3+)

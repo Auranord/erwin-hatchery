@@ -130,50 +130,44 @@ Live + high chat activity: optional future multiplier
 
 ## MVP pets
 
-MVP has 4 regular species and 1 rare species.
+MVP has a 30-species Beta pet pool seeded behind one egg type, `beta_egg` (`Beta Ei`). Erwin is not a pet.
 
 Definitions:
 
-- `pet_species` defines species templates, default stats, and the species default ability.
+- `pet_species` defines species templates, default stats, and the shared MVP placeholder ability `beta_instinct`.
 - `pets` stores owned pet instances with their own permanent base stats and individual ability.
 - A hatched pet starts from species defaults plus server-side hatch variance and copies the species default ability into `pets.ability_id`. Later training may permanently change the owned pet's base stats or ability without changing the species template.
-- `pet_traits` stores reusable trait objects with positive or negative modifiers for HP, ATK, DEF, SPD, GAIN, and POW; `pet_trait_assignments` stores each pet's trait list.
-- Rarity is not a stat multiplier. `pet_rarities` represents rarity rank, display/economy metadata, future combine progression, and recycle value only.
-- Each pet has exactly one class, one element, and one individual ability.
+- The seeded MVP pool does not include traits. The trait tables remain schema-only for future training/content systems.
+- Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
+- Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
 - Gems are not equipped on pets and should not be implemented for this pass.
 
-Suggested initial hatch assignments for the initial pet species:
+Seeded class roles:
 
-| Pet species    |  Rarity | Role             | Class    | Element | Ability     |  HP | Attack | Defense | Speed | GAIN | POW |
-| -------------- | ------: | ---------------- | -------- | ------- | ----------- | --: | -----: | ------: | ----: | ---: | --: |
-| Waldwachtel    | Regular | Drainer          | Drainer   | Nature  | Peck Burst  | 100 |     10 |       8 |    12 |  100 | 100 |
-| Glitzer-Spatz  | Regular | Saboteur         | Saboteur  | Air     | Glimmer Dash|  80 |      8 |       5 |    18 |  115 |  90 |
-| Moorente       | Regular | Protector        | Protector | Water   | Mud Guard   | 120 |      7 |      12 |     7 |   90 | 105 |
-| Turmeule       | Regular | Sunderer         | Sunderer  | Shadow  | Owl Strike  |  90 |     14 |       7 |    10 |  100 | 115 |
-| Goldener Erwin |    Rare | Nullifier        | Nullifier | Light   | Golden Crowl| 110 |     13 |      10 |    13 |  105 | 110 |
+| Class | Enemy stat debuffed |
+| --- | --- |
+| Protector | ATK |
+| Sunderer | DEF |
+| Saboteur | SPD |
+| Drainer | GAIN |
+| Nullifier | POW |
 
-Each hatched pet should get slight stat variance, for example ±10%, calculated server-side at hatch time and persisted on the pet instance as permanent base stats. GAIN modifies AP gained per attack in future boss-event combat, and POW scales ability effects.
+Seeded rarity weight totals for `beta_egg`:
+
+| Rarity | Total weight | Chance |
+| --- | ---: | ---: |
+| Common | 840 | 70.00% |
+| Uncommon | 240 | 20.00% |
+| Rare | 84 | 7.00% |
+| Epic | 33 | 2.75% |
+| Legendary | 3 | 0.25% |
 
 ## Egg loot table MVP
 
-The system must support multiple egg types later. MVP initializes three mystery egg types: `common_mystery_egg`, `uncommon_mystery_egg`, and `rare_mystery_egg`.
+The system must support more egg types later. MVP initializes one active egg type: `beta_egg` (`Beta Ei`). Its loot table is a single weighted pet table with integer weights totaling 1200 and no resource outcomes.
 
-Suggested granular loot table:
-
-| Outcome         | Probability | Result                       |
-| --------------- | ----------: | ---------------------------- |
-| Resource small  |         28% | 10 cracked eggs              |
-| Resource medium |         22% | 20 cracked eggs              |
-| Resource large  |         12% | 35 cracked eggs              |
-| Resource huge   |          6% | 60 cracked eggs              |
-| Pet             |          8% | Waldwachtel unhatched egg    |
-| Pet             |          8% | Glitzer-Spatz unhatched egg  |
-| Pet             |          7% | Moorente unhatched egg       |
-| Pet             |          7% | Turmeule unhatched egg       |
-| Rare pet        |          2% | Goldener Erwin unhatched egg |
-
-Total: 100%.
+Per-pet weights are 70 for each Common pet, 30 for each Uncommon pet, 14 for each Rare pet, 11 for each Epic pet, and 3 for the Legendary pet. The backend validates seed totals before writing the pool.
 
 The content is determined when the player identifies/opens the mystery egg, not when the Channel Point redemption is processed.
 

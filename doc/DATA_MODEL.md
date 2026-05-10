@@ -127,7 +127,7 @@ primary key(user_id, resource_type)
 Config table for egg types.
 
 ```text
-id text primary key -- common_mystery_egg / uncommon_mystery_egg / rare_mystery_egg
+id text primary key -- beta_egg
 display_name text not null
 base_incubation_seconds integer not null
 is_active boolean not null default true
@@ -231,7 +231,7 @@ Do not tick every second in the database. Store accumulated progress plus the la
 Config table for rarity rank and economy/display metadata. Rarity is not a stat multiplier and must not directly scale hatch stats, battle stats, ability strength, AP generation, or boss-event stack values.
 
 ```text
-id text primary key -- regular, rare, epic, legendary
+id text primary key -- common, uncommon, rare, epic, legendary
 label_de text not null
 rank integer not null unique
 display_config jsonb not null default '{}' -- colors, badges, labels
@@ -493,39 +493,62 @@ primary key(user_id, leaderboard_type)
 
 ### Pet species
 
-```text
-waldwachtel      Waldwachtel      regular drainer    class=drainer   element=earth ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
-glitzer_spatz    Glitzer-Spatz    regular saboteur   class=saboteur  element=air    ability=glimmer_dash  HP=80  ATK=8  DEF=5  SPD=18 GAIN=115 POW=90
-moorente         Moorente         regular protector  class=protector element=water  ability=mud_guard     HP=120 ATK=7  DEF=12 SPD=7  GAIN=90  POW=105
-turmeule         Turmeule         regular sunderer   class=sunderer  element=fire   ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
-goldener_erwin   Goldener Erwin   rare    nullifier  class=nullifier element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
-```
+The MVP seed creates one 30-species Beta pet pool. Every species uses the shared placeholder ability `beta_instinct`, no seeded traits are included, and Erwin is not a pet. Default non-HP stats are 10 plus 2 for each rarity rank above Common; HP is that default stat value times 10.
 
-Seed `pet_rarities`, `pet_classes`, `elements`, `pet_abilities`, `pet_traits`, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
+| code | display_name | rarity | weight | element | class | HP | ATK/DEF/SPD/GAIN/POW |
+| --- | --- | --- | ---: | --- | --- | ---: | ---: |
+| glutfink | Glutfink | common | 70 | fire | nullifier | 100 | 10 |
+| bachente | Bachente | common | 70 | water | nullifier | 100 | 10 |
+| windlerche | Windlerche | common | 70 | air | nullifier | 100 | 10 |
+| kieseltaube | Kieseltaube | common | 70 | earth | protector | 100 | 10 |
+| funkenmeise | Funkenmeise | common | 70 | fire | protector | 100 | 10 |
+| schilfreiher | Schilfreiher | common | 70 | water | sunderer | 100 | 10 |
+| mooswachtel | Mooswachtel | common | 70 | air | sunderer | 100 | 10 |
+| erdspatz | Erdspatz | common | 70 | earth | saboteur | 100 | 10 |
+| rauchsegler | Rauchsegler | common | 70 | fire | saboteur | 100 | 10 |
+| tropfenmoewe | Tropfenmöwe | common | 70 | water | drainer | 100 | 10 |
+| wolkenzaunkoenig | Wolkenzaunkönig | common | 70 | air | drainer | 100 | 10 |
+| knollenhuhn | Knollenhuhn | common | 70 | earth | drainer | 100 | 10 |
+| kerzenkauz | Kerzenkauz | uncommon | 30 | fire | protector | 120 | 12 |
+| perlentaucher | Perlentaucher | uncommon | 30 | water | protector | 120 | 12 |
+| sturmschwalbe | Sturmschwalbe | uncommon | 30 | air | sunderer | 120 | 12 |
+| lehmspecht | Lehmspecht | uncommon | 30 | earth | sunderer | 120 | 12 |
+| kupferfasan | Kupferfasan | uncommon | 30 | fire | sunderer | 120 | 12 |
+| regenkranich | Regenkranich | uncommon | 30 | water | saboteur | 120 | 12 |
+| boeenfalke | Böenfalke | uncommon | 30 | air | saboteur | 120 | 12 |
+| wurzelrabe | Wurzelrabe | uncommon | 30 | earth | saboteur | 120 | 12 |
+| phoenixkueken | Phönixküken | rare | 14 | fire | nullifier | 140 | 14 |
+| mondreiher | Mondreiher | rare | 14 | water | nullifier | 140 | 14 |
+| himmelsgreifchen | Himmelsgreifchen | rare | 14 | air | protector | 140 | 14 |
+| runenwachtel | Runenwachtel | rare | 14 | air | protector | 140 | 14 |
+| kristallkraehe | Kristallkrähe | rare | 14 | earth | drainer | 140 | 14 |
+| obsidianule | Obsidianule | rare | 14 | earth | drainer | 140 | 14 |
+| sonnenroc | Sonnenroc | epic | 11 | fire | sunderer | 160 | 16 |
+| tiefseealk | Tiefseealk | epic | 11 | water | saboteur | 160 | 16 |
+| bergwyrm_kondor | Bergwyrm-Kondor | epic | 11 | earth | drainer | 160 | 16 |
+| lichtseraph | Lichtseraph | legendary | 3 | light | nullifier | 180 | 18 |
+
+Seed `pet_rarities`, `pet_classes`, `elements`, the shared `pet_abilities` placeholder, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata and the static seed defaults above.
 
 ### Egg type
 
 ```text
-common_mystery_egg | 1x Gewöhnliches Mystery Ei | seeded
-uncommon_mystery_egg | 1x Ungewöhnliches Mystery Ei | seeded
-rare_mystery_egg | 1x Seltenes Mystery Ei | seeded
+beta_egg | 1x Beta Ei | seeded active
 ```
 
-### Basic egg loot table weights
+### Beta egg loot table weights
 
-Use weights totaling 10000:
+Use integer pet weights totaling 1200:
 
 ```text
-2800 resource cracked_eggs 10
-2200 resource cracked_eggs 20
-1200 resource cracked_eggs 35
- 600 resource cracked_eggs 60
- 800 pet_species waldwachtel
- 800 pet_species glitzer_spatz
- 700 pet_species moorente
- 700 pet_species turmeule
- 200 pet_species goldener_erwin
+Common total     840 = 70.00% (12 pets x 70)
+Uncommon total   240 = 20.00% (8 pets x 30)
+Rare total        84 =  7.00% (6 pets x 14)
+Epic total        33 =  2.75% (3 pets x 11)
+Legendary total    3 =  0.25% (1 pet x 3)
 ```
+
+The seed validates the totals, class counts, normal element counts, and that light appears only on the legendary pet before writing the data.
 
 ## Admin action log
 
@@ -537,7 +560,7 @@ Use weights totaling 10000:
 
 - `twitch_events`: one row per unique Twitch EventSub event ID (`twitch_event_id` unique).
 - `channel_point_redemptions`: one row per unique Twitch redemption ID (`twitch_redemption_id` unique).
-- Valid configured reward redemptions currently create one `common_mystery_egg` inventory unit, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
+- Valid configured reward redemptions currently create one active configured egg inventory unit, seeded as `beta_egg`, increment `mystery_egg_inventory`, and append one `economy_ledger` mutation event.
 
 ## Slotted RPG Inventory MVP Update
 

@@ -91,34 +91,43 @@ type PetInstanceDefaults = {
   elementId: string;
 };
 
-const DEFAULT_WALDWACHTEL_INSTANCE: PetInstanceDefaults = {
-  rarityId: 'regular',
-  classId: 'balanced',
+const DEFAULT_PET_INSTANCE: PetInstanceDefaults = {
+  rarityId: 'common',
+  classId: 'protector',
   elementId: 'earth'
 };
 
 const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
-  waldwachtel: DEFAULT_WALDWACHTEL_INSTANCE,
-  glitzer_spatz: {
-    rarityId: 'regular',
-    classId: 'scout',
-    elementId: 'air'
-  },
-  moorente: {
-    rarityId: 'regular',
-    classId: 'guardian',
-    elementId: 'water'
-  },
-  turmeule: {
-    rarityId: 'regular',
-    classId: 'striker',
-    elementId: 'fire'
-  },
-  goldener_erwin: {
-    rarityId: 'rare',
-    classId: 'hero',
-    elementId: 'light'
-  }
+  glutfink: { rarityId: 'common', classId: 'nullifier', elementId: 'fire' },
+  bachente: { rarityId: 'common', classId: 'nullifier', elementId: 'water' },
+  windlerche: { rarityId: 'common', classId: 'nullifier', elementId: 'air' },
+  kieseltaube: { rarityId: 'common', classId: 'protector', elementId: 'earth' },
+  funkenmeise: { rarityId: 'common', classId: 'protector', elementId: 'fire' },
+  schilfreiher: { rarityId: 'common', classId: 'sunderer', elementId: 'water' },
+  mooswachtel: { rarityId: 'common', classId: 'sunderer', elementId: 'air' },
+  erdspatz: { rarityId: 'common', classId: 'saboteur', elementId: 'earth' },
+  rauchsegler: { rarityId: 'common', classId: 'saboteur', elementId: 'fire' },
+  tropfenmoewe: { rarityId: 'common', classId: 'drainer', elementId: 'water' },
+  wolkenzaunkoenig: { rarityId: 'common', classId: 'drainer', elementId: 'air' },
+  knollenhuhn: { rarityId: 'common', classId: 'drainer', elementId: 'earth' },
+  kerzenkauz: { rarityId: 'uncommon', classId: 'protector', elementId: 'fire' },
+  perlentaucher: { rarityId: 'uncommon', classId: 'protector', elementId: 'water' },
+  sturmschwalbe: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'air' },
+  lehmspecht: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'earth' },
+  kupferfasan: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'fire' },
+  regenkranich: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'water' },
+  boeenfalke: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'air' },
+  wurzelrabe: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'earth' },
+  phoenixkueken: { rarityId: 'rare', classId: 'nullifier', elementId: 'fire' },
+  mondreiher: { rarityId: 'rare', classId: 'nullifier', elementId: 'water' },
+  himmelsgreifchen: { rarityId: 'rare', classId: 'protector', elementId: 'air' },
+  runenwachtel: { rarityId: 'rare', classId: 'protector', elementId: 'air' },
+  kristallkraehe: { rarityId: 'rare', classId: 'drainer', elementId: 'earth' },
+  obsidianule: { rarityId: 'rare', classId: 'drainer', elementId: 'earth' },
+  sonnenroc: { rarityId: 'epic', classId: 'sunderer', elementId: 'fire' },
+  tiefseealk: { rarityId: 'epic', classId: 'saboteur', elementId: 'water' },
+  bergwyrm_kondor: { rarityId: 'epic', classId: 'drainer', elementId: 'earth' },
+  lichtseraph: { rarityId: 'legendary', classId: 'nullifier', elementId: 'light' }
 };
 
 const PET_SCRAP_REWARD_BY_RARITY: Record<string, number> = {
@@ -1714,8 +1723,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .limit(1);
       if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
       const instanceDefaults =
-        DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ??
-        DEFAULT_WALDWACHTEL_INSTANCE;
+        DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ?? DEFAULT_PET_INSTANCE;
 
       const [newPet] = await tx
         .insert(pets)
