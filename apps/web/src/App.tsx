@@ -214,9 +214,7 @@ type LeaderboardEntry = {
 };
 
 const MYSTERY_EGG_LABELS: Record<string, string> = {
-  common_mystery_egg: 'Gewöhnliches Mystery-Ei',
-  uncommon_mystery_egg: 'Ungewöhnliches Mystery-Ei',
-  rare_mystery_egg: 'Seltenes Mystery-Ei'
+  beta_egg: 'Beta Ei'
 };
 
 const EGG_RESOURCE_LABELS: Record<string, string> = {
@@ -705,10 +703,7 @@ export function App(): JSX.Element {
 
   async function grantTestEgg(
     userId: string,
-    eggTypeId:
-      | 'common_mystery_egg'
-      | 'uncommon_mystery_egg'
-      | 'rare_mystery_egg'
+    eggTypeId: 'beta_egg'
   ): Promise<void> {
     const response = await fetch(
       `/api/admin/users/${userId}/grant-test-mystery-egg`,
@@ -1231,24 +1226,10 @@ export function App(): JSX.Element {
               <div>
                 <button
                   onClick={() =>
-                    void grantTestEgg(selected.id, 'common_mystery_egg')
+                    void grantTestEgg(selected.id, 'beta_egg')
                   }
                 >
-                  Gewöhnliches Test-Mystery-Ei
-                </button>
-                <button
-                  onClick={() =>
-                    void grantTestEgg(selected.id, 'uncommon_mystery_egg')
-                  }
-                >
-                  Ungewöhnliches Test-Mystery-Ei
-                </button>
-                <button
-                  onClick={() =>
-                    void grantTestEgg(selected.id, 'rare_mystery_egg')
-                  }
-                >
-                  Seltenes Test-Mystery-Ei
+                  Beta-Test-Ei
                 </button>
                 <button onClick={() => void loadInventory(selected.id)}>
                   Inventar laden
