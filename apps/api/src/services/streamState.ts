@@ -32,7 +32,13 @@ export function getManualStreamStateOverride(): LiveOverride {
   return manualOverride;
 }
 
-export async function getCurrentStreamState(): Promise<{ isLive: boolean; viewerCount: number; source: 'manual_override' | 'twitch_helix' | 'fallback_offline' }> {
+type StreamStateSource = 'debug_env' | 'manual_override' | 'twitch_helix' | 'fallback_offline';
+
+export async function getCurrentStreamState(): Promise<{ isLive: boolean; viewerCount: number; source: StreamStateSource }> {
+  if (config.DEBUG_MODE) {
+    return { isLive: true, viewerCount: 0, source: 'debug_env' };
+  }
+
   if (manualOverride) {
     return { isLive: manualOverride === 'live', viewerCount: 0, source: 'manual_override' };
   }
