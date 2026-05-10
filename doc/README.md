@@ -2,7 +2,7 @@
 
 **Erwin Hatchery** is a mobile-first Twitch community minigame for NTKOH.
 
-Viewers redeem Twitch Channel Points, called **eggs**, to receive mystery eggs in a web app. Eggs can become unhatched eggs or crack into resources. Pets hatch over time, can later be trained/equipped/styled, and can participate in stream events such as a simple battle/leaderboard event.
+Viewers redeem Twitch Channel Points, called **eggs**, to receive mystery eggs in a web app. Eggs can become unhatched eggs or crack into resources. Pets hatch over time with species-based permanent base stats, can later be trained and styled with cosmetic hats, and can participate in stream events such as a simple battle/leaderboard event.
 
 The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS SCALE behind Traefik, with containers built through GitHub Actions and published to GitHub Container Registry.
 
@@ -17,10 +17,18 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
    - move into an unhatched egg inventory.
 6. Viewer chooses unhatched eggs to incubate.
 7. The incubator accepts queued eggs; countdown progress is accumulated only while the stream is live.
-8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
-9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style `Verwerten` slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity. Pet inventory deliberately has no rewardless `Verwerfen` slot; other discardable slotted inventories keep their confirmed deletion flow without a resource reward.
+8. Finished pet eggs hatch into owned pet instances with permanent base stats derived from species defaults plus hatch variance.
+9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style `Verwerten` slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity recycle metadata. Pet inventory deliberately has no rewardless `Verwerfen` slot; other discardable slotted inventories keep their confirmed deletion flow without a resource reward.
 10. Admin starts a battle event from the admin panel. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
 11. Winners receive leaderboard points (3/2/1). Event is logged and selected pets are deselected after resolution.
+
+
+## Pet RPG model direction
+
+- `pet_species` defines species templates and default stats; `pets` stores owned instances with permanent base stats created from species defaults plus hatch variance and later training.
+- Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
+- Each pet has exactly one class, one element, one ability, and may equip one cosmetic hat. Hats are cosmetic only; gems are out of scope for this pass.
+- Future boss-event AP, attack counts, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
 
@@ -32,10 +40,10 @@ Public without Twitch login:
 
 Requires Twitch login:
 
-- Inventory, including separate consumable, equipment, and hat grids
+- Inventory, including separate consumable, equipment, and cosmetic hat grids
 - Egg identification
 - Incubation
-- Pet selection
+- Pet selection, cosmetic hat styling
 - Consumables/upgrades
 - Account deletion
 
