@@ -113,6 +113,13 @@
       "when": 1791000000000,
       "tag": "0015_species_default_abilities_and_traits",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793000000000,
+      "tag": "0017_mvp_pet_elements",
+      "breakpoints": true
     }
   ]
 }

@@ -494,10 +494,10 @@ primary key(user_id, leaderboard_type)
 ### Pet species
 
 ```text
-waldwachtel      Waldwachtel      regular drainer    class=drainer   element=nature ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
+waldwachtel      Waldwachtel      regular drainer    class=drainer   element=earth ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
 glitzer_spatz    Glitzer-Spatz    regular saboteur   class=saboteur  element=air    ability=glimmer_dash  HP=80  ATK=8  DEF=5  SPD=18 GAIN=115 POW=90
 moorente         Moorente         regular protector  class=protector element=water  ability=mud_guard     HP=120 ATK=7  DEF=12 SPD=7  GAIN=90  POW=105
-turmeule         Turmeule         regular sunderer   class=sunderer  element=shadow ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
+turmeule         Turmeule         regular sunderer   class=sunderer  element=fire   ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
 goldener_erwin   Goldener Erwin   rare    nullifier  class=nullifier element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
 ```
 

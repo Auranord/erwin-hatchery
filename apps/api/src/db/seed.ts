@@ -68,12 +68,21 @@ async function seed(): Promise<void> {
   await db.delete(petClasses).where(inArray(petClasses.id, ['balanced', 'scout', 'guardian', 'striker', 'hero']));
 
   await db.insert(elements).values([
-    { id: 'nature', labelDe: 'Natur', description: 'Natur-Element.', isActive: true },
-    { id: 'air', labelDe: 'Luft', description: 'Luft-Element.', isActive: true },
+    { id: 'fire', labelDe: 'Feuer', description: 'Feuer-Element.', isActive: true },
     { id: 'water', labelDe: 'Wasser', description: 'Wasser-Element.', isActive: true },
-    { id: 'shadow', labelDe: 'Schatten', description: 'Schatten-Element.', isActive: true },
+    { id: 'air', labelDe: 'Luft', description: 'Luft-Element.', isActive: true },
+    { id: 'earth', labelDe: 'Erde', description: 'Erde-Element.', isActive: true },
     { id: 'light', labelDe: 'Licht', description: 'Licht-Element.', isActive: true }
-  ]).onConflictDoUpdate({ target: elements.id, set: { isActive: true } });
+  ]).onConflictDoUpdate({
+    target: elements.id,
+    set: {
+      labelDe: sql`excluded.label_de`,
+      description: sql`excluded.description`,
+      isActive: true
+    }
+  });
+
+  await db.delete(elements).where(inArray(elements.id, ['nature', 'shadow']));
 
   await db.insert(petAbilities).values([
     { id: 'peck_burst', labelDe: 'Pick-Salve', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true },
