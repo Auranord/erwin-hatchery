@@ -159,7 +159,7 @@ type DragPayload =
   | { kind: 'equipment'; id: string }
   | { kind: 'hat'; id: string };
 type PetScrapTarget = { petId: string; label: string; rarity: string };
-type InventoryDiscardKind = 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat';
+type InventoryDiscardKind = 'egg' | 'consumable' | 'equipment' | 'hat';
 type InventoryDiscardTarget = {
   kind: InventoryDiscardKind;
   id: string;
@@ -487,14 +487,12 @@ export function App(): JSX.Element {
   ): Promise<void> {
     const endpointByKind: Record<InventoryDiscardKind, string> = {
       egg: '/api/game/inventory/egg-slots/discard',
-      pet: '/api/game/inventory/pet-slots/discard',
       consumable: '/api/game/inventory/consumable-slots/discard',
       equipment: '/api/game/inventory/equipment-slots/discard',
       hat: '/api/game/inventory/hat-slots/discard'
     };
     const idKeyByKind: Record<InventoryDiscardKind, string> = {
       egg: 'unhatchedEggId',
-      pet: 'petId',
       consumable: 'consumableSlotId',
       equipment: 'equipmentSlotId',
       hat: 'hatSlotId'
@@ -510,7 +508,6 @@ export function App(): JSX.Element {
   ): kind is InventoryDiscardKind {
     return (
       kind === 'egg' ||
-      kind === 'pet' ||
       kind === 'consumable' ||
       kind === 'equipment' ||
       kind === 'hat'
@@ -526,12 +523,6 @@ export function App(): JSX.Element {
         .map((cell) => cell.item)
         .find((item): item is EggItem => item?.id === payload.id);
       return egg ? formatMysteryEggType(egg.eggTypeId) : 'dieses Ei';
-    }
-    if (payload.kind === 'pet') {
-      const pet = playerInventory?.pets.slots
-        .map((cell) => cell.item)
-        .find((item): item is PetItem => item?.id === payload.id);
-      return pet?.petTypeDisplayName ?? 'dieses Pet';
     }
     if (payload.kind === 'consumable') {
       const consumable = playerInventory?.consumables.slots
@@ -1462,6 +1453,15 @@ export function App(): JSX.Element {
     );
   }
 
+  function getInventoryActionSlotStyle(columns: number): CSSProperties {
+    const span = Math.min(2, columns);
+    const startColumn = Math.max(1, columns - span + 1);
+    return {
+      gridColumn: `${startColumn} / span ${span}`,
+      gridRow: `span ${span}`
+    };
+  }
+
   function renderPetTrashSlot(columns: number): JSX.Element {
     return (
       <div
@@ -1515,7 +1515,7 @@ export function App(): JSX.Element {
           role="button"
           tabIndex={0}
           className={`inventory-slot inventory-discard-drop-target empty ${canDiscard ? 'select-target' : ''}`}
-          style={{ gridColumn: `${columns} / span 1` }}
+          style={getInventoryActionSlotStyle(columns)}
           onDragOver={(event) => {
             if (canDiscard) event.preventDefault();
           }}
@@ -1896,13 +1896,7 @@ export function App(): JSX.Element {
                     ),
                     'pet-grid-panel',
                     (pet) => (pet.selectedForEvent ? 'selected-event-pet' : ''),
-                    <>
-                      {renderPetTrashSlot(playerInventory.pets.dimensions.columns)}
-                      {renderInventoryDiscardSlot(
-                        playerInventory.pets.dimensions.columns,
-                        'pet'
-                      )}
-                    </>
+                    renderPetTrashSlot(playerInventory.pets.dimensions.columns)
                   )}
                   {renderGrid(
                     'Verbrauchbares',
