@@ -51,12 +51,21 @@ async function seed(): Promise<void> {
   ]).onConflictDoUpdate({ target: petRarities.id, set: { isActive: true } });
 
   await db.insert(petClasses).values([
-    { id: 'balanced', labelDe: 'Ausgeglichen', description: 'Flexible Basisklasse.', isActive: true },
-    { id: 'scout', labelDe: 'Späher', description: 'Schnelle Basisklasse.', isActive: true },
-    { id: 'guardian', labelDe: 'Wächter', description: 'Robuste Basisklasse.', isActive: true },
-    { id: 'striker', labelDe: 'Angreifer', description: 'Offensive Basisklasse.', isActive: true },
-    { id: 'hero', labelDe: 'Held', description: 'Besondere Allrounder-Klasse.', isActive: true }
-  ]).onConflictDoUpdate({ target: petClasses.id, set: { isActive: true } });
+    { id: 'protector', labelDe: 'Beschützer', description: 'Schützt das Team, indem er gegnerischen Angriffsdruck bindet.', relatedEnemyStat: 'ATK' },
+    { id: 'sunderer', labelDe: 'Spalter', description: 'Bricht zähe Verteidigungen auf und zielt auf gegnerische DEF.', relatedEnemyStat: 'DEF' },
+    { id: 'saboteur', labelDe: 'Saboteur', description: 'Stört schnelle Gegner und zielt auf gegnerische SPD.', relatedEnemyStat: 'SPD' },
+    { id: 'drainer', labelDe: 'Entlader', description: 'Bremst den gegnerischen AP-Aufbau und zielt auf GAIN.', relatedEnemyStat: 'GAIN' },
+    { id: 'nullifier', labelDe: 'Bannbrecher', description: 'Schwächt gegnerische Fähigkeitseffekte und zielt auf POW.', relatedEnemyStat: 'POW' }
+  ]).onConflictDoUpdate({
+    target: petClasses.id,
+    set: {
+      labelDe: sql`excluded.label_de`,
+      description: sql`excluded.description`,
+      relatedEnemyStat: sql`excluded.related_enemy_stat`
+    }
+  });
+
+  await db.delete(petClasses).where(inArray(petClasses.id, ['balanced', 'scout', 'guardian', 'striker', 'hero']));
 
   await db.insert(elements).values([
     { id: 'nature', labelDe: 'Natur', description: 'Natur-Element.', isActive: true },

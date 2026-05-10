@@ -147,11 +147,11 @@ Suggested initial hatch assignments for the initial pet species:
 
 | Pet species    |  Rarity | Role             | Class    | Element | Ability     |  HP | Attack | Defense | Speed | GAIN | POW |
 | -------------- | ------: | ---------------- | -------- | ------- | ----------- | --: | -----: | ------: | ----: | ---: | --: |
-| Waldwachtel    | Regular | Balanced         | Balanced | Nature  | Peck Burst  | 100 |     10 |       8 |    12 |  100 | 100 |
-| Glitzer-Spatz  | Regular | Fast             | Scout    | Air     | Glimmer Dash|  80 |      8 |       5 |    18 |  115 |  90 |
-| Moorente       | Regular | Tank             | Guardian | Water   | Mud Guard   | 120 |      7 |      12 |     7 |   90 | 105 |
-| Turmeule       | Regular | Striker          | Striker  | Shadow  | Owl Strike  |  90 |     14 |       7 |    10 |  100 | 115 |
-| Goldener Erwin |    Rare | Rare all-rounder | Hero     | Light   | Golden Crowl| 110 |     13 |      10 |    13 |  105 | 110 |
+| Waldwachtel    | Regular | Drainer          | Drainer   | Nature  | Peck Burst  | 100 |     10 |       8 |    12 |  100 | 100 |
+| Glitzer-Spatz  | Regular | Saboteur         | Saboteur  | Air     | Glimmer Dash|  80 |      8 |       5 |    18 |  115 |  90 |
+| Moorente       | Regular | Protector        | Protector | Water   | Mud Guard   | 120 |      7 |      12 |     7 |   90 | 105 |
+| Turmeule       | Regular | Sunderer         | Sunderer  | Shadow  | Owl Strike  |  90 |     14 |       7 |    10 |  100 | 115 |
+| Goldener Erwin |    Rare | Nullifier        | Nullifier | Light   | Golden Crowl| 110 |     13 |      10 |    13 |  105 | 110 |
 
 Each hatched pet should get slight stat variance, for example ±10%, calculated server-side at hatch time and persisted on the pet instance as permanent base stats. GAIN modifies AP gained per attack in future boss-event combat, and POW scales ability effects.
 

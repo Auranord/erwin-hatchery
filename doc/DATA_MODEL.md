@@ -251,7 +251,7 @@ Config table for the exactly-one class assigned to each pet. Class metadata is s
 id text primary key
 label_de text not null
 description text not null default ''
-is_active boolean not null default true
+related_enemy_stat text not null -- enemy stat this class counters or targets: ATK, DEF, SPD, GAIN, POW
 ```
 
 ### elements
@@ -494,11 +494,11 @@ primary key(user_id, leaderboard_type)
 ### Pet species
 
 ```text
-waldwachtel      Waldwachtel      regular balanced        class=balanced element=nature ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
-glitzer_spatz    Glitzer-Spatz    regular fast            class=scout    element=air    ability=glimmer_dash  HP=80  ATK=8  DEF=5  SPD=18 GAIN=115 POW=90
-moorente         Moorente         regular tank            class=guardian element=water  ability=mud_guard     HP=120 ATK=7  DEF=12 SPD=7  GAIN=90  POW=105
-turmeule         Turmeule         regular striker         class=striker  element=shadow ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
-goldener_erwin   Goldener Erwin   rare    rare_allrounder   class=hero     element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
+waldwachtel      Waldwachtel      regular drainer    class=drainer   element=nature ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
+glitzer_spatz    Glitzer-Spatz    regular saboteur   class=saboteur  element=air    ability=glimmer_dash  HP=80  ATK=8  DEF=5  SPD=18 GAIN=115 POW=90
+moorente         Moorente         regular protector  class=protector element=water  ability=mud_guard     HP=120 ATK=7  DEF=12 SPD=7  GAIN=90  POW=105
+turmeule         Turmeule         regular sunderer   class=sunderer  element=shadow ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
+goldener_erwin   Goldener Erwin   rare    nullifier  class=nullifier element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
 ```
 
 Seed `pet_rarities`, `pet_classes`, `elements`, `pet_abilities`, `pet_traits`, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.

@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "pet_classes" (
   "id" text PRIMARY KEY NOT NULL,
   "label_de" text NOT NULL,
   "description" text NOT NULL DEFAULT '',
-  "is_active" boolean NOT NULL DEFAULT true
+  "related_enemy_stat" text
 );
 
 CREATE TABLE IF NOT EXISTS "elements" (
@@ -39,13 +39,13 @@ INSERT INTO pet_rarities (id, label_de, rank, recycle_cracked_eggs, is_active) V
   ('rare', 'Selten', 2, 35, true)
 ON CONFLICT (id) DO UPDATE SET label_de = excluded.label_de, rank = excluded.rank, recycle_cracked_eggs = excluded.recycle_cracked_eggs, is_active = true;
 
-INSERT INTO pet_classes (id, label_de, description, is_active) VALUES
-  ('balanced', 'Ausgeglichen', 'Flexible Basisklasse.', true),
-  ('scout', 'Späher', 'Schnelle Basisklasse.', true),
-  ('guardian', 'Wächter', 'Robuste Basisklasse.', true),
-  ('striker', 'Angreifer', 'Offensive Basisklasse.', true),
-  ('hero', 'Held', 'Besondere Allrounder-Klasse.', true)
-ON CONFLICT (id) DO UPDATE SET label_de = excluded.label_de, description = excluded.description, is_active = true;
+INSERT INTO pet_classes (id, label_de, description, related_enemy_stat) VALUES
+  ('protector', 'Beschützer', 'Schützt das Team, indem er gegnerischen Angriffsdruck bindet.', 'ATK'),
+  ('sunderer', 'Spalter', 'Bricht zähe Verteidigungen auf und zielt auf gegnerische DEF.', 'DEF'),
+  ('saboteur', 'Saboteur', 'Stört schnelle Gegner und zielt auf gegnerische SPD.', 'SPD'),
+  ('drainer', 'Entlader', 'Bremst den gegnerischen AP-Aufbau und zielt auf GAIN.', 'GAIN'),
+  ('nullifier', 'Bannbrecher', 'Schwächt gegnerische Fähigkeitseffekte und zielt auf POW.', 'POW')
+ON CONFLICT (id) DO UPDATE SET label_de = excluded.label_de, description = excluded.description, related_enemy_stat = excluded.related_enemy_stat;
 
 INSERT INTO elements (id, label_de, description, is_active) VALUES
   ('nature', 'Natur', 'Natur-Element.', true),
@@ -154,16 +154,31 @@ BEGIN
     UPDATE pets p SET class_id = coalesce(
       p.class_id,
       CASE ps.role
-        WHEN 'fast' THEN 'scout'
-        WHEN 'tank' THEN 'guardian'
-        WHEN 'allrounder' THEN 'hero'
+        WHEN 'fast' THEN 'saboteur'
+        WHEN 'tank' THEN 'protector'
+        WHEN 'allrounder' THEN 'nullifier'
+        WHEN 'rare_allrounder' THEN 'nullifier'
+        WHEN 'balanced' THEN 'drainer'
+        WHEN 'striker' THEN 'sunderer'
         ELSE ps.role
       END,
-      'balanced'
+      'drainer'
     ) FROM pet_species ps WHERE p.species_id = ps.id;
   END IF;
 END $$;
-UPDATE pets SET class_id = coalesce(class_id, CASE species_id WHEN 'glitzer_spatz' THEN 'scout' WHEN 'moorente' THEN 'guardian' WHEN 'turmeule' THEN 'striker' WHEN 'goldener_erwin' THEN 'hero' ELSE 'balanced' END);
+UPDATE pets SET class_id = CASE coalesce(class_id, '')
+  WHEN 'balanced' THEN 'drainer'
+  WHEN 'fast' THEN 'saboteur'
+  WHEN 'scout' THEN 'saboteur'
+  WHEN 'tank' THEN 'protector'
+  WHEN 'guardian' THEN 'protector'
+  WHEN 'striker' THEN 'sunderer'
+  WHEN 'allrounder' THEN 'nullifier'
+  WHEN 'rare_allrounder' THEN 'nullifier'
+  WHEN 'hero' THEN 'nullifier'
+  WHEN '' THEN CASE species_id WHEN 'glitzer_spatz' THEN 'saboteur' WHEN 'moorente' THEN 'protector' WHEN 'turmeule' THEN 'sunderer' WHEN 'goldener_erwin' THEN 'nullifier' ELSE 'drainer' END
+  ELSE class_id
+END;
 ALTER TABLE pets ALTER COLUMN class_id SET NOT NULL;
 
 ALTER TABLE pets ADD COLUMN IF NOT EXISTS element_id text;
