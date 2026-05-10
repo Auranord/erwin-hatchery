@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -242,6 +242,8 @@ export function App(): JSX.Element {
   const [pendingPetScrap, setPendingPetScrap] = useState<PetScrapTarget | null>(
     null
   );
+  const [isPetScrapSubmitting, setIsPetScrapSubmitting] = useState(false);
+  const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [gameMessage, setGameMessage] = useState<string | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -337,6 +339,26 @@ export function App(): JSX.Element {
 
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
+
+  useEffect(() => {
+    if (!pendingPetScrap) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    petScrapConfirmButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isPetScrapSubmitting) {
+        setPendingPetScrap(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPetScrapSubmitting, pendingPetScrap]);
 
   async function refreshOwnInventory(): Promise<void> {
     const response = await fetch('/api/game/inventory', {
@@ -442,6 +464,21 @@ export function App(): JSX.Element {
     setGameMessage(
       error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
     );
+  }
+
+  async function confirmPetScrap(): Promise<void> {
+    if (!pendingPetScrap || isPetScrapSubmitting) return;
+
+    setIsPetScrapSubmitting(true);
+    try {
+      await scrapPet(pendingPetScrap.petId);
+      setPendingPetScrap(null);
+      await refreshOwnInventory();
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setIsPetScrapSubmitting(false);
+    }
   }
 
   async function handleDropToSlot(
@@ -1511,38 +1548,41 @@ export function App(): JSX.Element {
                   </p>
                 ) : null}
                 {pendingPetScrap ? (
-                  <div
-                    className="confirm-panel"
-                    role="alertdialog"
-                    aria-modal="true"
-                    aria-label="Pet verwerten bestätigen"
-                  >
-                    <strong>{pendingPetScrap.label} wirklich verwerten?</strong>
-                    <p>
-                      Dieses Pet wird dauerhaft gelöscht und du erhältst
-                      Aufgebrochene Eier abhängig von der Seltenheit (
-                      {pendingPetScrap.rarity}).
-                    </p>
-                    <div className="confirm-actions">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void scrapPet(pendingPetScrap.petId)
-                            .then(async () => {
-                              setPendingPetScrap(null);
-                              await refreshOwnInventory();
-                            })
-                            .catch(showGameError)
-                        }
-                      >
-                        Ja, verwerten
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPendingPetScrap(null)}
-                      >
-                        Abbrechen
-                      </button>
+                  <div className="modal-backdrop" role="presentation">
+                    <div
+                      className="confirm-modal"
+                      role="alertdialog"
+                      aria-modal="true"
+                      aria-labelledby="pet-scrap-confirm-title"
+                      aria-describedby="pet-scrap-confirm-description"
+                    >
+                      <strong id="pet-scrap-confirm-title">
+                        {pendingPetScrap.label} wirklich verwerten?
+                      </strong>
+                      <p id="pet-scrap-confirm-description">
+                        Dieses Pet wird dauerhaft gelöscht und du erhältst
+                        Aufgebrochene Eier abhängig von der Seltenheit (
+                        {pendingPetScrap.rarity}).
+                      </p>
+                      <div className="confirm-actions">
+                        <button
+                          ref={petScrapConfirmButtonRef}
+                          type="button"
+                          onClick={() => void confirmPetScrap()}
+                          disabled={isPetScrapSubmitting}
+                        >
+                          {isPetScrapSubmitting
+                            ? 'Wird verwertet …'
+                            : 'Ja, verwerten'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingPetScrap(null)}
+                          disabled={isPetScrapSubmitting}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ) : null}

@@ -434,17 +434,33 @@ ul {
   color: #fecaca;
 }
 
-.confirm-panel {
-  border: 1px solid rgba(248, 113, 113, 0.72);
-  border-radius: 0.85rem;
-  background: rgba(127, 29, 29, 0.28);
-  color: #fee2e2;
-  padding: 0.85rem;
-  margin-bottom: 1rem;
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(7, 10, 20, 0.72);
+  backdrop-filter: blur(4px);
 }
 
-.confirm-panel p {
-  margin: 0.45rem 0;
+.confirm-modal {
+  width: min(100%, 24rem);
+  border: 1px solid rgba(248, 113, 113, 0.82);
+  border-radius: 1rem;
+  background: linear-gradient(
+    145deg,
+    rgba(127, 29, 29, 0.96),
+    rgba(38, 32, 58, 0.98)
+  );
+  color: #fee2e2;
+  padding: 1rem;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.5);
+}
+
+.confirm-modal p {
+  margin: 0.55rem 0 0.85rem;
 }
 
 .confirm-actions {
