@@ -18,7 +18,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 6. Viewer chooses unhatched eggs to incubate.
 7. The incubator accepts queued eggs; countdown progress is accumulated only while the stream is live.
 8. Finished pet eggs hatch into pets with type-based stats and slight per-pet variance.
-9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity. Every slotted inventory, including pets, also has a `Verwerfen` slot for confirmed deletion without any resource reward; this is separate from pet verwerten.
+9. Viewer selects one pet for the next admin-started stream event by dropping or tap-selecting it into the Event-Pet slot above the pet inventory; the pet remains highlighted in its normal inventory slot. Pets can also be dragged to a trashcan-style `Verwerten` slot, confirmed, and scrapped into Aufgebrochene Eier based on rarity. Pet inventory deliberately has no rewardless `Verwerfen` slot; other discardable slotted inventories keep their confirmed deletion flow without a resource reward.
 10. Admin starts a battle event from the admin panel. MVP randomly chooses 1st, 2nd, and 3rd place from selected pets.
 11. Winners receive leaderboard points (3/2/1). Event is logged and selected pets are deselected after resolution.
 
