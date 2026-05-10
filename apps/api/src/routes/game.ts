@@ -92,7 +92,7 @@ type PetInstanceDefaults = {
 
 const DEFAULT_WALDWACHTEL_INSTANCE: PetInstanceDefaults = {
   rarityId: 'regular',
-  classId: 'balanced',
+  classId: 'drainer',
   elementId: 'nature',
   abilityId: 'peck_burst'
 };
@@ -101,25 +101,25 @@ const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
   waldwachtel: DEFAULT_WALDWACHTEL_INSTANCE,
   glitzer_spatz: {
     rarityId: 'regular',
-    classId: 'scout',
+    classId: 'saboteur',
     elementId: 'air',
     abilityId: 'glimmer_dash'
   },
   moorente: {
     rarityId: 'regular',
-    classId: 'guardian',
+    classId: 'protector',
     elementId: 'water',
     abilityId: 'mud_guard'
   },
   turmeule: {
     rarityId: 'regular',
-    classId: 'striker',
+    classId: 'sunderer',
     elementId: 'shadow',
     abilityId: 'owl_strike'
   },
   goldener_erwin: {
     rarityId: 'rare',
-    classId: 'hero',
+    classId: 'nullifier',
     elementId: 'light',
     abilityId: 'golden_crowl'
   }
