@@ -13,7 +13,7 @@ ALTER TABLE "unhatched_eggs" ADD COLUMN "slot_index" integer;
 ALTER TABLE "pets" ADD COLUMN "slot_index" integer;
 ALTER TABLE "incubator_slots" ADD COLUMN "slot_index" integer;
 ALTER TABLE "incubator_slots" ADD COLUMN "speed_multiplier_basis_points" integer NOT NULL DEFAULT 10000;
-ALTER TABLE "incubator_slots" ADD COLUMN "rarity_bonus_basis_points" integer NOT NULL DEFAULT 0;
+ALTER TABLE "incubator_slots" ADD COLUMN "special_bonus_basis_points" integer NOT NULL DEFAULT 0;
 ALTER TABLE "incubator_slots" ADD COLUMN "fuel_behavior" text NOT NULL DEFAULT 'none';
 ALTER TABLE "incubator_slots" ADD COLUMN "special_effect_config" jsonb NOT NULL DEFAULT '{}'::jsonb;
 

@@ -58,7 +58,7 @@ export type EggResourceBalance = { resourceType: string; amount: number; updated
 
 export type IncubatorMetadata = {
   speedMultiplierBasisPoints: number;
-  rarityBonusBasisPoints: number;
+  specialBonusBasisPoints: number;
   fuelBehavior: string;
   specialEffectConfig: unknown;
 };
@@ -88,14 +88,24 @@ export type UnhatchedEggSlotItem = { id: string; eggTypeId: string; state: strin
 
 export type PetSlotItem = {
   id: string;
-  petTypeId: string;
-  petTypeDisplayName: string;
-  rarity: string;
-  role: string;
-  hp: number;
-  attack: number;
-  defense: number;
-  speed: number;
+  speciesId: string;
+  speciesDisplayName: string;
+  rarityId: string;
+  rarityLabelDe: string;
+  classId: string;
+  classLabelDe: string;
+  elementId: string;
+  elementLabelDe: string;
+  abilityId: string;
+  abilityLabelDe: string;
+  nickname: string | null;
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
+  baseSpd: number;
+  baseGain: number;
+  basePow: number;
+  equippedHatId: string | null;
   selectedForEvent: boolean;
   createdAt: string;
 };
@@ -113,7 +123,7 @@ export type EquipmentSlotItem = {
 
 export type HatSlotItem = {
   id: string;
-  hatTypeId: string;
+  hatId: string;
 };
 
 export type SlottedGrid<T> = {

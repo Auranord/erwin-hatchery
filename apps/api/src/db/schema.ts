@@ -185,15 +185,72 @@ export const eggTypes = pgTable('egg_types', {
     .defaultNow()
 });
 
-export const petTypes = pgTable('pet_types', {
+export const petRarities = pgTable(
+  'pet_rarities',
+  {
+    id: text('id').primaryKey(),
+    labelDe: text('label_de').notNull(),
+    rank: integer('rank').notNull(),
+    recycleCrackedEggs: integer('recycle_cracked_eggs').notNull().default(0),
+    displayConfig: jsonb('display_config').notNull().default({}),
+    economyConfig: jsonb('economy_config').notNull().default({}),
+    combineProgressionConfig: jsonb('combine_progression_config')
+      .notNull()
+      .default({}),
+    isActive: boolean('is_active').notNull().default(true)
+  },
+  (table) => ({
+    rankUnique: uniqueIndex('pet_rarities_rank_idx').on(table.rank)
+  })
+);
+
+export const petClasses = pgTable('pet_classes', {
+  id: text('id').primaryKey(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  isActive: boolean('is_active').notNull().default(true)
+});
+
+export const elements = pgTable('elements', {
+  id: text('id').primaryKey(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  isActive: boolean('is_active').notNull().default(true)
+});
+
+export const petAbilities = pgTable('pet_abilities', {
+  id: text('id').primaryKey(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  apRequired: integer('ap_required').notNull(),
+  minAttacksRequired: integer('min_attacks_required').notNull().default(0),
+  effectType: text('effect_type').notNull(),
+  effectConfig: jsonb('effect_config').notNull().default({}),
+  isActive: boolean('is_active').notNull().default(true)
+});
+
+export const hats = pgTable('hats', {
+  id: text('id').primaryKey(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  config: jsonb('config').notNull().default({}),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+});
+
+export const petSpecies = pgTable('pet_species', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),
-  rarity: text('rarity').notNull(),
-  role: text('role').notNull(),
-  baseHp: integer('base_hp').notNull(),
-  baseAttack: integer('base_attack').notNull(),
-  baseDefense: integer('base_defense').notNull(),
-  baseSpeed: integer('base_speed').notNull(),
+  labelDe: text('label_de').notNull(),
+  description: text('description').notNull().default(''),
+  defaultHp: integer('default_hp').notNull(),
+  defaultAtk: integer('default_atk').notNull(),
+  defaultDef: integer('default_def').notNull(),
+  defaultSpd: integer('default_spd').notNull(),
+  defaultGain: integer('default_gain').notNull(),
+  defaultPow: integer('default_pow').notNull(),
   assetKey: text('asset_key').notNull(),
   isActive: boolean('is_active').notNull().default(true)
 });
@@ -207,7 +264,7 @@ export const eggLootTableEntries = pgTable('egg_loot_table_entries', {
   outcomeType: text('outcome_type').notNull(),
   resourceType: text('resource_type'),
   resourceAmount: integer('resource_amount'),
-  petTypeId: text('pet_type_id').references(() => petTypes.id)
+  petSpeciesId: text('pet_species_id').references(() => petSpecies.id)
 });
 
 export const mysteryEggInventory = pgTable(
@@ -259,9 +316,9 @@ export const unhatchedEggs = pgTable(
     eggTypeId: text('egg_type_id')
       .notNull()
       .references(() => eggTypes.id),
-    hiddenPetTypeId: text('hidden_pet_type_id')
+    hiddenPetSpeciesId: text('hidden_pet_species_id')
       .notNull()
-      .references(() => petTypes.id),
+      .references(() => petSpecies.id),
     state: text('state').notNull(),
     slotIndex: integer('slot_index'),
     createdFromRedemptionId: uuid('created_from_redemption_id').references(
@@ -292,7 +349,7 @@ export const incubatorSlots = pgTable(
     speedMultiplierBasisPoints: integer('speed_multiplier_basis_points')
       .notNull()
       .default(10000),
-    rarityBonusBasisPoints: integer('rarity_bonus_basis_points')
+    specialBonusBasisPoints: integer('special_bonus_basis_points')
       .notNull()
       .default(0),
     fuelBehavior: text('fuel_behavior').notNull().default('none'),
@@ -341,15 +398,30 @@ export const pets = pgTable(
     ownerUserId: uuid('owner_user_id')
       .notNull()
       .references(() => users.id),
-    petTypeId: text('pet_type_id')
+    speciesId: text('species_id')
       .notNull()
-      .references(() => petTypes.id),
-    displayName: text('display_name'),
-    hp: integer('hp').notNull(),
-    attack: integer('attack').notNull(),
-    defense: integer('defense').notNull(),
-    speed: integer('speed').notNull(),
-    statRolls: jsonb('stat_rolls').notNull(),
+      .references(() => petSpecies.id),
+    rarityId: text('rarity_id')
+      .notNull()
+      .references(() => petRarities.id),
+    classId: text('class_id')
+      .notNull()
+      .references(() => petClasses.id),
+    elementId: text('element_id')
+      .notNull()
+      .references(() => elements.id),
+    abilityId: text('ability_id')
+      .notNull()
+      .references(() => petAbilities.id),
+    nickname: text('nickname'),
+    baseHp: integer('base_hp').notNull(),
+    baseAtk: integer('base_atk').notNull(),
+    baseDef: integer('base_def').notNull(),
+    baseSpd: integer('base_spd').notNull(),
+    baseGain: integer('base_gain').notNull(),
+    basePow: integer('base_pow').notNull(),
+    hatchVariance: jsonb('hatch_variance').notNull().default({}),
+    equippedHatId: text('equipped_hat_id').references(() => hats.id),
     sourceUnhatchedEggId: uuid('source_unhatched_egg_id')
       .notNull()
       .references(() => unhatchedEggs.id),
@@ -446,17 +518,6 @@ export const equipmentInventorySlots = pgTable(
   })
 );
 
-export const hatTypes = pgTable('hat_types', {
-  id: text('id').primaryKey(),
-  displayName: text('display_name').notNull(),
-  description: text('description').notNull(),
-  config: jsonb('config').notNull().default({}),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-});
-
 export const hatInventorySlots = pgTable(
   'hat_inventory_slots',
   {
@@ -464,9 +525,9 @@ export const hatInventorySlots = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
-    hatTypeId: text('hat_type_id')
+    hatId: text('hat_id')
       .notNull()
-      .references(() => hatTypes.id),
+      .references(() => hats.id),
     slotIndex: integer('slot_index'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -520,6 +581,7 @@ export const gameEventParticipants = pgTable('game_event_participants', {
     .references(() => pets.id),
   placement: integer('placement'),
   pointsAwarded: integer('points_awarded').notNull().default(0),
+  runtimeState: jsonb('runtime_state').notNull().default({}),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow()

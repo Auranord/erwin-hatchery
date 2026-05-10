@@ -75,15 +75,62 @@ CREATE TABLE IF NOT EXISTS egg_types (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS pet_types (
+CREATE TABLE IF NOT EXISTS pet_rarities (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  rank integer NOT NULL UNIQUE,
+  recycle_cracked_eggs integer NOT NULL DEFAULT 0,
+  display_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  economy_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  combine_progression_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS pet_classes (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  is_active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS elements (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  is_active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS pet_abilities (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  ap_required integer NOT NULL,
+  min_attacks_required integer NOT NULL DEFAULT 0,
+  effect_type text NOT NULL,
+  effect_config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS hats (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS pet_species (
   id text PRIMARY KEY,
   display_name text NOT NULL,
-  rarity text NOT NULL,
-  role text NOT NULL,
-  base_hp integer NOT NULL,
-  base_attack integer NOT NULL,
-  base_defense integer NOT NULL,
-  base_speed integer NOT NULL,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  default_hp integer NOT NULL,
+  default_atk integer NOT NULL,
+  default_def integer NOT NULL,
+  default_spd integer NOT NULL,
+  default_gain integer NOT NULL,
+  default_pow integer NOT NULL,
   asset_key text NOT NULL,
   is_active boolean NOT NULL DEFAULT true
 );
@@ -95,7 +142,7 @@ CREATE TABLE IF NOT EXISTS egg_loot_table_entries (
   outcome_type text NOT NULL,
   resource_type text,
   resource_amount integer,
-  pet_type_id text REFERENCES pet_types(id),
+  pet_species_id text REFERENCES pet_species(id),
   is_active boolean NOT NULL DEFAULT true
 );
 
@@ -111,7 +158,7 @@ CREATE TABLE IF NOT EXISTS unhatched_eggs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
   egg_type_id text NOT NULL REFERENCES egg_types(id),
-  hidden_pet_type_id text NOT NULL REFERENCES pet_types(id),
+  hidden_pet_species_id text NOT NULL REFERENCES pet_species(id),
   state text NOT NULL,
   created_from_redemption_id uuid REFERENCES channel_point_redemptions(id),
   created_at timestamptz NOT NULL DEFAULT now()
@@ -143,13 +190,20 @@ CREATE TABLE IF NOT EXISTS incubation_jobs (
 CREATE TABLE IF NOT EXISTS pets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
-  pet_type_id text NOT NULL REFERENCES pet_types(id),
-  display_name text,
-  hp integer NOT NULL,
-  attack integer NOT NULL,
-  defense integer NOT NULL,
-  speed integer NOT NULL,
-  stat_rolls jsonb NOT NULL,
+  species_id text NOT NULL REFERENCES pet_species(id),
+  rarity_id text NOT NULL REFERENCES pet_rarities(id),
+  class_id text NOT NULL REFERENCES pet_classes(id),
+  element_id text NOT NULL REFERENCES elements(id),
+  ability_id text NOT NULL REFERENCES pet_abilities(id),
+  nickname text,
+  base_hp integer NOT NULL,
+  base_atk integer NOT NULL,
+  base_def integer NOT NULL,
+  base_spd integer NOT NULL,
+  base_gain integer NOT NULL,
+  base_pow integer NOT NULL,
+  hatch_variance jsonb NOT NULL DEFAULT '{}'::jsonb,
+  equipped_hat_id text REFERENCES hats(id),
   source_unhatched_egg_id uuid NOT NULL REFERENCES unhatched_eggs(id),
   is_favorite boolean NOT NULL DEFAULT false,
   selected_for_event boolean NOT NULL DEFAULT false,
@@ -200,6 +254,7 @@ CREATE TABLE IF NOT EXISTS game_event_participants (
   pet_id uuid NOT NULL REFERENCES pets(id),
   placement integer,
   points_awarded integer NOT NULL DEFAULT 0,
+  runtime_state jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 

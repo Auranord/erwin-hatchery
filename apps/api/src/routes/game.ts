@@ -16,7 +16,11 @@ import {
   incubationJobs,
   incubatorSlots,
   eggTypes,
-  petTypes,
+  elements,
+  petAbilities,
+  petClasses,
+  petRarities,
+  petSpecies,
   leaderboardScores,
   users,
   gameEvents
@@ -336,7 +340,7 @@ async function syncIncubationQueueInTx(
       progressSecondsAccumulated: incubationJobs.progressSecondsAccumulated,
       lastProgressedAt: incubationJobs.lastProgressedAt,
       speedMultiplierBasisPoints: incubatorSlots.speedMultiplierBasisPoints,
-      rarityBonusBasisPoints: incubatorSlots.rarityBonusBasisPoints,
+      specialBonusBasisPoints: incubatorSlots.specialBonusBasisPoints,
       fuelBehavior: incubatorSlots.fuelBehavior,
       specialEffectConfig: incubatorSlots.specialEffectConfig
     })
@@ -404,7 +408,7 @@ async function syncIncubationQueueInTx(
           incubatorMultiplierApplied: incubatorMultiplier,
           incubatorMetadata: {
             speedMultiplierBasisPoints: runningJob.speedMultiplierBasisPoints,
-            rarityBonusBasisPoints: runningJob.rarityBonusBasisPoints,
+            specialBonusBasisPoints: runningJob.specialBonusBasisPoints,
             fuelBehavior: runningJob.fuelBehavior,
             specialEffectConfig: runningJob.specialEffectConfig
           }
@@ -535,20 +539,34 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     db
       .select({
         id: pets.id,
-        petTypeId: pets.petTypeId,
-        petTypeDisplayName: petTypes.displayName,
-        rarity: petTypes.rarity,
-        role: petTypes.role,
-        hp: pets.hp,
-        attack: pets.attack,
-        defense: pets.defense,
-        speed: pets.speed,
+        speciesId: pets.speciesId,
+        speciesDisplayName: petSpecies.displayName,
+        rarityId: pets.rarityId,
+        rarityLabelDe: petRarities.labelDe,
+        classId: pets.classId,
+        classLabelDe: petClasses.labelDe,
+        elementId: pets.elementId,
+        elementLabelDe: elements.labelDe,
+        abilityId: pets.abilityId,
+        abilityLabelDe: petAbilities.labelDe,
+        nickname: pets.nickname,
+        baseHp: pets.baseHp,
+        baseAtk: pets.baseAtk,
+        baseDef: pets.baseDef,
+        baseSpd: pets.baseSpd,
+        baseGain: pets.baseGain,
+        basePow: pets.basePow,
+        equippedHatId: pets.equippedHatId,
         selectedForEvent: pets.selectedForEvent,
         createdAt: pets.createdAt,
         slotIndex: pets.slotIndex
       })
       .from(pets)
-      .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+      .innerJoin(petSpecies, eq(pets.speciesId, petSpecies.id))
+      .innerJoin(petRarities, eq(pets.rarityId, petRarities.id))
+      .innerJoin(petClasses, eq(pets.classId, petClasses.id))
+      .innerJoin(elements, eq(pets.elementId, elements.id))
+      .innerJoin(petAbilities, eq(pets.abilityId, petAbilities.id))
       .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
     db
       .select({
@@ -569,7 +587,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     db
       .select({
         id: hatInventorySlots.id,
-        hatTypeId: hatInventorySlots.hatTypeId,
+        hatId: hatInventorySlots.hatId,
         slotIndex: hatInventorySlots.slotIndex
       })
       .from(hatInventorySlots)
@@ -590,7 +608,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         slotIndex: incubatorSlots.slotIndex,
         isAvailable: incubatorSlots.isAvailable,
         speedMultiplierBasisPoints: incubatorSlots.speedMultiplierBasisPoints,
-        rarityBonusBasisPoints: incubatorSlots.rarityBonusBasisPoints,
+        specialBonusBasisPoints: incubatorSlots.specialBonusBasisPoints,
         fuelBehavior: incubatorSlots.fuelBehavior,
         specialEffectConfig: incubatorSlots.specialEffectConfig
       })
@@ -661,7 +679,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             isAvailable: slot.isAvailable,
             metadata: {
               speedMultiplierBasisPoints: slot.speedMultiplierBasisPoints,
-              rarityBonusBasisPoints: slot.rarityBonusBasisPoints,
+              specialBonusBasisPoints: slot.specialBonusBasisPoints,
               fuelBehavior: slot.fuelBehavior,
               specialEffectConfig: slot.specialEffectConfig
             },
@@ -701,14 +719,24 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
           slotIndex: row.slotIndex,
           item: {
             id: row.id,
-            petTypeId: row.petTypeId,
-            petTypeDisplayName: row.petTypeDisplayName,
-            rarity: row.rarity,
-            role: row.role,
-            hp: row.hp,
-            attack: row.attack,
-            defense: row.defense,
-            speed: row.speed,
+            speciesId: row.speciesId,
+            speciesDisplayName: row.speciesDisplayName,
+            rarityId: row.rarityId,
+            rarityLabelDe: row.rarityLabelDe,
+            classId: row.classId,
+            classLabelDe: row.classLabelDe,
+            elementId: row.elementId,
+            elementLabelDe: row.elementLabelDe,
+            abilityId: row.abilityId,
+            abilityLabelDe: row.abilityLabelDe,
+            nickname: row.nickname,
+            baseHp: row.baseHp,
+            baseAtk: row.baseAtk,
+            baseDef: row.baseDef,
+            baseSpd: row.baseSpd,
+            baseGain: row.baseGain,
+            basePow: row.basePow,
+            equippedHatId: row.equippedHatId,
             selectedForEvent: row.selectedForEvent,
             createdAt: toIsoTimestamp(row.createdAt)
           }
@@ -745,7 +773,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         hatDimensions,
         hatRows.map((row) => ({
           slotIndex: row.slotIndex,
-          item: { id: row.id, hatTypeId: row.hatTypeId }
+          item: { id: row.id, hatId: row.hatId }
         }))
       )
     }
@@ -914,11 +942,15 @@ async function buildPetHatchedOverlayAlert(row: {
     .select({
       displayName: users.displayName,
       login: users.twitchLogin,
-      petName: petTypes.displayName
+      petName: petSpecies.displayName
     })
     .from(pets)
     .innerJoin(users, eq(pets.ownerUserId, users.id))
-    .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+    .innerJoin(petSpecies, eq(pets.speciesId, petSpecies.id))
+      .innerJoin(petRarities, eq(pets.rarityId, petRarities.id))
+      .innerJoin(petClasses, eq(pets.classId, petClasses.id))
+      .innerJoin(elements, eq(pets.elementId, elements.id))
+      .innerJoin(petAbilities, eq(pets.abilityId, petAbilities.id))
     .where(eq(pets.id, hatchedPetId))
     .limit(1);
   if (!details) return null;
@@ -1035,11 +1067,15 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           .select({
             displayName: users.displayName,
             login: users.twitchLogin,
-            petName: petTypes.displayName
+            petName: petSpecies.displayName
           })
           .from(pets)
           .innerJoin(users, eq(pets.ownerUserId, users.id))
-          .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+          .innerJoin(petSpecies, eq(pets.speciesId, petSpecies.id))
+      .innerJoin(petRarities, eq(pets.rarityId, petRarities.id))
+      .innerJoin(petClasses, eq(pets.classId, petClasses.id))
+      .innerJoin(elements, eq(pets.elementId, elements.id))
+      .innerJoin(petAbilities, eq(pets.abilityId, petAbilities.id))
           .where(eq(pets.id, winner.petId))
           .limit(1);
         return {
@@ -1241,7 +1277,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const entries = await tx
         .select({
           outcomeType: eggLootTableEntries.outcomeType,
-          petTypeId: eggLootTableEntries.petTypeId,
+          petSpeciesId: eggLootTableEntries.petSpeciesId,
           resourceType: eggLootTableEntries.resourceType,
           resourceAmount: eggLootTableEntries.resourceAmount,
           weight: eggLootTableEntries.weight
@@ -1280,7 +1316,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           )
         );
 
-      if (picked.outcomeType === 'pet' && picked.petTypeId) {
+      if (picked.outcomeType === 'pet' && picked.petSpeciesId) {
         if (freeEggSlot === null)
           return { kind: 'unhatched_inventory_full' as const };
         const [egg] = await tx
@@ -1288,7 +1324,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           .values({
             ownerUserId: identity.userId,
             eggTypeId: eggTypeId,
-            hiddenPetTypeId: picked.petTypeId,
+            hiddenPetSpeciesId: picked.petSpeciesId,
             state: 'ready_for_incubation',
             slotIndex: freeEggSlot
           })
@@ -1394,7 +1430,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           slotIndex: incubatorSlots.slotIndex,
           isAvailable: incubatorSlots.isAvailable,
           speedMultiplierBasisPoints: incubatorSlots.speedMultiplierBasisPoints,
-          rarityBonusBasisPoints: incubatorSlots.rarityBonusBasisPoints,
+          specialBonusBasisPoints: incubatorSlots.specialBonusBasisPoints,
           fuelBehavior: incubatorSlots.fuelBehavior,
           specialEffectConfig: incubatorSlots.specialEffectConfig
         })
@@ -1488,7 +1524,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
             baseIncubationSeconds: eggType.baseIncubationSeconds,
             incubatorMetadata: {
               speedMultiplierBasisPoints: slot.speedMultiplierBasisPoints,
-              rarityBonusBasisPoints: slot.rarityBonusBasisPoints,
+              specialBonusBasisPoints: slot.specialBonusBasisPoints,
               fuelBehavior: slot.fuelBehavior,
               specialEffectConfig: slot.specialEffectConfig
             }
@@ -1551,7 +1587,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [egg] = await tx
         .select({
           id: unhatchedEggs.id,
-          hiddenPetTypeId: unhatchedEggs.hiddenPetTypeId,
+          hiddenPetSpeciesId: unhatchedEggs.hiddenPetSpeciesId,
           state: unhatchedEggs.state
         })
         .from(unhatchedEggs)
@@ -1591,29 +1627,38 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const freePetSlot = await findFreePetSlotInTx(tx, identity.userId);
       if (freePetSlot === null) return { kind: 'pet_inventory_full' as const };
 
-      const [petType] = await tx
+      const [petSpeciesRow] = await tx
         .select({
-          id: petTypes.id,
-          baseHp: petTypes.baseHp,
-          baseAttack: petTypes.baseAttack,
-          baseDefense: petTypes.baseDefense,
-          baseSpeed: petTypes.baseSpeed
+          id: petSpecies.id,
+          defaultHp: petSpecies.defaultHp,
+          defaultAtk: petSpecies.defaultAtk,
+          defaultDef: petSpecies.defaultDef,
+          defaultSpd: petSpecies.defaultSpd,
+          defaultGain: petSpecies.defaultGain,
+          defaultPow: petSpecies.defaultPow
         })
-        .from(petTypes)
-        .where(eq(petTypes.id, egg.hiddenPetTypeId))
+        .from(petSpecies)
+        .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
         .limit(1);
-      if (!petType) return { kind: 'pet_type_missing' as const };
+      if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
+      const instanceDefaults = DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ?? DEFAULT_PET_INSTANCE_BY_SPECIES.waldwachtel!;
 
       const [newPet] = await tx
         .insert(pets)
         .values({
           ownerUserId: identity.userId,
-          petTypeId: petType.id,
-          hp: petType.baseHp,
-          attack: petType.baseAttack,
-          defense: petType.baseDefense,
-          speed: petType.baseSpeed,
-          statRolls: { hp: 0, attack: 0, defense: 0, speed: 0 },
+          speciesId: petSpeciesRow.id,
+          rarityId: instanceDefaults.rarityId,
+          classId: instanceDefaults.classId,
+          elementId: instanceDefaults.elementId,
+          abilityId: instanceDefaults.abilityId,
+          baseHp: petSpeciesRow.defaultHp,
+          baseAtk: petSpeciesRow.defaultAtk,
+          baseDef: petSpeciesRow.defaultDef,
+          baseSpd: petSpeciesRow.defaultSpd,
+          baseGain: petSpeciesRow.defaultGain,
+          basePow: petSpeciesRow.defaultPow,
+          hatchVariance: { hp: 0, atk: 0, def: 0, spd: 0, gain: 0, pow: 0 },
           sourceUnhatchedEggId: egg.id,
           slotIndex: freePetSlot
         })
@@ -1642,7 +1687,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           hatchedPets: [
             {
               id: newPet?.id ?? null,
-              petTypeId: petType.id,
+              speciesId: petSpeciesRow.id,
               slotIndex: freePetSlot
             }
           ],
@@ -1773,12 +1818,13 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [pet] = await tx
         .select({
           id: pets.id,
-          petTypeId: pets.petTypeId,
+          speciesId: pets.speciesId,
           selectedForEvent: pets.selectedForEvent,
-          rarity: petTypes.rarity
+          rarityId: pets.rarityId,
+          recycleCrackedEggs: petRarities.recycleCrackedEggs
         })
         .from(pets)
-        .innerJoin(petTypes, eq(pets.petTypeId, petTypes.id))
+        .innerJoin(petRarities, eq(pets.rarityId, petRarities.id))
         .where(
           and(
             eq(pets.id, body.petId!),
@@ -1789,9 +1835,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .limit(1);
       if (!pet) return { kind: 'not_found' as const };
 
-      const rewardAmount =
-        PET_SCRAP_REWARD_BY_RARITY[pet.rarity] ??
-        PET_SCRAP_REWARD_BY_RARITY.common;
+      const rewardAmount = pet.recycleCrackedEggs;
       const now = new Date();
       await tx
         .update(pets)
@@ -1827,8 +1871,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           pets: [
             {
               id: pet.id,
-              petTypeId: pet.petTypeId,
-              rarity: pet.rarity,
+              speciesId: pet.speciesId,
+              rarityId: pet.rarityId,
               change: -1,
               selectedForEvent: pet.selectedForEvent
             }
@@ -2011,7 +2055,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [pet] = await tx
         .select({
           id: pets.id,
-          petTypeId: pets.petTypeId,
+          speciesId: pets.speciesId,
           slotIndex: pets.slotIndex,
           selectedForEvent: pets.selectedForEvent
         })
@@ -2046,7 +2090,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           pets: [
             {
               id: pet.id,
-              petTypeId: pet.petTypeId,
+              speciesId: pet.speciesId,
               slotIndex: pet.slotIndex,
               selectedForEvent: pet.selectedForEvent,
               change: -1
@@ -2192,7 +2236,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [hat] = await tx
         .select({
           id: hatInventorySlots.id,
-          hatTypeId: hatInventorySlots.hatTypeId,
+          hatId: hatInventorySlots.hatId,
           slotIndex: hatInventorySlots.slotIndex
         })
         .from(hatInventorySlots)
@@ -2216,7 +2260,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           hats: [
             {
               id: hat.id,
-              hatTypeId: hat.hatTypeId,
+              hatId: hat.hatId,
               slotIndex: hat.slotIndex,
               change: -1
             }

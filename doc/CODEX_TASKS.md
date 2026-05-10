@@ -44,7 +44,7 @@ Acceptance:
 - PostgreSQL connection.
 - Migration tooling.
 - Basic schema from `DATA_MODEL.md`.
-- Seed data for pet types, egg types, loot table.
+- Seed data for pet species, pet rarities/classes/elements/abilities, egg types, loot table.
 
 Acceptance:
 
@@ -194,6 +194,17 @@ Acceptance:
 - 🟨 TrueNAS deployment baseline exists with persistent Postgres volume and init migration/seed job; backup/restore documentation still needs hardening.
 - ✅ `GET /` returns the landing page and frontend route fallback works without impacting `/api/*` routes.
 
+
+## Pet RPG data model revision
+
+- Use `pet_species` for species templates/default stats and `pets` for owned pet instances with permanent base stats derived from species defaults plus hatch variance.
+- Do not use rarity as a stat multiplier; `pet_rarities` is for rank, display/economy metadata, combine progression, and recycle value only.
+- Each pet has exactly one class, one element, and one ability. Each pet may equip one cosmetic hat; hats never affect combat stats.
+- Do not implement gems for this pass.
+- Keep current AP, current HP, attacks made, effective stats, boss class stacks, and boss element stacks on boss-event participant runtime state, not on pets.
+- Future ability rules are documentation-only for now: `pet_abilities.ap_required` is the AP auto-trigger threshold; trigger when current AP and minimum attacks are met; attacks grant 20 base AP; GAIN modifies AP gained; POW scales ability effects.
+- Do not implement boss-event battle logic in code until explicitly requested.
+
 ## Slotted RPG Inventory MVP Update
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
@@ -207,5 +218,5 @@ Acceptance:
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
