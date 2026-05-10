@@ -407,14 +407,11 @@ ul {
   font-weight: 700;
 }
 
-.pet-trash-panel {
-  display: grid;
-  gap: 0.4rem;
-  margin-top: 0.75rem;
+.pet-trash-row {
+  margin-top: 0.45rem;
 }
 
 .pet-trash-drop-target {
-  min-height: 6.5rem;
   border-color: rgba(248, 113, 113, 0.78);
   background: linear-gradient(
     135deg,

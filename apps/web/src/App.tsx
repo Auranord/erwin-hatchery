@@ -1241,7 +1241,8 @@ export function App(): JSX.Element {
     kind: Exclude<DragPayload['kind'], 'incubator'>,
     renderItem: (item: T, slotIndex: number) => JSX.Element,
     className = '',
-    getItemClassName?: (item: T) => string
+    getItemClassName?: (item: T) => string,
+    renderAfterGrid?: JSX.Element
   ): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
@@ -1286,6 +1287,7 @@ export function App(): JSX.Element {
             </div>
           ))}
         </div>
+        {renderAfterGrid}
       </section>
     );
   }
@@ -1338,13 +1340,19 @@ export function App(): JSX.Element {
     );
   }
 
-  function renderPetTrashSlot(): JSX.Element {
+  function renderPetTrashSlot(columns: number): JSX.Element {
     return (
-      <section className="pet-trash-panel">
+      <div
+        className="inventory-grid pet-trash-row"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
+        }}
+      >
         <div
           role="button"
           tabIndex={0}
           className={`inventory-slot pet-trash-drop-target empty ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
+          style={{ gridColumn: `${columns} / span 1` }}
           onDragOver={(event) => {
             if ((dragPayload ?? selectedPayload)?.kind === 'pet')
               event.preventDefault();
@@ -1361,14 +1369,10 @@ export function App(): JSX.Element {
         >
           <div className="slot-content pet-trash-content">
             <strong>Verwerten</strong>
-            <span>Pet hier ablegen</span>
-            <span>Gibt Aufgebrochene Eier</span>
+            <span>Pet ablegen</span>
           </div>
         </div>
-        <p className="inventory-capacity">
-          Vor dem Löschen erscheint eine Bestätigung.
-        </p>
-      </section>
+      </div>
     );
   }
 
@@ -1661,7 +1665,6 @@ export function App(): JSX.Element {
                       Event-Slot wählen.
                     </p>
                     {renderEventPetSelectionSlot(selectedEventPet)}
-                    {renderPetTrashSlot()}
                   </section>
                   {renderGrid(
                     'Pet-Inventar',
@@ -1689,7 +1692,8 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'pet-grid-panel',
-                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : '')
+                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : ''),
+                    renderPetTrashSlot(playerInventory.pets.dimensions.columns)
                   )}
                   {renderGrid(
                     'Items',
