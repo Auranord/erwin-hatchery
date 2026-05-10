@@ -92,6 +92,13 @@
       "when": 1788000000000,
       "tag": "0012_incubation_queue_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789000000000,
+      "tag": "0013_split_nonstackable_inventories",
+      "breakpoints": true
     }
   ]
 }

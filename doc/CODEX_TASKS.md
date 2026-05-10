@@ -8,7 +8,7 @@ Last reevaluated: **2026-05-09**.
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
 - ✅ Milestone 2 completed (Twitch OAuth login/logout, OAuth state validation, secure session cookie, `/api/me`, owner bootstrap via broadcaster ID).
 - ✅ Milestone 3 completed (EventSub webhook ingestion + idempotent Channel Point redemption processing + startup subscription auto-sync + admin status debug implemented).
-- ✅ Milestone 4 completed (authenticated player shell, live slotted inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, item/pet/egg slot moves, and public leaderboard are implemented).
+- ✅ Milestone 4 completed (authenticated player shell, live slotted inventory stream, mystery egg identify, incubate -> hatch flow, pet selection, consumable/equipment/hat/pet/egg slot moves, and public leaderboard are implemented).
 - ✅ Milestone 5 completed (timestamp-based incubation start/finish flow, queue-based live-progress accumulation, live/viewer multipliers, admin stream-state override, and hatch pet creation are implemented).
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 completed (admin battle event start with random winners, 3/2/1 leaderboard award, participant/result persistence, pet deselection, and dedicated battle revert action are implemented).
@@ -198,14 +198,14 @@ Acceptance:
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, and consumable/item stacks. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
+- Capacity applies only to slotted inventories: unhatched eggs, pets, consumables, equipment, and hats. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and 8 columns × 3 base rows for items.
+- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - The Event-Pet selector sits directly above the pet inventory as a fixed drop target with pet stat labels; it marks a pet for events without moving it out of the pet inventory. A trashcan-style fixed slot scraps a pet into Aufgebrochene Eier after confirmation.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables/items are represented as slotted stacks with server-side move, merge, and swap validation. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, pets, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources; this is separate from the pet `Verwerten` slot that grants cracked eggs. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
