@@ -286,7 +286,7 @@ Ability trigger rule for future boss-event logic: after an attack and AP gain ar
 
 ### pet_species
 
-Config table for species templates and default stats. Species defaults are the starting template only; hatched pets store their own permanent base stats in `pets`.
+Config table for species templates, default stats, and the species default ability. Species defaults are the starting template only; hatched pets store their own permanent base stats and copied individual ability in `pets`.
 
 ```text
 id text primary key
@@ -299,7 +299,27 @@ default_def integer not null
 default_spd integer not null
 default_gain integer not null
 default_pow integer not null
+default_ability_id text not null references pet_abilities(id)
 asset_key text not null
+is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
+```
+
+### pet_traits
+
+Reusable trait definitions that can be assigned to pet instances. Modifiers are signed integers and may be positive, negative, or zero for each permanent base stat. The MVP stores the data model now; combat formulas can decide later how trait modifiers affect effective stats.
+
+```text
+id text primary key
+label_de text not null
+description text not null default ''
+hp_modifier integer not null default 0
+atk_modifier integer not null default 0
+def_modifier integer not null default 0
+spd_modifier integer not null default 0
+gain_modifier integer not null default 0
+pow_modifier integer not null default 0
 is_active boolean not null default true
 created_at timestamp
 updated_at timestamp
@@ -307,7 +327,7 @@ updated_at timestamp
 
 ### pets
 
-Unique owned pet instances. A pet is created from its species defaults plus hatch variance. Its permanent base stats live on the `pets` row so later training can change that individual pet without changing the species template.
+Unique owned pet instances. A pet is created from its species defaults plus hatch variance and receives an individual `ability_id` copied from `pet_species.default_ability_id`. Its permanent base stats and individual ability live on the `pets` row so later training can change that individual pet without changing the species template.
 
 ```text
 id uuid primary key
@@ -316,7 +336,7 @@ species_id text not null references pet_species(id)
 rarity_id text not null references pet_rarities(id)
 class_id text not null references pet_classes(id)
 element_id text not null references elements(id)
-ability_id text not null references pet_abilities(id)
+ability_id text not null references pet_abilities(id) -- copied from pet_species.default_ability_id at hatch; future training may change the individual pet
 nickname text nullable
 base_hp integer not null
 base_atk integer not null
@@ -336,12 +356,23 @@ created_at timestamp
 hatched_at timestamp
 ```
 
+### pet_trait_assignments
+
+Join table that stores the ordered-independent list of traits assigned to each owned pet. Assigning, replacing, or removing traits later counts as a server-authoritative training/economy action and must be ledgered.
+
+```text
+pet_id uuid not null references pets(id)
+trait_id text not null references pet_traits(id)
+assigned_at timestamp
+primary key (pet_id, trait_id)
+```
+
 Pet invariants:
 
-- Every pet has exactly one class, one element, and one ability.
-- `pet_species` defines defaults; `pets` stores the owned instance and its own permanent base stats.
-- Hatch generation starts from species defaults, applies hatch variance, assigns the owned pet instance rarity/class/element/ability from explicit server-side hatch rules, and writes an immutable ledger row.
-- Training may later modify `base_*` values or append to `training_adjustments`; it must be server-authoritative and ledgered.
+- Every pet has exactly one class, one element, and one individual ability.
+- `pet_species` defines default stats and the default ability; `pets` stores the owned instance, its own permanent base stats, and its own ability.
+- Hatch generation starts from species defaults, applies hatch variance, copies `pet_species.default_ability_id` into `pets.ability_id`, assigns rarity/class/element from explicit server-side hatch rules, and writes an immutable ledger row.
+- Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
 - Gems are intentionally not part of the pet equipment model in this pass. Do not add gem equip slots or gem combat effects yet.
@@ -470,7 +501,7 @@ turmeule         Turmeule         regular striker         class=striker  element
 goldener_erwin   Goldener Erwin   rare    rare_allrounder   class=hero     element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
 ```
 
-Seed `pet_rarities`, `pet_classes`, `elements`, `pet_abilities`, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
+Seed `pet_rarities`, `pet_classes`, `elements`, `pet_abilities`, `pet_traits`, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
 
 ### Egg type
 

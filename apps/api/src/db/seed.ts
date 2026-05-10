@@ -8,7 +8,8 @@ import {
   petAbilities,
   petClasses,
   petRarities,
-  petSpecies
+  petSpecies,
+  petTraits
 } from './schema.js';
 
 const SEEDED_EGG_TYPE_IDS = ['common_mystery_egg', 'uncommon_mystery_egg', 'rare_mystery_egg'] as const;
@@ -73,19 +74,28 @@ async function seed(): Promise<void> {
     { id: 'golden_crowl', labelDe: 'Goldruf', description: 'Automatische Basisfähigkeit.', apRequired: 100, minAttacksRequired: 1, effectType: 'damage', isActive: true }
   ]).onConflictDoUpdate({ target: petAbilities.id, set: { isActive: true } });
 
+  await db.insert(petTraits).values([
+    { id: 'sturdy', labelDe: 'Robust', description: 'Mehr HP, etwas weniger SPD.', hpModifier: 10, atkModifier: 0, defModifier: 0, spdModifier: -2, gainModifier: 0, powModifier: 0, isActive: true },
+    { id: 'sharp', labelDe: 'Scharfsinnig', description: 'Mehr ATK, etwas weniger DEF.', hpModifier: 0, atkModifier: 2, defModifier: -2, spdModifier: 0, gainModifier: 0, powModifier: 0, isActive: true },
+    { id: 'focused', labelDe: 'Fokussiert', description: 'Mehr POW, etwas weniger GAIN.', hpModifier: 0, atkModifier: 0, defModifier: 0, spdModifier: 0, gainModifier: -5, powModifier: 10, isActive: true }
+  ]).onConflictDoUpdate({ target: petTraits.id, set: { isActive: true } });
+
   await db.insert(hats).values([
     { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
   ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
 
   await db.insert(petSpecies).values([
-    { id: 'waldwachtel', displayName: 'Waldwachtel', labelDe: 'Waldwachtel', description: 'Gemütliche Waldwachtel.', defaultHp: 100, defaultAtk: 10, defaultDef: 8, defaultSpd: 12, defaultGain: 100, defaultPow: 100, assetKey: 'pet_waldwachtel', isActive: true },
-    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', labelDe: 'Glitzer-Spatz', description: 'Funkelnder schneller Spatz.', defaultHp: 80, defaultAtk: 8, defaultDef: 5, defaultSpd: 18, defaultGain: 115, defaultPow: 90, assetKey: 'pet_glitzer_spatz', isActive: true },
-    { id: 'moorente', displayName: 'Moorente', labelDe: 'Moorente', description: 'Zähe Ente aus dem Moor.', defaultHp: 120, defaultAtk: 7, defaultDef: 12, defaultSpd: 7, defaultGain: 90, defaultPow: 105, assetKey: 'pet_moorente', isActive: true },
-    { id: 'turmeule', displayName: 'Turmeule', labelDe: 'Turmeule', description: 'Wachsame Eule vom Turm.', defaultHp: 90, defaultAtk: 14, defaultDef: 7, defaultSpd: 10, defaultGain: 100, defaultPow: 115, assetKey: 'pet_turmeule', isActive: true },
-    { id: 'goldener_erwin', displayName: 'Goldener Erwin', labelDe: 'Goldener Erwin', description: 'Legendär glänzender Erwin.', defaultHp: 110, defaultAtk: 13, defaultDef: 10, defaultSpd: 13, defaultGain: 105, defaultPow: 110, assetKey: 'pet_goldener_erwin', isActive: true }
+    { id: 'waldwachtel', displayName: 'Waldwachtel', labelDe: 'Waldwachtel', description: 'Gemütliche Waldwachtel.', defaultHp: 100, defaultAtk: 10, defaultDef: 8, defaultSpd: 12, defaultGain: 100, defaultPow: 100, defaultAbilityId: 'peck_burst', assetKey: 'pet_waldwachtel', isActive: true },
+    { id: 'glitzer_spatz', displayName: 'Glitzer-Spatz', labelDe: 'Glitzer-Spatz', description: 'Funkelnder schneller Spatz.', defaultHp: 80, defaultAtk: 8, defaultDef: 5, defaultSpd: 18, defaultGain: 115, defaultPow: 90, defaultAbilityId: 'glimmer_dash', assetKey: 'pet_glitzer_spatz', isActive: true },
+    { id: 'moorente', displayName: 'Moorente', labelDe: 'Moorente', description: 'Zähe Ente aus dem Moor.', defaultHp: 120, defaultAtk: 7, defaultDef: 12, defaultSpd: 7, defaultGain: 90, defaultPow: 105, defaultAbilityId: 'mud_guard', assetKey: 'pet_moorente', isActive: true },
+    { id: 'turmeule', displayName: 'Turmeule', labelDe: 'Turmeule', description: 'Wachsame Eule vom Turm.', defaultHp: 90, defaultAtk: 14, defaultDef: 7, defaultSpd: 10, defaultGain: 100, defaultPow: 115, defaultAbilityId: 'owl_strike', assetKey: 'pet_turmeule', isActive: true },
+    { id: 'goldener_erwin', displayName: 'Goldener Erwin', labelDe: 'Goldener Erwin', description: 'Legendär glänzender Erwin.', defaultHp: 110, defaultAtk: 13, defaultDef: 10, defaultSpd: 13, defaultGain: 105, defaultPow: 110, defaultAbilityId: 'golden_crowl', assetKey: 'pet_goldener_erwin', isActive: true }
   ]).onConflictDoUpdate({
     target: petSpecies.id,
-    set: { isActive: true }
+    set: {
+      defaultAbilityId: sql`excluded.default_ability_id`,
+      isActive: true
+    }
   });
 
   await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [...SEEDED_EGG_TYPE_IDS]));
