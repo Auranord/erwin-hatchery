@@ -8,7 +8,7 @@ This document describes the recommended database shape. Exact names can change, 
 - All economy mutations are server-side and ledgered.
 - Mystery eggs are stored as per-user integer balances by egg type.
 - Egg contents are determined at identify/open time for mystery eggs and are ledgered.
-- Database should support future features: more egg types, fusion, training, consumables, equipment, hats, buffs, battle formulas.
+- Database should support future features: more egg types, fusion, training, consumables, cosmetic hats, boss-event formulas, and runtime boss state.
 - Events must be reversible where practical, especially admin-started battles.
 
 ## Core tables
@@ -145,7 +145,7 @@ weight integer not null
 outcome_type text not null -- resource, unhatched_egg
 resource_type text nullable
 resource_amount integer nullable
-pet_type_id text nullable references pet_types(id)
+pet_species_id text nullable references pet_species(id)
 ```
 
 Use integer weights, not floating percentages. Example: total weight 10000 for basis points.
@@ -173,7 +173,7 @@ Pet eggs that are known to contain a pet, but not which pet.
 id uuid primary key
 owner_user_id uuid references users(id)
 egg_type_id text references egg_types(id)
-hidden_pet_type_id text references pet_types(id)
+hidden_pet_species_id text references pet_species(id)
 state text not null -- ready, incubating, hatched, deleted
 created_from_redemption_id uuid nullable references channel_point_redemptions(id)
 created_at timestamp
@@ -190,7 +190,7 @@ slot_source text not null -- default, upgrade (future); subscriber/admin sources
 slot_level integer not null default 1
 slot_index integer nullable
 speed_multiplier_basis_points integer not null default 10000
-rarity_bonus_basis_points integer not null default 0
+special_bonus_basis_points integer not null default 0 -- incubation/economy modifier placeholder; not a pet stat multiplier
 fuel_behavior text not null default 'none'
 special_effect_config jsonb not null default '{}'
 is_available boolean not null default true
@@ -226,37 +226,116 @@ progress_snapshot jsonb not null -- stream state/modifiers from latest sync if n
 
 Do not tick every second in the database. Store accumulated progress plus the last live-progress timestamp, and only add progress for elapsed time while the stream is live.
 
-### pet_types
+### pet_rarities
 
-Config table for pet species/types.
+Config table for rarity rank and economy/display metadata. Rarity is not a stat multiplier and must not directly scale hatch stats, battle stats, ability strength, AP generation, or boss-event stack values.
+
+```text
+id text primary key -- regular, rare, epic, legendary
+display_name text not null
+rank integer not null unique
+display_config jsonb not null default '{}' -- colors, badges, labels
+economy_config jsonb not null default '{}' -- non-random shop/pricing metadata
+combine_progression_config jsonb not null default '{}' -- future combine/fusion thresholds
+recycle_cracked_eggs integer not null default 0
+is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
+```
+
+### pet_classes
+
+Config table for the exactly-one class assigned to each pet. Class metadata is static pet identity data. Boss class stacks are runtime boss-event state and are not stored on `pets`.
 
 ```text
 id text primary key
 display_name text not null
-rarity text not null -- regular, rare
+description text nullable
+display_config jsonb not null default '{}'
+is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
+```
+
+### pet_elements
+
+Config table for the exactly-one element assigned to each pet. Element metadata is static pet identity data. Boss element stacks are runtime boss-event state and are not stored on `pets`.
+
+```text
+id text primary key
+display_name text not null
+description text nullable
+display_config jsonb not null default '{}'
+is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
+```
+
+### pet_abilities
+
+Config table for automatic pet abilities. Current AP is runtime boss-event participant state, not pet state.
+
+```text
+id text primary key
+display_name text not null
+description text not null
+ap_required integer not null -- AP required to auto-trigger
+min_attacks_required integer not null default 0 -- attacks required before auto-trigger is allowed
+effect_type text not null
+effect_config jsonb not null default '{}' -- formulas may reference POW as ability-effect scaling
+is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
+```
+
+Ability trigger rule for future boss-event logic: after an attack and AP gain are resolved, automatically trigger when `current_ap >= pet_abilities.ap_required` and `attacks_made >= pet_abilities.min_attacks_required`. Attacks grant 20 base AP. The pet's permanent `gain` stat modifies AP gained per attack. The pet's permanent `pow` stat scales ability effects.
+
+### pet_species
+
+Config table for species templates and default stats. Species defaults are the starting template only; hatched pets store their own permanent base stats in `pets`.
+
+```text
+id text primary key
+display_name text not null
+rarity_id text not null references pet_rarities(id)
+default_class_id text not null references pet_classes(id)
+default_element_id text not null references pet_elements(id)
+default_ability_id text not null references pet_abilities(id)
 role text not null
-base_hp integer not null
-base_attack integer not null
-base_defense integer not null
-base_speed integer not null
+default_hp integer not null
+default_attack integer not null
+default_defense integer not null
+default_speed integer not null
+default_gain integer not null
+default_pow integer not null
 asset_key text not null
 is_active boolean not null default true
+created_at timestamp
+updated_at timestamp
 ```
 
 ### pets
 
-Unique hatched pet instances.
+Unique owned pet instances. A pet is created from its species defaults plus hatch variance. Its permanent base stats live on the `pets` row so later training can change that individual pet without changing the species template.
 
 ```text
 id uuid primary key
 owner_user_id uuid references users(id)
-pet_type_id text references pet_types(id)
+pet_species_id text not null references pet_species(id)
+rarity_id text not null references pet_rarities(id) -- copied from species at hatch for stable economy/display
+class_id text not null references pet_classes(id)
+element_id text not null references pet_elements(id)
+ability_id text not null references pet_abilities(id)
 display_name text nullable
-hp integer not null
-attack integer not null
-defense integer not null
-speed integer not null
-stat_rolls jsonb not null
+base_hp integer not null
+base_attack integer not null
+base_defense integer not null
+base_speed integer not null
+base_gain integer not null
+base_pow integer not null
+hatch_variance jsonb not null -- source rolls used to derive initial permanent base stats
+training_adjustments jsonb not null default '{}' -- future additive/permanent training changes
+equipped_hat_inventory_slot_id uuid nullable unique references hat_inventory_slots(id)
 source_unhatched_egg_id uuid references unhatched_eggs(id)
 is_favorite boolean not null default false
 selected_for_event boolean not null default false
@@ -266,7 +345,18 @@ created_at timestamp
 hatched_at timestamp
 ```
 
-Future fields can include level, experience, fusion count, training history, equipment slots, cosmetics.
+Pet invariants:
+
+- Every pet has exactly one class, one element, and one ability.
+- `pet_species` defines defaults; `pets` stores the owned instance and its own permanent base stats.
+- Hatch generation starts from species defaults, applies hatch variance, copies species rarity/class/element/ability unless a future explicit rule overrides them, and writes an immutable ledger row.
+- Training may later modify `base_*` values or append to `training_adjustments`; it must be server-authoritative and ledgered.
+- Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
+- A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
+- Gems are intentionally not part of the pet equipment model in this pass. Do not add gem equip slots or gem combat effects yet.
+- Current AP, attacks made, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
+
+Future fields can include level, experience, fusion count, and richer training history.
 
 ### consumables, equipment, and hats
 
@@ -312,7 +402,7 @@ hat_types:
 id text primary key
 display_name text
 description text
-config jsonb
+config jsonb -- cosmetic display/positioning metadata only; no stat effects
 is_active boolean
 created_at timestamp
 
@@ -339,11 +429,13 @@ updated_at timestamp
 
 ## Battle/event tables
 
+Boss-event combat formulas are documentation-only for this pass. Do not implement battle logic in code yet. Runtime AP, attacks made, class stacks, element stacks, and temporary effects belong on participant runtime state, not on `pets`.
+
 ### game_events
 
 ```text
 id uuid primary key
-event_type text not null -- battle
+event_type text not null -- battle, boss_event
 status text not null -- draft, running, resolved, reverted
 started_by_user_id uuid references users(id)
 started_at timestamp
@@ -361,6 +453,7 @@ user_id uuid references users(id)
 pet_id uuid references pets(id)
 placement integer nullable
 points_awarded integer not null default 0
+runtime_state jsonb not null default '{}' -- boss-event state: current_ap, attacks_made, class stacks, element stacks, temporary effects
 created_at timestamp
 ```
 
@@ -376,15 +469,17 @@ primary key(user_id, leaderboard_type)
 
 ## MVP seed data
 
-### Pet types
+### Pet species
 
 ```text
-waldwachtel      Waldwachtel      regular balanced 100 10 8 12
-glitzer_spatz    Glitzer-Spatz    regular fast      80  8  5 18
-moorente         Moorente         regular tank      120 7  12 7
-turmeule         Turmeule         regular striker   90  14 7 10
-goldener_erwin   Goldener Erwin   rare    allrounder 110 13 10 13
+waldwachtel      Waldwachtel      regular balanced        class=balanced element=nature ability=peck_burst    HP=100 ATK=10 DEF=8  SPD=12 GAIN=100 POW=100
+glitzer_spatz    Glitzer-Spatz    regular fast            class=scout    element=air    ability=glimmer_dash  HP=80  ATK=8  DEF=5  SPD=18 GAIN=115 POW=90
+moorente         Moorente         regular tank            class=guardian element=water  ability=mud_guard     HP=120 ATK=7  DEF=12 SPD=7  GAIN=90  POW=105
+turmeule         Turmeule         regular striker         class=striker  element=shadow ability=owl_strike    HP=90  ATK=14 DEF=7  SPD=10 GAIN=100 POW=115
+goldener_erwin   Goldener Erwin   rare    rare_allrounder   class=hero     element=light  ability=golden_crowl  HP=110 ATK=13 DEF=10 SPD=13 GAIN=105 POW=110
 ```
+
+Seed `pet_rarities`, `pet_classes`, `pet_elements`, and `pet_abilities` before seeding `pet_species`. Rarity seed values define display/economy/combine/recycle metadata only, never stat multipliers.
 
 ### Egg type
 
@@ -403,11 +498,11 @@ Use weights totaling 10000:
 2200 resource cracked_eggs 20
 1200 resource cracked_eggs 35
  600 resource cracked_eggs 60
- 800 pet waldwachtel
- 800 pet glitzer_spatz
- 700 pet moorente
- 700 pet turmeule
- 200 pet goldener_erwin
+ 800 pet_species waldwachtel
+ 800 pet_species glitzer_spatz
+ 700 pet_species moorente
+ 700 pet_species turmeule
+ 200 pet_species goldener_erwin
 ```
 
 ## Admin action log
@@ -435,5 +530,5 @@ Use weights totaling 10000:
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

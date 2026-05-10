@@ -60,6 +60,7 @@ Each player needs separate inventories for:
 - Mystery eggs (integer balance per egg type, not individual rows)
 - Unhatched eggs
 - Hatched pets
+- Cosmetic hats
 - Consumables
 - Resources, starting with cracked eggs
 
@@ -82,7 +83,7 @@ Outcome A: egg cracks into resources.
 
 Outcome B: egg contains a pet.
 
-- Pet type remains hidden.
+- Pet species remains hidden.
 - Mystery egg is consumed.
 - An unhatched egg is added to the pet egg inventory.
 
@@ -96,9 +97,9 @@ When incubation finishes, the pet is revealed.
 
 The generated pet has:
 
-- pet type
-- base stats from pet type
-- slight per-pet stat variance
+- pet species
+- permanent base stats derived from species defaults plus hatch variance
+- exactly one class, one element, and one ability copied from the species defaults unless a future explicit rule overrides them
 - unique pet instance ID
 - owner
 - creation/hatch metadata
@@ -129,19 +130,29 @@ Live + high chat activity: optional future multiplier
 
 ## MVP pets
 
-MVP has 4 regular pets and 1 rare pet.
+MVP has 4 regular species and 1 rare species.
 
-Suggested initial pet types:
+Definitions:
 
-| Pet type       |  Rarity | Role             |  HP | Attack | Defense | Speed |
-| -------------- | ------: | ---------------- | --: | -----: | ------: | ----: |
-| Waldwachtel    | Regular | Balanced         | 100 |     10 |       8 |    12 |
-| Glitzer-Spatz  | Regular | Fast             |  80 |      8 |       5 |    18 |
-| Moorente       | Regular | Tank             | 120 |      7 |      12 |     7 |
-| Turmeule       | Regular | Striker          |  90 |     14 |       7 |    10 |
-| Goldener Erwin |    Rare | Rare all-rounder | 110 |     13 |      10 |    13 |
+- `pet_species` defines species templates and default stats.
+- `pets` stores owned pet instances with their own permanent base stats.
+- A hatched pet starts from species defaults plus server-side hatch variance. Later training may permanently change the owned pet's base stats without changing the species template.
+- Rarity is not a stat multiplier. `pet_rarities` represents rarity rank, display/economy metadata, future combine progression, and recycle value only.
+- Each pet has exactly one class, one element, and one ability.
+- Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
+- Gems are not equipped on pets and should not be implemented for this pass.
 
-Each hatched pet should get slight stat variance, for example ±10%, calculated server-side at hatch time.
+Suggested initial pet species:
+
+| Pet species    |  Rarity | Role             | Class    | Element | Ability     |  HP | Attack | Defense | Speed | GAIN | POW |
+| -------------- | ------: | ---------------- | -------- | ------- | ----------- | --: | -----: | ------: | ----: | ---: | --: |
+| Waldwachtel    | Regular | Balanced         | Balanced | Nature  | Peck Burst  | 100 |     10 |       8 |    12 |  100 | 100 |
+| Glitzer-Spatz  | Regular | Fast             | Scout    | Air     | Glimmer Dash|  80 |      8 |       5 |    18 |  115 |  90 |
+| Moorente       | Regular | Tank             | Guardian | Water   | Mud Guard   | 120 |      7 |      12 |     7 |   90 | 105 |
+| Turmeule       | Regular | Striker          | Striker  | Shadow  | Owl Strike  |  90 |     14 |       7 |    10 |  100 | 115 |
+| Goldener Erwin |    Rare | Rare all-rounder | Hero     | Light   | Golden Crowl| 110 |     13 |      10 |    13 |  105 | 110 |
+
+Each hatched pet should get slight stat variance, for example ±10%, calculated server-side at hatch time and persisted on the pet instance as permanent base stats. GAIN modifies AP gained per attack in future boss-event combat, and POW scales ability effects.
 
 ## Egg loot table MVP
 
@@ -211,7 +222,7 @@ Bits:
 
 ## Battle/event system
 
-The event should not be hardcoded as “end of stream.” It is an admin-started game event that can be run any time.
+The event should not be hardcoded as “end of stream.” It is an admin-started game event that can be run any time. Existing MVP battle placement can remain random. Do not implement boss-event combat logic in code yet; the RPG rules below are documentation-only for a later pass.
 
 MVP battle flow:
 
@@ -229,7 +240,16 @@ MVP battle flow:
 9. Selected pets from the event are deselected after the event.
 10. Admin can revert the event, removing the awarded leaderboard points.
 
-Future battle versions can use pet stats, consumables, equipment, hats, training, or animation stages.
+Future battle versions can use pet stats, consumables, cosmetic hats, training, or animation stages, but hats must remain cosmetic and must not alter combat stats.
+
+Future boss-event RPG rules:
+
+- Current AP is runtime state on boss-event participant state, not on the pet.
+- Boss class stacks and boss element stacks are runtime boss-event state, not pet state.
+- `pet_abilities.ap_required` defines the AP needed to automatically trigger an ability.
+- Abilities auto-trigger when `current_ap >= ability.ap_required` and `attacks_made >= ability.min_attacks_required`.
+- Each attack grants 20 base AP. GAIN modifies AP gained per attack. POW scales ability effects.
+- Rarity must not modify AP gain, stat values, ability effects, or stack values.
 
 ## Overlays
 
@@ -299,6 +319,6 @@ Implement this in a simple and transparent way.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
-- Identifying a mystery egg into egg resources does not need slotted inventory space. Scrapping a pet deletes the pet after explicit confirmation, grants `cracked_eggs` based on rarity, and writes a ledger row.
-- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity. Automatic sorting is intentionally out of scope.
+- Identifying a mystery egg into egg resources does not need slotted inventory space. Scrapping a pet deletes the pet after explicit confirmation, grants `cracked_eggs` from rarity recycle metadata, and writes a ledger row; rarity still never multiplies stats.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

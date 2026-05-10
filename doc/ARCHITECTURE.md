@@ -76,9 +76,9 @@ The backend owns:
 - mystery egg balance increments/decrements
 - egg content rolls at identify/open time
 - incubation calculations
-- pet stat generation
+- pet instance generation from species defaults plus hatch variance
 - admin panel API
-- battle/event resolution
+- battle/event resolution; future boss-event RPG combat rules remain documentation-only until explicitly implemented
 - leaderboard updates
 - audit/ledger/revert logic
 - Server-Sent Events for overlays and live UI updates; alert overlays consume normalized `overlay_alert` events for pet hatches now and future in-game event messages later
@@ -99,6 +99,13 @@ The frontend owns:
 - OBS overlay pages (`/overlay/alerts` is a transparent 600x260 temporary alert source; `/overlay/battle` remains a larger event presentation source)
 
 The frontend must never decide final outcomes. It only sends user intent to the backend.
+
+
+## Pet RPG model boundaries
+
+The backend remains authoritative for hatch generation and later training. `pet_species` stores species templates/default stats, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance. Rarity metadata is limited to rank, display/economy metadata, combine progression, and recycle value; it must not be used as a stat multiplier. Each pet has exactly one class, one element, and one ability, and may equip one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Gems are intentionally out of scope for this pass.
+
+Future boss-event state such as current AP, attacks made, class stacks, and element stacks belongs on event participant runtime state, not on pet rows. Ability trigger logic is documented for later implementation only: attacks grant 20 base AP, GAIN modifies AP gained per attack, POW scales ability effects, and abilities auto-trigger when AP and minimum-attack requirements are met.
 
 ## Realtime MVP
 
@@ -238,5 +245,5 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

@@ -108,8 +108,8 @@ Server must own the economy.
 Never allow the frontend to directly set:
 
 - egg contents
-- pet type
-- pet stats
+- pet species
+- pet instance base stats, generated server-side from species defaults plus hatch variance
 - resource balances
 - leaderboard score
 - battle winners
@@ -152,6 +152,14 @@ Battle resolution must be revertible in MVP.
 - Database backups.
 - No secret values in logs.
 
+
+## Pet RPG fairness guardrails
+
+- Rarity must not be used as a hidden stat multiplier. It may define rank, display/economy metadata, combine progression, and recycle value only.
+- Cosmetic hats must not affect combat stats, AP gain, ability effects, or boss-event stack values.
+- Gems are out of scope for this pass and must not be exposed as paid or random combat equipment.
+- Future boss-event AP, attacks made, class stacks, and element stacks are runtime event state, not permanent pet state.
+
 ## References for implementation research
 
 Use official/current Twitch docs when implementing:
@@ -180,5 +188,5 @@ Use official/current Twitch docs when implementing:
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
