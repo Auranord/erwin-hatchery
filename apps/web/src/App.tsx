@@ -195,7 +195,7 @@ type PlayerInventory = {
   equipmentSets: EquipmentSet[];
   hats: InventoryGrid<HatItem>;
 };
-type DragPayload =
+type SelectionPayload =
   | { kind: 'incubator'; id: string }
   | { kind: 'egg'; id: string }
   | { kind: 'pet'; id: string }
@@ -406,8 +406,7 @@ export function App(): JSX.Element {
     LeaderboardEntry[]
   >([]);
   const [nowMs, setNowMs] = useState<number>(Date.now());
-  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
-  const [selectedPayload, setSelectedPayload] = useState<DragPayload | null>(
+  const [selectedPayload, setSelectedPayload] = useState<SelectionPayload | null>(
     null
   );
   const [pendingPetScrap, setPendingPetScrap] = useState<PetScrapTarget | null>(
@@ -419,6 +418,9 @@ export function App(): JSX.Element {
   const [isInventoryDiscardSubmitting, setIsInventoryDiscardSubmitting] =
     useState(false);
   const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
+  const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
+  const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
   const [gameMessage, setGameMessage] = useState<string | null>(null);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -664,7 +666,7 @@ export function App(): JSX.Element {
   }
 
   function isInventoryDiscardKind(
-    kind: DragPayload['kind']
+    kind: SelectionPayload['kind']
   ): kind is InventoryDiscardKind {
     return (
       kind === 'egg' ||
@@ -739,13 +741,12 @@ export function App(): JSX.Element {
   }
 
   async function handleDropToSlot(
-    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat' | 'trashcan' | 'discard',
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat',
     slotIndex: number,
     targetIncubatorId?: string
   ): Promise<void> {
-    const payload = dragPayload ?? selectedPayload;
+    const payload = selectedPayload;
     setSelectedPayload(null);
-    setDragPayload(null);
     if (!payload) return;
     try {
       if (
@@ -757,22 +758,7 @@ export function App(): JSX.Element {
         await refreshOwnInventory();
         return;
       }
-      if (targetKind === 'discard' && isInventoryDiscardKind(payload.kind)) {
-        const discardTarget = { kind: payload.kind, id: payload.id };
-        setPendingInventoryDiscard({
-          ...discardTarget,
-          label: getInventoryDiscardLabel(discardTarget)
-        });
-      } else if (payload.kind === 'pet' && targetKind === 'trashcan') {
-        const pet = playerInventory?.pets.slots
-          .map((cell) => cell.item)
-          .find((item): item is PetItem => item?.id === payload.id);
-        setPendingPetScrap({
-          petId: payload.id,
-          label: pet?.speciesDisplayName ?? 'dieses Pet',
-          rarity: pet?.rarityLabelDe ?? 'unbekannt'
-        });
-      } else if (payload.kind === 'egg' && targetKind === 'egg')
+      if (payload.kind === 'egg' && targetKind === 'egg')
         await postInventoryMove('/api/game/inventory/egg-slots/move', {
           unhatchedEggId: payload.id,
           toSlotIndex: slotIndex
@@ -820,8 +806,8 @@ export function App(): JSX.Element {
   }
 
   function selectOrRun(
-    payload: DragPayload,
-    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat' | 'trashcan' | 'discard',
+    payload: SelectionPayload,
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat',
     slotIndex: number,
     targetIncubatorId?: string
   ): void {
@@ -831,13 +817,13 @@ export function App(): JSX.Element {
     }
     setSelectedPayload(payload);
     if (payload.kind === 'egg') {
-      setGameMessage('Inkubator, Verwerfen-Slot oder Ziel-Slot antippen.');
+      setGameMessage('Inkubator oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
     } else if (payload.kind === 'pet') {
-      setGameMessage('Event-Slot, Verwerten-Slot oder Ziel-Slot antippen.');
+      setGameMessage('Event-Slot oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
     } else if (payload.kind === 'equipment' || payload.kind === 'equipment-set') {
-      setGameMessage('Set-Slot, Ausrüstungsinventar oder Verwerfen-Slot antippen.');
+      setGameMessage('Set-Slot oder Ausrüstungsinventar antippen. Aktionen oben rechts nutzen.');
     } else {
-      setGameMessage('Verwerfen-Slot oder Ziel-Slot antippen.');
+      setGameMessage('Ziel-Slot antippen oder Aktionen oben rechts nutzen.');
     }
   }
 
@@ -1028,10 +1014,43 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setPetNickname(petId: string, nickname: string): Promise<void> {
+    const response = await fetch(`/api/game/pets/${petId}/nickname`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Name konnte nicht aktualisiert werden.'
+      );
+    }
+  }
+
+  async function confirmPetRename(): Promise<void> {
+    if (!renamePetDraft || isPetRenameSubmitting) return;
+
+    setIsPetRenameSubmitting(true);
+    try {
+      await setPetNickname(renamePetDraft.petId, renamePetDraft.nickname);
+      setRenamePetDraft(null);
+      await refreshOwnInventory();
+      setGameMessage('Pet wurde umbenannt.');
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setIsPetRenameSubmitting(false);
+    }
+  }
+
   async function handleDropToEventPetSlot(): Promise<void> {
-    const payload = dragPayload ?? selectedPayload;
+    const payload = selectedPayload;
     setSelectedPayload(null);
-    setDragPayload(null);
     if (!payload || payload.kind !== 'pet') return;
 
     try {
@@ -1597,23 +1616,227 @@ export function App(): JSX.Element {
   const selectedEventSet =
     playerInventory?.equipmentSets.find((set) => set.selectedForEvent) ?? null;
 
+  function findInventoryItem(payload: SelectionPayload | null): EggItem | PetItem | ConsumableItem | EquipmentItem | HatItem | null {
+    if (!payload || !playerInventory) return null;
+    if (payload.kind === 'egg') {
+      return playerInventory.unhatchedEggs.slots.find((cell) => cell.item?.id === payload.id)?.item ?? null;
+    }
+    if (payload.kind === 'pet') {
+      return playerInventory.pets.slots.find((cell) => cell.item?.id === payload.id)?.item ?? null;
+    }
+    if (payload.kind === 'consumable') {
+      return playerInventory.consumables.slots.find((cell) => cell.item?.id === payload.id)?.item ?? null;
+    }
+    if (payload.kind === 'equipment') {
+      return playerInventory.equipment.slots.find((cell) => cell.item?.id === payload.id)?.item ?? null;
+    }
+    if (payload.kind === 'equipment-set') {
+      for (const set of playerInventory.equipmentSets) {
+        const item = set.slots.find((slot) => slot.item?.id === payload.id)?.item;
+        if (item) return item;
+      }
+      return null;
+    }
+    return playerInventory.hats.slots.find((cell) => cell.item?.id === payload.id)?.item ?? null;
+  }
+
+  function getSelectedPet(): PetItem | null {
+    const item = findInventoryItem(selectedPayload);
+    return selectedPayload?.kind === 'pet' && item ? (item as PetItem) : null;
+  }
+
+  function getInventoryItemLabel(payload: SelectionPayload | null): string {
+    const item = findInventoryItem(payload);
+    if (!payload || !item) return 'Ausgewähltes Objekt';
+    if (payload.kind === 'egg') return formatMysteryEggType((item as EggItem).eggTypeId);
+    if (payload.kind === 'pet') {
+      const pet = item as PetItem;
+      return pet.nickname ?? pet.speciesDisplayName;
+    }
+    if (payload.kind === 'consumable') return (item as ConsumableItem).consumableTypeId;
+    if (payload.kind === 'equipment' || payload.kind === 'equipment-set') return (item as EquipmentItem).equipmentTypeId;
+    return (item as HatItem).hatId;
+  }
+
+  function renderStatsRows(payload: SelectionPayload): JSX.Element {
+    const item = findInventoryItem(payload);
+    if (!item) return <p>Dieses Objekt ist nicht mehr im Inventar.</p>;
+
+    if (payload.kind === 'pet') {
+      const pet = item as PetItem;
+      return (
+        <dl className="stats-grid">
+          <div><dt>Art</dt><dd>{pet.speciesDisplayName}</dd></div>
+          <div><dt>Spitzname</dt><dd>{pet.nickname ?? '—'}</dd></div>
+          <div><dt>Seltenheit</dt><dd>{pet.rarityLabelDe}</dd></div>
+          <div><dt>Klasse</dt><dd>{pet.classLabelDe}</dd></div>
+          <div><dt>Element</dt><dd>{pet.elementLabelDe}</dd></div>
+          <div><dt>Fähigkeit</dt><dd>{pet.abilityLabelDe}</dd></div>
+          <div><dt>Level</dt><dd>{pet.level}</dd></div>
+          <div><dt>EXP</dt><dd>{pet.experience}</dd></div>
+          <div><dt>Favorit</dt><dd>{pet.isFavorite ? 'Ja' : 'Nein'}</dd></div>
+          <div><dt>Event-Pet</dt><dd>{pet.selectedForEvent ? 'Ja' : 'Nein'}</dd></div>
+          <div><dt>HP</dt><dd>{pet.baseHp}</dd></div>
+          <div><dt>ATK</dt><dd>{pet.baseAtk}</dd></div>
+          <div><dt>DEF</dt><dd>{pet.baseDef}</dd></div>
+          <div><dt>SPD</dt><dd>{pet.baseSpd}</dd></div>
+          <div><dt>Gain</dt><dd>{pet.baseGain}</dd></div>
+          <div><dt>Power</dt><dd>{pet.basePow}</dd></div>
+          <div><dt>Traits</dt><dd>{pet.traits.length > 0 ? pet.traits.map((trait) => trait.labelDe).join(', ') : '—'}</dd></div>
+        </dl>
+      );
+    }
+
+    if (payload.kind === 'egg') {
+      const egg = item as EggItem;
+      return (
+        <dl className="stats-grid">
+          <div><dt>Typ</dt><dd>{formatMysteryEggType(egg.eggTypeId)}</dd></div>
+          <div><dt>Status</dt><dd>{egg.state}</dd></div>
+          <div><dt>ID</dt><dd>{egg.id}</dd></div>
+        </dl>
+      );
+    }
+
+    if (payload.kind === 'consumable') {
+      const consumable = item as ConsumableItem;
+      return (
+        <dl className="stats-grid">
+          <div><dt>Typ</dt><dd>{consumable.consumableTypeId}</dd></div>
+          <div><dt>Menge</dt><dd>{consumable.quantity}</dd></div>
+          <div><dt>ID</dt><dd>{consumable.id}</dd></div>
+        </dl>
+      );
+    }
+
+    if (payload.kind === 'equipment' || payload.kind === 'equipment-set') {
+      const equipment = item as EquipmentItem;
+      return (
+        <dl className="stats-grid">
+          <div><dt>Typ</dt><dd>{equipment.equipmentTypeId}</dd></div>
+          <div><dt>Status</dt><dd>{payload.kind === 'equipment-set' ? 'Im Set' : 'Im Inventar'}</dd></div>
+          <div><dt>ID</dt><dd>{equipment.id}</dd></div>
+        </dl>
+      );
+    }
+
+    const hat = item as HatItem;
+    return (
+      <dl className="stats-grid">
+        <div><dt>Typ</dt><dd>{hat.hatId}</dd></div>
+        <div><dt>ID</dt><dd>{hat.id}</dd></div>
+      </dl>
+    );
+  }
+
+  function recycleSelectedPayload(): void {
+    if (!selectedPayload) return;
+    if (selectedPayload.kind === 'pet') {
+      const pet = getSelectedPet();
+      if (pet?.isFavorite) {
+        setGameMessage('Favoriten können nicht recycelt werden. Entferne zuerst den Favoritenstatus.');
+        return;
+      }
+      setPendingPetScrap({
+        petId: selectedPayload.id,
+        label: pet?.nickname ?? pet?.speciesDisplayName ?? 'dieses Pet',
+        rarity: pet?.rarityLabelDe ?? 'unbekannt'
+      });
+      setSelectedPayload(null);
+      return;
+    }
+    if (isInventoryDiscardKind(selectedPayload.kind)) {
+      const discardTarget = { kind: selectedPayload.kind, id: selectedPayload.id };
+      setPendingInventoryDiscard({
+        ...discardTarget,
+        label: getInventoryDiscardLabel(discardTarget)
+      });
+      setSelectedPayload(null);
+    }
+  }
+
+  function renderInventoryControlCenter(
+    kind: Exclude<SelectionPayload['kind'], 'incubator'>
+  ): JSX.Element {
+    const isSelectedHere = selectedPayload?.kind === kind;
+    const selectedPet = isSelectedHere && kind === 'pet' ? getSelectedPet() : null;
+    const recycleDisabled = !isSelectedHere || selectedPet?.isFavorite === true;
+    return (
+      <div className="inventory-control-center" aria-label="Inventar-Steuerung">
+        <button
+          type="button"
+          disabled={recycleDisabled}
+          onClick={recycleSelectedPayload}
+          title={selectedPet?.isFavorite ? 'Favoriten können nicht recycelt werden' : 'Ausgewähltes Objekt recyceln'}
+          aria-label={selectedPet?.isFavorite ? 'Favoriten können nicht recycelt werden' : 'Ausgewähltes Objekt recyceln'}
+        >
+          ♻
+        </button>
+        <button
+          type="button"
+          disabled={!isSelectedHere}
+          onClick={() => setStatsPayload(selectedPayload)}
+          title="Werte anzeigen"
+          aria-label="Werte anzeigen"
+        >
+          📊
+        </button>
+        {kind === 'pet' ? (
+          <>
+            <button
+              type="button"
+              disabled={!selectedPet}
+              onClick={() => {
+                if (selectedPet) void handlePetFavoriteToggle(selectedPet.id, !selectedPet.isFavorite);
+              }}
+              title={selectedPet?.isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+              aria-label={selectedPet?.isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
+            >
+              ★
+            </button>
+            <button
+              type="button"
+              disabled={!selectedPet}
+              onClick={() => {
+                if (selectedPet) {
+                  setRenamePetDraft({
+                    petId: selectedPet.id,
+                    nickname: selectedPet.nickname ?? selectedPet.speciesDisplayName
+                  });
+                }
+              }}
+              title="Pet umbenennen"
+              aria-label="Pet umbenennen"
+            >
+              ✎
+            </button>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderGrid<T extends { id: string }>(
     title: string,
     grid: InventoryGrid<T>,
-    kind: Exclude<DragPayload['kind'], 'incubator'>,
+    kind: Exclude<SelectionPayload['kind'], 'incubator'>,
     renderItem: (item: T, slotIndex: number) => JSX.Element,
     className = '',
-    getItemClassName?: (item: T) => string,
-    renderAfterGrid?: JSX.Element
+    getItemClassName?: (item: T) => string
   ): JSX.Element {
     return (
       <section className={`inventory-panel ${className}`}>
-        <h3>{title}</h3>
-        <p className="inventory-capacity">
-          {grid.slots.filter((cell) => cell.item).length}/
-          {grid.dimensions.capacity} Slots · {grid.dimensions.columns}×
-          {grid.dimensions.rows}
-        </p>
+        <div className="inventory-panel-header">
+          <div>
+            <h3>{title}</h3>
+            <p className="inventory-capacity">
+              {grid.slots.filter((cell) => cell.item).length}/
+              {grid.dimensions.capacity} Slots · {grid.dimensions.columns}×
+              {grid.dimensions.rows}
+            </p>
+          </div>
+          {renderInventoryControlCenter(kind)}
+        </div>
         <div
           className="inventory-grid"
           style={{
@@ -1625,15 +1848,20 @@ export function App(): JSX.Element {
               key={cell.slotIndex}
               role="button"
               tabIndex={0}
-              className={`inventory-slot ${cell.item ? 'occupied' : 'empty'} ${kind}-slot ${cell.item && getItemClassName ? getItemClassName(cell.item) : ''} ${selectedPayload ? 'select-target' : ''}`}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                void handleDropToSlot(kind, cell.slotIndex);
-              }}
+              className={`inventory-slot ${cell.item ? 'occupied' : 'empty'} ${kind}-slot ${cell.item && selectedPayload?.kind === kind && selectedPayload.id === cell.item.id ? 'selected-source' : ''} ${cell.item && getItemClassName ? getItemClassName(cell.item) : ''} ${selectedPayload ? 'select-target' : ''}`}
               onClick={() => {
                 if (cell.item) {
-                  const payload: DragPayload = { kind, id: cell.item.id };
+                  const payload: SelectionPayload = { kind, id: cell.item.id };
+                  selectOrRun(payload, kind, cell.slotIndex);
+                } else {
+                  void handleDropToSlot(kind, cell.slotIndex);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                if (cell.item) {
+                  const payload: SelectionPayload = { kind, id: cell.item.id };
                   selectOrRun(payload, kind, cell.slotIndex);
                 } else {
                   void handleDropToSlot(kind, cell.slotIndex);
@@ -1649,7 +1877,6 @@ export function App(): JSX.Element {
             </div>
           ))}
         </div>
-        {renderAfterGrid}
       </section>
     );
   }
@@ -1679,16 +1906,6 @@ export function App(): JSX.Element {
                     key={slot.slotIndex}
                     type="button"
                     className={`equipment-set-slot ${slot.item ? 'occupied' : 'empty'} ${(selectedPayload?.kind === 'equipment' || selectedPayload?.kind === 'equipment-set') ? 'select-target' : ''}`}
-                    draggable={Boolean(slot.item)}
-                    onDragStart={() => {
-                      if (slot.item) setDragPayload({ kind: 'equipment-set', id: slot.item.id });
-                    }}
-                    onDragEnd={() => setDragPayload(null)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      void handleDropToSlot('equipment-set', slot.slotIndex, set.id);
-                    }}
                     onClick={() => {
                       if (slot.item) {
                         selectOrRun({ kind: 'equipment-set', id: slot.item.id }, 'equipment-set', slot.slotIndex, set.id);
@@ -1707,7 +1924,7 @@ export function App(): JSX.Element {
                         })}
                         <span>
                           <strong>{slot.item.equipmentTypeId}</strong>
-                          <small>Ausrüstung zurücklegen: ins Raster ziehen</small>
+                          <small>Ausrüstung antippen, dann Ziel-Slot wählen</small>
                         </span>
                       </span>
                     ) : (
@@ -1741,11 +1958,6 @@ export function App(): JSX.Element {
           role="button"
           tabIndex={0}
           className={`inventory-slot event-pet-drop-target ${selectedPet ? 'occupied selected-event-pet-slot' : 'empty'} ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            void handleDropToEventPetSlot();
-          }}
           onClick={() => {
             if (selectedPayload?.kind === 'pet') {
               void handleDropToEventPetSlot();
@@ -1767,7 +1979,7 @@ export function App(): JSX.Element {
               </div>
             </div>
           ) : (
-            <span className="empty-slot-label">Pet hier ablegen</span>
+            <span className="empty-slot-label">Pet auswählen</span>
           )}
         </div>
         <div className="event-pet-details">
@@ -1799,90 +2011,6 @@ export function App(): JSX.Element {
           ) : null}
         </div>
       </section>
-    );
-  }
-
-  function getInventoryActionSlotStyle(columns: number): CSSProperties {
-    const span = Math.min(2, columns);
-    const startColumn = Math.max(1, columns - span + 1);
-    return {
-      gridColumn: `${startColumn} / span ${span}`,
-      gridRow: `span ${span}`
-    };
-  }
-
-  function renderPetTrashSlot(columns: number): JSX.Element {
-    return (
-      <div
-        className="inventory-grid pet-trash-row"
-        style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
-        }}
-      >
-        <div
-          role="button"
-          tabIndex={0}
-          className={`inventory-slot pet-trash-drop-target empty ${selectedPayload?.kind === 'pet' ? 'select-target' : ''}`}
-          style={{ gridColumn: `${columns} / span 1` }}
-          onDragOver={(event) => {
-            if ((dragPayload ?? selectedPayload)?.kind === 'pet')
-              event.preventDefault();
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            void handleDropToSlot('trashcan', 0);
-          }}
-          onClick={() => {
-            if (selectedPayload?.kind === 'pet')
-              void handleDropToSlot('trashcan', 0);
-          }}
-          aria-label="Pet verwerten"
-        >
-          <div className="slot-content pet-trash-content">
-            <strong>Verwerten</strong>
-            <span>Pet ablegen</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function renderInventoryDiscardSlot(
-    columns: number,
-    acceptedKind: InventoryDiscardKind
-  ): JSX.Element {
-    const activePayload = dragPayload ?? selectedPayload;
-    const canDiscard = activePayload?.kind === acceptedKind;
-    return (
-      <div
-        className="inventory-grid inventory-discard-row"
-        style={{
-          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`
-        }}
-      >
-        <div
-          role="button"
-          tabIndex={0}
-          className={`inventory-slot inventory-discard-drop-target empty ${canDiscard ? 'select-target' : ''}`}
-          style={getInventoryActionSlotStyle(columns)}
-          onDragOver={(event) => {
-            if (canDiscard) event.preventDefault();
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (canDiscard) void handleDropToSlot('discard', 0);
-          }}
-          onClick={() => {
-            if (canDiscard) void handleDropToSlot('discard', 0);
-          }}
-          aria-label="Gegenstand verwerfen"
-        >
-          <div className="slot-content inventory-discard-content">
-            <strong>Verwerfen</strong>
-            <span>Keine Belohnung</span>
-          </div>
-        </div>
-      </div>
     );
   }
 
@@ -1928,14 +2056,6 @@ export function App(): JSX.Element {
                   role="button"
                   tabIndex={0}
                   className={`inventory-slot occupied incubator-slot incubator-drop-target ${isInactiveEmptySlot ? 'incubator-inactive' : ''} ${selectedPayload?.kind === 'egg' && canStartEgg ? 'select-target' : ''}`}
-                  onDragOver={(event) => {
-                    if (canStartEgg) event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    if (canStartEgg)
-                      void handleDropToSlot('incubator', 0, incubator.id);
-                  }}
                   onClick={() => {
                     if (selectedPayload?.kind === 'egg' && canStartEgg) {
                       void handleDropToSlot('incubator', 0, incubator.id);
@@ -1976,7 +2096,7 @@ export function App(): JSX.Element {
                         ) : null}
                       </>
                     ) : canStartEgg ? (
-                      <span>Frei · Ei hier ablegen</span>
+                      <span>Frei · Ei auswählen, dann hier antippen</span>
                     ) : (
                       <span>Inaktiv</span>
                     )}
@@ -2136,6 +2256,67 @@ export function App(): JSX.Element {
                     </div>
                   </div>
                 ) : null}
+                {statsPayload ? (
+                  <div className="modal-backdrop" role="presentation">
+                    <div
+                      className="confirm-modal stats-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="inventory-stats-title"
+                    >
+                      <strong id="inventory-stats-title">
+                        Werte: {getInventoryItemLabel(statsPayload)}
+                      </strong>
+                      {renderStatsRows(statsPayload)}
+                      <div className="confirm-actions">
+                        <button type="button" onClick={() => setStatsPayload(null)}>
+                          Schließen
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                {renamePetDraft ? (
+                  <div className="modal-backdrop" role="presentation">
+                    <form
+                      className="confirm-modal"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby="pet-rename-title"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void confirmPetRename();
+                      }}
+                    >
+                      <strong id="pet-rename-title">Pet umbenennen</strong>
+                      <label className="rename-field">
+                        Neuer Spitzname
+                        <input
+                          value={renamePetDraft.nickname}
+                          maxLength={32}
+                          onChange={(event) =>
+                            setRenamePetDraft({
+                              ...renamePetDraft,
+                              nickname: event.target.value
+                            })
+                          }
+                        />
+                      </label>
+                      <div className="confirm-actions">
+                        <button type="submit" disabled={isPetRenameSubmitting}>
+                          {isPetRenameSubmitting ? 'Wird gespeichert …' : 'Speichern'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRenamePetDraft(null)}
+                          disabled={isPetRenameSubmitting}
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : null}
                 <div className="resource-summary">
                   <h3>Gezählte Vorräte</h3>
                   <div className="resource-summary-grid">
@@ -2232,11 +2413,6 @@ export function App(): JSX.Element {
                     'egg',
                     (egg) => (
                       <div
-                        draggable
-                        onDragStart={() =>
-                          setDragPayload({ kind: 'egg', id: egg.id })
-                        }
-                        onDragEnd={() => setDragPayload(null)}
                         className="slot-content slot-content-with-asset"
                       >
                         {renderSlotAsset({
@@ -2252,17 +2428,12 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'egg-panel',
-                    undefined,
-                    renderInventoryDiscardSlot(
-                      playerInventory.unhatchedEggs.dimensions.columns,
-                      'egg'
-                    )
+                    undefined
                   )}
                   <section className="inventory-panel pet-panel">
                     <h3>Pets</h3>
                     <p className="inventory-capacity">
-                      Pet in den Event-Slot ziehen oder antippen und dann den
-                      Event-Slot wählen.
+                      Pet antippen und dann den Event-Slot oder Ziel-Slot wählen.
                     </p>
                     {renderEventPetSelectionSlot(selectedEventPet)}
                     <div className="event-set-summary">
@@ -2277,11 +2448,6 @@ export function App(): JSX.Element {
                     'pet',
                     (pet) => (
                       <div
-                        draggable
-                        onDragStart={() =>
-                          setDragPayload({ kind: 'pet', id: pet.id })
-                        }
-                        onDragEnd={() => setDragPayload(null)}
                         className="pet-slot-card"
                         title={`${pet.speciesDisplayName} · ${pet.rarityLabelDe} · ${pet.classLabelDe} · ${pet.elementLabelDe}`}
                       >
@@ -2348,8 +2514,7 @@ export function App(): JSX.Element {
                     ),
                     'pet-grid-panel',
                     (pet) =>
-                      `${pet.selectedForEvent ? 'selected-event-pet' : ''} ${getPetRarityClassName(pet.rarityId)}`.trim(),
-                    renderPetTrashSlot(playerInventory.pets.dimensions.columns)
+                      `${pet.selectedForEvent ? 'selected-event-pet' : ''} ${getPetRarityClassName(pet.rarityId)}`.trim()
                   )}
                   {renderGrid(
                     'Verbrauchbares',
@@ -2357,11 +2522,6 @@ export function App(): JSX.Element {
                     'consumable',
                     (item) => (
                       <div
-                        draggable
-                        onDragStart={() =>
-                          setDragPayload({ kind: 'consumable', id: item.id })
-                        }
-                        onDragEnd={() => setDragPayload(null)}
                         className="slot-content slot-content-with-asset"
                       >
                         {renderSlotAsset({
@@ -2377,11 +2537,7 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'item-panel',
-                    undefined,
-                    renderInventoryDiscardSlot(
-                      playerInventory.consumables.dimensions.columns,
-                      'consumable'
-                    )
+                    undefined
                   )}
                   {renderEquipmentSetsPanel(playerInventory.equipmentSets)}
                   {renderGrid(
@@ -2390,11 +2546,6 @@ export function App(): JSX.Element {
                     'equipment',
                     (equipment) => (
                       <div
-                        draggable
-                        onDragStart={() =>
-                          setDragPayload({ kind: 'equipment', id: equipment.id })
-                        }
-                        onDragEnd={() => setDragPayload(null)}
                         className="slot-content slot-content-with-asset"
                       >
                         {renderSlotAsset({
@@ -2410,11 +2561,7 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'item-panel',
-                    undefined,
-                    renderInventoryDiscardSlot(
-                      playerInventory.equipment.dimensions.columns,
-                      'equipment'
-                    )
+                    undefined
                   )}
                   {renderGrid(
                     'Hüte',
@@ -2422,11 +2569,6 @@ export function App(): JSX.Element {
                     'hat',
                     (hat) => (
                       <div
-                        draggable
-                        onDragStart={() =>
-                          setDragPayload({ kind: 'hat', id: hat.id })
-                        }
-                        onDragEnd={() => setDragPayload(null)}
                         className="slot-content slot-content-with-asset"
                       >
                         {renderSlotAsset({
@@ -2442,11 +2584,7 @@ export function App(): JSX.Element {
                       </div>
                     ),
                     'item-panel',
-                    undefined,
-                    renderInventoryDiscardSlot(
-                      playerInventory.hats.dimensions.columns,
-                      'hat'
-                    )
+                    undefined
                   )}
                 </div>
               </>
