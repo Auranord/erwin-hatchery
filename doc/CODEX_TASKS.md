@@ -75,7 +75,7 @@ Acceptance:
 - Store raw events.
 - Process configured reward ID only.
 - Create provisional user if needed.
-- Create mystery egg with hidden outcome determined at redemption time.
+- Create counted mystery egg inventory; hidden outcomes are determined later when the player identifies/opens the egg.
 - Idempotency by Twitch event/redemption ID.
 - Ledger entry for egg creation.
 
