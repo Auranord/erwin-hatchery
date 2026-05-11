@@ -810,12 +810,15 @@ export function App(): JSX.Element {
     setLedgerEntries(payload.entries);
   }
 
-  async function setEventPetSelection(petId: string): Promise<void> {
+  async function setEventPetSelection(
+    petId: string,
+    selectedForEvent: boolean
+  ): Promise<void> {
     const response = await fetch(`/api/game/pets/${petId}/selection`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ selectedForEvent: true })
+      body: JSON.stringify({ selectedForEvent })
     });
 
     if (!response.ok) {
@@ -835,9 +838,19 @@ export function App(): JSX.Element {
     if (!payload || payload.kind !== 'pet') return;
 
     try {
-      await setEventPetSelection(payload.id);
+      await setEventPetSelection(payload.id, true);
       await refreshOwnInventory();
       setGameMessage('Event-Pet ausgewählt.');
+    } catch (error) {
+      showGameError(error);
+    }
+  }
+
+  async function handleDeselectEventPet(petId: string): Promise<void> {
+    try {
+      await setEventPetSelection(petId, false);
+      await refreshOwnInventory();
+      setGameMessage('Event-Pet abgewählt.');
     } catch (error) {
       showGameError(error);
     }
@@ -1451,6 +1464,15 @@ export function App(): JSX.Element {
             <span>DEF: {selectedPet?.baseDef ?? '—'}</span>
             <span>SPD: {selectedPet?.baseSpd ?? '—'}</span>
           </div>
+          {selectedPet ? (
+            <button
+              type="button"
+              className="event-pet-deselect-button"
+              onClick={() => void handleDeselectEventPet(selectedPet.id)}
+            >
+              Event-Pet abwählen
+            </button>
+          ) : null}
         </div>
       </section>
     );

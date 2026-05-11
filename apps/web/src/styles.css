@@ -255,6 +255,11 @@ ul {
   font-size: 0.85rem;
 }
 
+.event-pet-deselect-button {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
 .event-pet-badge {
   margin-top: auto;
   border-radius: 999px;
