@@ -128,8 +128,8 @@ pnpm build
 - Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for reward IDs that are mapped to active egg types in the database.
 - Creates a provisional user by Twitch user ID when needed.
-- Resolves mystery egg outcome at redemption time and stores unhatched egg immediately.
-- Increments the configured active egg inventory, currently `beta_egg`, by +1 and writes an immutable `economy_ledger` entry.
+- Increments the configured mystery egg inventory, currently `beta_egg`, by +1 and writes an immutable `economy_ledger` entry.
+- Resolves the mystery egg outcome later when the player identifies/opens the egg. The seeded Beta Ei table now grants a pet about one third of the time and `cracked_eggs` resources about two thirds of the time, split evenly across 50, 100, and 200 resource outcomes.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
 ## EventSub subscription auto-sync (Milestone 3+)

@@ -153,7 +153,7 @@ Seeded class roles:
 | Drainer | GAIN |
 | Nullifier | POW |
 
-Seeded rarity weight totals for `beta_egg`:
+Seeded pet rarity weight totals within the `beta_egg` pet subset:
 
 | Rarity | Total weight | Chance |
 | --- | ---: | ---: |
@@ -165,9 +165,9 @@ Seeded rarity weight totals for `beta_egg`:
 
 ## Egg loot table MVP
 
-The system must support more egg types later. MVP initializes one active egg type: `beta_egg` (`Beta Ei`). Its loot table is a single weighted pet table with integer weights totaling 1200 and no resource outcomes.
+The system must support more egg types later. MVP initializes one active egg type: `beta_egg` (`Beta Ei`). Its loot table has integer pet weights totaling 1200 and three `cracked_eggs` resource outcomes weighted 800 each, for a total table weight of 3600. This makes pet outcomes about one third of identified Beta eggs and egg resource outcomes about two thirds.
 
-Per-pet weights are 70 for each Common pet, 30 for each Uncommon pet, 14 for each Rare pet, 11 for each Epic pet, and 3 for the Legendary pet. The backend validates seed totals before writing the pool.
+Per-pet weights are 70 for each Common pet, 30 for each Uncommon pet, 14 for each Rare pet, 11 for each Epic pet, and 3 for the Legendary pet. Resource outcomes grant 50, 100, or 200 `cracked_eggs`; each amount has equal weight. The backend validates seed pet totals before writing the pool.
 
 The content is determined when the player identifies/opens the mystery egg, not when the Channel Point redemption is processed.
 

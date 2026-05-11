@@ -538,17 +538,20 @@ beta_egg | 1x Beta Ei | seeded active
 
 ### Beta egg loot table weights
 
-Use integer pet weights totaling 1200:
+Use integer pet weights totaling 1200 plus `cracked_eggs` resource weights totaling 2400. The combined table weight is 3600, so pets are about one third of Beta Ei identifications and egg resources are about two thirds.
 
 ```text
-Common total     840 = 70.00% (12 pets x 70)
-Uncommon total   240 = 20.00% (8 pets x 30)
-Rare total        84 =  7.00% (6 pets x 14)
-Epic total        33 =  2.75% (3 pets x 11)
-Legendary total    3 =  0.25% (1 pet x 3)
+Common pets total       840 = 23.33% of all outcomes (12 pets x 70)
+Uncommon pets total     240 =  6.67% of all outcomes (8 pets x 30)
+Rare pets total          84 =  2.33% of all outcomes (6 pets x 14)
+Epic pets total          33 =  0.92% of all outcomes (3 pets x 11)
+Legendary pet total       3 =  0.08% of all outcomes (1 pet x 3)
+cracked_eggs x50        800 = 22.22% of all outcomes
+cracked_eggs x100       800 = 22.22% of all outcomes
+cracked_eggs x200       800 = 22.22% of all outcomes
 ```
 
-The seed validates the totals, class counts, normal element counts, and that light appears only on the legendary pet before writing the data.
+Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon, 7.00% Rare, 2.75% Epic, and 0.25% Legendary. The seed validates the pet totals, class counts, normal element counts, and that light appears only on the legendary pet before writing the data.
 
 ## Admin action log
 

@@ -12,6 +12,7 @@ import {
 } from './schema.js';
 
 const BETA_EGG_TYPE_ID = 'beta_egg';
+const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_ABILITY_ID = 'beta_instinct';
 
 const PET_RARITIES = [
@@ -34,6 +35,12 @@ type SeedPet = {
   element: ElementId;
   classId: ClassId;
 };
+
+const BETA_EGG_RESOURCE_REWARDS = [
+  { resourceType: CRACKED_EGGS_RESOURCE_TYPE, resourceAmount: 50, weight: 800 },
+  { resourceType: CRACKED_EGGS_RESOURCE_TYPE, resourceAmount: 100, weight: 800 },
+  { resourceType: CRACKED_EGGS_RESOURCE_TYPE, resourceAmount: 200, weight: 800 }
+] as const;
 
 const PET_POOL = [
   { code: 'glutfink', displayName: 'Glutfink', rarity: 'common', weight: 70, element: 'fire', classId: 'nullifier' },
@@ -91,7 +98,7 @@ function assertCount(counts: Record<string, number>, key: string, expected: numb
 function validatePetPool(): void {
   const totalWeight = PET_POOL.reduce((sum, pet) => sum + pet.weight, 0);
   if (totalWeight !== 1200) {
-    throw new Error(`Invalid seed data: expected total weight 1200, got ${totalWeight}`);
+    throw new Error(`Invalid seed data: expected pet total weight 1200, got ${totalWeight}`);
   }
 
   const rarityWeights = PET_POOL.reduce<Record<string, number>>((totals, pet) => {
@@ -124,8 +131,23 @@ function validatePetPool(): void {
   }
 }
 
+function validateBetaEggResourceRewards(): void {
+  const totalWeight = BETA_EGG_RESOURCE_REWARDS.reduce((sum, reward) => sum + reward.weight, 0);
+  if (totalWeight !== 2400) {
+    throw new Error(`Invalid seed data: expected resource total weight 2400, got ${totalWeight}`);
+  }
+
+  const rewardAmounts = new Set(BETA_EGG_RESOURCE_REWARDS.map((reward) => reward.resourceAmount));
+  for (const expectedAmount of [50, 100, 200] as const) {
+    if (!rewardAmounts.has(expectedAmount)) {
+      throw new Error(`Invalid seed data: missing cracked egg reward amount ${expectedAmount}`);
+    }
+  }
+}
+
 async function seed(): Promise<void> {
   validatePetPool();
+  validateBetaEggResourceRewards();
 
   await db.insert(eggTypes).values({
     id: BETA_EGG_TYPE_ID,
@@ -254,18 +276,26 @@ async function seed(): Promise<void> {
 
   await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, BETA_EGG_TYPE_ID));
 
-  await db.insert(eggLootTableEntries).values(
-    PET_POOL.map((pet) => ({
+  await db.insert(eggLootTableEntries).values([
+    ...PET_POOL.map((pet) => ({
       eggTypeId: BETA_EGG_TYPE_ID,
       weight: pet.weight,
       outcomeType: 'pet',
       resourceType: null,
       resourceAmount: null,
       petSpeciesId: pet.code
+    })),
+    ...BETA_EGG_RESOURCE_REWARDS.map((reward) => ({
+      eggTypeId: BETA_EGG_TYPE_ID,
+      weight: reward.weight,
+      outcomeType: 'resource',
+      resourceType: reward.resourceType,
+      resourceAmount: reward.resourceAmount,
+      petSpeciesId: null
     }))
-  );
+  ]);
 
-  console.info('Seed completed for Beta Ei, MVP pet pool, and weighted pet loot table.');
+  console.info('Seed completed for Beta Ei, MVP pet pool, and weighted pet/resource loot table.');
 }
 
 void seed()
