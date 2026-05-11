@@ -266,6 +266,7 @@ ul {
   margin-top: 0.25rem;
 }
 
+.favorite-pet-badge,
 .event-pet-badge {
   margin-top: auto;
   border-radius: 999px;
@@ -275,6 +276,11 @@ ul {
   font-size: 0.75rem;
   font-weight: 700;
   text-align: center;
+}
+
+.favorite-pet-badge {
+  background: rgba(244, 114, 182, 0.18);
+  color: #fbcfe8;
 }
 
 .incubator-list {

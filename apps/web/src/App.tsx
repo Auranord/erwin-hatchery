@@ -157,6 +157,9 @@ type PetItem = {
   baseSpd: number;
   baseGain: number;
   basePow: number;
+  experience: number;
+  level: number;
+  isFavorite: boolean;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;
@@ -939,6 +942,44 @@ export function App(): JSX.Element {
     }
   }
 
+  async function setPetFavorite(
+    petId: string,
+    isFavorite: boolean
+  ): Promise<void> {
+    const response = await fetch(`/api/game/pets/${petId}/favorite`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isFavorite })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Favorit konnte nicht aktualisiert werden.'
+      );
+    }
+  }
+
+  async function handlePetFavoriteToggle(
+    petId: string,
+    isFavorite: boolean
+  ): Promise<void> {
+    try {
+      await setPetFavorite(petId, isFavorite);
+      await refreshOwnInventory();
+      setGameMessage(
+        isFavorite
+          ? 'Pet als Favorit markiert.'
+          : 'Pet ist kein Favorit mehr.'
+      );
+    } catch (error) {
+      showGameError(error);
+    }
+  }
+
   async function handleDropToEventPetSlot(): Promise<void> {
     const payload = dragPayload ?? selectedPayload;
     setSelectedPayload(null);
@@ -1689,6 +1730,11 @@ export function App(): JSX.Element {
           <div className="event-pet-stat-grid">
             <span>Seltenheit: {selectedPet?.rarityLabelDe ?? '—'}</span>
             <span>Klasse: {selectedPet?.classLabelDe ?? '—'}</span>
+            <span>Level: {selectedPet?.level ?? '—'}</span>
+            <span>EXP: {selectedPet?.experience ?? '—'}</span>
+            <span>
+              Favorit: {selectedPet ? (selectedPet.isFavorite ? 'Ja' : 'Nein') : '—'}
+            </span>
             <span>HP: {selectedPet?.baseHp ?? '—'}</span>
             <span>ATK: {selectedPet?.baseAtk ?? '—'}</span>
             <span>DEF: {selectedPet?.baseDef ?? '—'}</span>
@@ -2170,6 +2216,10 @@ export function App(): JSX.Element {
                             {pet.rarityLabelDe} · {pet.classLabelDe}
                           </span>
                           <span>Fähigkeit: {pet.abilityLabelDe}</span>
+                          <span>Level {pet.level} · EXP {pet.experience}</span>
+                          {pet.isFavorite ? (
+                            <span className="favorite-pet-badge">Favorit</span>
+                          ) : null}
                           {pet.traits.length > 0 ? (
                             <span>
                               Traits:{' '}
@@ -2181,6 +2231,20 @@ export function App(): JSX.Element {
                           <span>
                             HP {pet.baseHp} · ATK {pet.baseAtk}
                           </span>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handlePetFavoriteToggle(
+                                pet.id,
+                                !pet.isFavorite
+                              );
+                            }}
+                          >
+                            {pet.isFavorite
+                              ? 'Favorit entfernen'
+                              : 'Als Favorit markieren'}
+                          </button>
                           {pet.selectedForEvent ? (
                             <span className="event-pet-badge">Event-Pet</span>
                           ) : null}
