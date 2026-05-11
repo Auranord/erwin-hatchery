@@ -328,6 +328,42 @@ function formatIncubatorSource(slotSource: string): string {
   return slotSource;
 }
 
+function toCssModifier(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+}
+
+function getPetRarityClassName(rarityId: string): string {
+  return `pet-rarity-${toCssModifier(rarityId)}`;
+}
+
+function getEmblemAssetPath(assetPath: string): string {
+  return `${SLOT_ASSET_ROOT}/emblems/${assetPath}-16.png`;
+}
+
+function hideBrokenEmblemAsset(event: SyntheticEvent<HTMLImageElement>): void {
+  event.currentTarget.hidden = true;
+}
+
+function renderEmblemAsset(
+  assetPath: string,
+  label: string,
+  className = ''
+): JSX.Element {
+  return (
+    <img
+      src={getEmblemAssetPath(assetPath)}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      className={`pet-emblem-asset ${className}`.trim()}
+      onError={hideBrokenEmblemAsset}
+      title={label}
+      width={16}
+      height={16}
+    />
+  );
+}
+
 function formatRemainingDuration(totalSeconds: number): string {
   const seconds = Math.max(0, totalSeconds);
   const hours = Math.floor(seconds / 3600);
@@ -2202,57 +2238,73 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'pet', id: pet.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content slot-content-with-asset"
+                        className="pet-slot-card"
+                        title={`${pet.speciesDisplayName} · ${pet.rarityLabelDe} · ${pet.classLabelDe} · ${pet.elementLabelDe}`}
                       >
-                        {renderSlotAsset({
-                          folder: 'pets',
-                          assetKey: getPetAssetKey(pet.speciesId),
-                          label: pet.speciesDisplayName,
-                          size: 56
-                        })}
-                        <div className="slot-text">
-                          <strong>{pet.speciesDisplayName}</strong>
-                          <span>
-                            {pet.rarityLabelDe} · {pet.classLabelDe}
-                          </span>
-                          <span>Fähigkeit: {pet.abilityLabelDe}</span>
-                          <span>Level {pet.level} · EXP {pet.experience}</span>
-                          {pet.isFavorite ? (
-                            <span className="favorite-pet-badge">Favorit</span>
-                          ) : null}
-                          {pet.traits.length > 0 ? (
-                            <span>
-                              Traits:{' '}
-                              {pet.traits
-                                .map((trait) => trait.labelDe)
-                                .join(', ')}
-                            </span>
-                          ) : null}
-                          <span>
-                            HP {pet.baseHp} · ATK {pet.baseAtk}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handlePetFavoriteToggle(
-                                pet.id,
-                                !pet.isFavorite
-                              );
-                            }}
+                        <div className="pet-slot-main">
+                          <div className="pet-slot-picture">
+                            {renderSlotAsset({
+                              folder: 'pets',
+                              assetKey: getPetAssetKey(pet.speciesId),
+                              label: pet.speciesDisplayName,
+                              size: 56,
+                              className: 'pet-slot-asset'
+                            })}
+                          </div>
+                          <div
+                            className="pet-slot-emblems"
+                            aria-label={`${pet.rarityLabelDe}, Level ${pet.level}, ${pet.classLabelDe}, ${pet.elementLabelDe}`}
                           >
-                            {pet.isFavorite
-                              ? 'Favorit entfernen'
-                              : 'Als Favorit markieren'}
-                          </button>
-                          {pet.selectedForEvent ? (
-                            <span className="event-pet-badge">Event-Pet</span>
-                          ) : null}
+                            <span
+                              className={`pet-emblem pet-emblem-favorite ${pet.isFavorite ? 'is-visible' : ''}`}
+                              aria-label={
+                                pet.isFavorite ? 'Favorit' : 'Kein Favorit'
+                              }
+                              title={
+                                pet.isFavorite ? 'Favorit' : 'Kein Favorit'
+                              }
+                            >
+                              {pet.isFavorite
+                                ? renderEmblemAsset('favorite', 'Favorit')
+                                : null}
+                            </span>
+                            <span
+                              className="pet-emblem pet-emblem-level"
+                              aria-label={`Level ${pet.level}`}
+                              title={`Level ${pet.level}`}
+                            >
+                              {pet.level}
+                            </span>
+                            <span
+                              className="pet-emblem pet-emblem-class"
+                              aria-label={pet.classLabelDe}
+                              title={pet.classLabelDe}
+                            >
+                              {renderEmblemAsset(
+                                `classes/${pet.classId}`,
+                                pet.classLabelDe
+                              )}
+                            </span>
+                            <span
+                              className="pet-emblem pet-emblem-element"
+                              aria-label={pet.elementLabelDe}
+                              title={pet.elementLabelDe}
+                            >
+                              {renderEmblemAsset(
+                                `elements/${pet.elementId}`,
+                                pet.elementLabelDe
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="pet-slot-name">
+                          <strong>{pet.nickname ?? pet.speciesDisplayName}</strong>
                         </div>
                       </div>
                     ),
                     'pet-grid-panel',
-                    (pet) => (pet.selectedForEvent ? 'selected-event-pet' : ''),
+                    (pet) =>
+                      `${pet.selectedForEvent ? 'selected-event-pet' : ''} ${getPetRarityClassName(pet.rarityId)}`.trim(),
                     renderPetTrashSlot(playerInventory.pets.dimensions.columns)
                   )}
                   {renderGrid(
