@@ -103,7 +103,7 @@ The frontend must never decide final outcomes. It only sends user intent to the 
 
 ## Pet RPG model boundaries
 
-The backend remains authoritative for hatch generation and later training. `pet_species` stores species templates/default stats and the default ability, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance and an individual `ability_id` copied from the species at hatch. That pet-level ability is intentionally mutable by future training without changing the species template. The MVP seed uses one active `beta_egg` loot table with integer pet weights totaling 1200. Each seeded pet has exactly one class, one element, and the shared `beta_instinct` placeholder ability; no traits are included in the seeded MVP pool. `pet_traits` and `pet_trait_assignments` remain available for future training/content systems. Each pet may equip one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Gems are intentionally out of scope for this pass.
+The backend remains authoritative for hatch generation and later training. `pet_species` stores species templates/default stats and the default ability, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance and an individual `ability_id` copied from the species at hatch. That pet-level ability is intentionally mutable by future training without changing the species template. The MVP seed uses one active `beta_egg` loot table with integer pet weights totaling 1200. Each seeded pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability; no traits are included in the seeded MVP pool. `pet_traits` and `pet_trait_assignments` remain available for future training/content systems. Each pet may equip one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Gems are intentionally out of scope for this pass.
 
 Future boss-event state such as current AP, current HP, attacks made, effective stats, class stacks, and element stacks belongs on event participant runtime state, not on pet rows. Ability trigger logic is documented for later implementation only: attacks grant 20 base AP, GAIN modifies AP gained per attack, POW scales ability effects, and abilities auto-trigger when AP and minimum-attack requirements are met.
 
@@ -209,7 +209,7 @@ To support this cheaply:
 
 ## Local development
 
-Recommended dev commands, to be implemented by Codex:
+Recommended dev commands:
 
 ```bash
 pnpm install
@@ -217,6 +217,8 @@ pnpm dev
 pnpm db:migrate
 pnpm db:seed
 ```
+
+The migration set is intentionally a single consolidated base schema while the MVP database is redeployable from scratch; seed scripts own only baseline content and do not carry legacy cleanup branches.
 
 Local stack should use Docker Compose for PostgreSQL and local API/web dev servers.
 

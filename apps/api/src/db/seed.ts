@@ -1,5 +1,5 @@
 import { db, pool } from './client.js';
-import { inArray, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   eggLootTableEntries,
   eggTypes,
@@ -8,25 +8,10 @@ import {
   petAbilities,
   petClasses,
   petRarities,
-  petSpecies,
-  petTraits
+  petSpecies
 } from './schema.js';
 
 const BETA_EGG_TYPE_ID = 'beta_egg';
-const LEGACY_SEEDED_EGG_TYPE_IDS = [
-  'common_mystery_egg',
-  'uncommon_mystery_egg',
-  'rare_mystery_egg'
-] as const;
-const PLACEHOLDER_ABILITY_IDS = [
-  'peck_burst',
-  'glimmer_dash',
-  'mud_guard',
-  'owl_strike',
-  'golden_crowl'
-] as const;
-const PLACEHOLDER_TRAIT_IDS = ['sturdy', 'sharp', 'focused'] as const;
-
 const DEFAULT_ABILITY_ID = 'beta_instinct';
 
 const PET_RARITIES = [
@@ -166,9 +151,7 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.update(eggTypes).set({ isActive: false }).where(inArray(eggTypes.id, [...LEGACY_SEEDED_EGG_TYPE_IDS]));
-
-  await db.insert(petRarities).values([...PET_RARITIES]).onConflictDoUpdate({
+  await db.insert(petRarities).values(PET_RARITIES).onConflictDoUpdate({
     target: petRarities.id,
     set: {
       labelDe: sql`excluded.label_de`,
@@ -177,8 +160,6 @@ async function seed(): Promise<void> {
       isActive: true
     }
   });
-
-  await db.update(petRarities).set({ isActive: false }).where(inArray(petRarities.id, ['regular']));
 
   await db.insert(petClasses).values([
     { id: 'protector', labelDe: 'Beschützer', description: 'Senkt gegnerischen ATK.', relatedEnemyStat: 'ATK' },
@@ -195,8 +176,6 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.delete(petClasses).where(inArray(petClasses.id, ['balanced', 'scout', 'guardian', 'striker', 'hero']));
-
   await db.insert(elements).values([
     { id: 'fire', labelDe: 'Feuer', description: 'Feuer-Element.', isActive: true },
     { id: 'water', labelDe: 'Wasser', description: 'Wasser-Element.', isActive: true },
@@ -212,15 +191,13 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.delete(elements).where(inArray(elements.id, ['nature', 'shadow']));
-
   await db.insert(petAbilities).values({
     id: DEFAULT_ABILITY_ID,
     labelDe: 'Beta-Instinkt',
-    description: 'Einheitliche Platzhalterfähigkeit für alle MVP-Pets.',
+    description: 'Einheitliche Basisfähigkeit für alle MVP-Pets.',
     apRequired: 100,
     minAttacksRequired: 1,
-    effectType: 'placeholder',
+    effectType: 'mvp_basic',
     isActive: true
   }).onConflictDoUpdate({
     target: petAbilities.id,
@@ -233,9 +210,6 @@ async function seed(): Promise<void> {
       isActive: true
     }
   });
-
-  await db.update(petAbilities).set({ isActive: false }).where(inArray(petAbilities.id, [...PLACEHOLDER_ABILITY_IDS]));
-  await db.update(petTraits).set({ isActive: false }).where(inArray(petTraits.id, [...PLACEHOLDER_TRAIT_IDS]));
 
   await db.insert(hats).values([
     { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
@@ -278,9 +252,7 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.update(petSpecies).set({ isActive: false }).where(inArray(petSpecies.id, ['waldwachtel', 'glitzer_spatz', 'moorente', 'turmeule', 'goldener_erwin']));
-
-  await db.delete(eggLootTableEntries).where(inArray(eggLootTableEntries.eggTypeId, [BETA_EGG_TYPE_ID, ...LEGACY_SEEDED_EGG_TYPE_IDS]));
+  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, BETA_EGG_TYPE_ID));
 
   await db.insert(eggLootTableEntries).values(
     PET_POOL.map((pet) => ({

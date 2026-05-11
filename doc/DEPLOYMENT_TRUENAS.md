@@ -141,6 +141,8 @@ API container startup order is enforced in-container:
 
 The production image runs the compiled JavaScript files directly instead of invoking `pnpm` at runtime. This keeps startup independent from Corepack/package-manager cache writes in the read-only `/app` deployment tree. The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
 
+The MVP database is currently treated as redeployable from scratch: Drizzle migrations are consolidated into the single base schema migration, and legacy incremental migration support has been removed. Preserve or export production data before replacing a mounted Postgres dataset.
+
 Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
 
 Prerequisite: at least one active egg type must exist before API startup and admin operations. The startup seed step ensures this baseline exists; `GET /api/admin/health` still returns `503` with `NO_ACTIVE_EGG_TYPES` if seed is skipped or fails.
