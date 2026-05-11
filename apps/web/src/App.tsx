@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type SyntheticEvent
+} from 'react';
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -226,6 +232,75 @@ type LeaderboardEntry = {
   login: string | null;
   score: number;
 };
+
+
+type SlotAssetFolder = 'eggs' | 'pets' | 'consumables' | 'equipment' | 'hats';
+
+type SlotAssetProps = {
+  folder: SlotAssetFolder;
+  assetKey: string;
+  label: string;
+  size: 28 | 56 | 112;
+  className?: string;
+};
+
+const SLOT_ASSET_ROOT = '/assets/slots';
+
+function getSlotAssetPath(
+  folder: SlotAssetFolder,
+  assetKey: string,
+  size: 28 | 56 | 112
+): string {
+  return `${SLOT_ASSET_ROOT}/${folder}/${assetKey}-${size}.png`;
+}
+
+function getSlotFallbackAssetPath(
+  folder: SlotAssetFolder,
+  size: 28 | 56 | 112
+): string {
+  return getSlotAssetPath(folder, 'fallback', size);
+}
+
+function fallbackSlotAsset(
+  event: SyntheticEvent<HTMLImageElement>,
+  folder: SlotAssetFolder,
+  size: 28 | 56 | 112
+): void {
+  const image = event.currentTarget;
+  const fallbackSrc = getSlotFallbackAssetPath(folder, size);
+  if (image.getAttribute('src') === fallbackSrc) return;
+  image.src = fallbackSrc;
+}
+
+function renderSlotAsset({
+  folder,
+  assetKey,
+  label,
+  size,
+  className = ''
+}: SlotAssetProps): JSX.Element {
+  return (
+    <img
+      src={getSlotAssetPath(folder, assetKey, size)}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+      className={`slot-asset slot-asset--${size} ${className}`.trim()}
+      onError={(event) => fallbackSlotAsset(event, folder, size)}
+      title={label}
+      width={size}
+      height={size}
+    />
+  );
+}
+
+function getEggAssetKey(eggTypeId: string): string {
+  return eggTypeId;
+}
+
+function getPetAssetKey(speciesId: string): string {
+  return `pet_${speciesId}`;
+}
 
 const MYSTERY_EGG_LABELS: Record<string, string> = {
   beta_egg: 'Beta Ei'
@@ -1534,9 +1609,17 @@ export function App(): JSX.Element {
                     }}
                   >
                     {slot.item ? (
-                      <span>
-                        <strong>{slot.item.equipmentTypeId}</strong>
-                        <small>Ausrüstung zurücklegen: ins Raster ziehen</small>
+                      <span className="equipment-set-slot-content">
+                        {renderSlotAsset({
+                          folder: 'equipment',
+                          assetKey: slot.item.equipmentTypeId,
+                          label: slot.item.equipmentTypeId,
+                          size: 28
+                        })}
+                        <span>
+                          <strong>{slot.item.equipmentTypeId}</strong>
+                          <small>Ausrüstung zurücklegen: ins Raster ziehen</small>
+                        </span>
                       </span>
                     ) : (
                       <span>Slot frei</span>
@@ -1582,9 +1665,17 @@ export function App(): JSX.Element {
           aria-label="Event-Pet Auswahl-Slot"
         >
           {selectedPet ? (
-            <div className="slot-content">
-              <strong>{selectedPet.speciesDisplayName}</strong>
-              <span>Event-Pet</span>
+            <div className="slot-content slot-content-with-asset">
+              {renderSlotAsset({
+                folder: 'pets',
+                assetKey: getPetAssetKey(selectedPet.speciesId),
+                label: selectedPet.speciesDisplayName,
+                size: 56
+              })}
+              <div className="slot-text">
+                <strong>{selectedPet.speciesDisplayName}</strong>
+                <span>Event-Pet</span>
+              </div>
             </div>
           ) : (
             <span className="empty-slot-label">Pet hier ablegen</span>
@@ -1964,11 +2055,19 @@ export function App(): JSX.Element {
                   {playerInventory.mysteryEggs
                     .filter((entry) => entry.amount > 0)
                     .map((entry) => (
-                      <p key={entry.eggTypeId}>
-                        <strong>
-                          {formatMysteryEggType(entry.eggTypeId)}:
-                        </strong>{' '}
-                        {entry.amount}{' '}
+                      <p key={entry.eggTypeId} className="resource-row">
+                        {renderSlotAsset({
+                          folder: 'eggs',
+                          assetKey: getEggAssetKey(entry.eggTypeId),
+                          label: formatMysteryEggType(entry.eggTypeId),
+                          size: 28
+                        })}
+                        <span>
+                          <strong>
+                            {formatMysteryEggType(entry.eggTypeId)}:
+                          </strong>{' '}
+                          {entry.amount}
+                        </span>{' '}
                         <button
                           type="button"
                           onClick={() =>
@@ -2012,10 +2111,18 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'egg', id: egg.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
+                        className="slot-content slot-content-with-asset"
                       >
-                        <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
-                        <span>Bereit</span>
+                        {renderSlotAsset({
+                          folder: 'eggs',
+                          assetKey: getEggAssetKey(egg.eggTypeId),
+                          label: formatMysteryEggType(egg.eggTypeId),
+                          size: 56
+                        })}
+                        <div className="slot-text">
+                          <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
+                          <span>Bereit</span>
+                        </div>
                       </div>
                     ),
                     'egg-panel',
@@ -2049,27 +2156,35 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'pet', id: pet.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
+                        className="slot-content slot-content-with-asset"
                       >
-                        <strong>{pet.speciesDisplayName}</strong>
-                        <span>
-                          {pet.rarityLabelDe} · {pet.classLabelDe}
-                        </span>
-                        <span>Fähigkeit: {pet.abilityLabelDe}</span>
-                        {pet.traits.length > 0 ? (
+                        {renderSlotAsset({
+                          folder: 'pets',
+                          assetKey: getPetAssetKey(pet.speciesId),
+                          label: pet.speciesDisplayName,
+                          size: 56
+                        })}
+                        <div className="slot-text">
+                          <strong>{pet.speciesDisplayName}</strong>
                           <span>
-                            Traits:{' '}
-                            {pet.traits
-                              .map((trait) => trait.labelDe)
-                              .join(', ')}
+                            {pet.rarityLabelDe} · {pet.classLabelDe}
                           </span>
-                        ) : null}
-                        <span>
-                          HP {pet.baseHp} · ATK {pet.baseAtk}
-                        </span>
-                        {pet.selectedForEvent ? (
-                          <span className="event-pet-badge">Event-Pet</span>
-                        ) : null}
+                          <span>Fähigkeit: {pet.abilityLabelDe}</span>
+                          {pet.traits.length > 0 ? (
+                            <span>
+                              Traits:{' '}
+                              {pet.traits
+                                .map((trait) => trait.labelDe)
+                                .join(', ')}
+                            </span>
+                          ) : null}
+                          <span>
+                            HP {pet.baseHp} · ATK {pet.baseAtk}
+                          </span>
+                          {pet.selectedForEvent ? (
+                            <span className="event-pet-badge">Event-Pet</span>
+                          ) : null}
+                        </div>
                       </div>
                     ),
                     'pet-grid-panel',
@@ -2087,10 +2202,18 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'consumable', id: item.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
+                        className="slot-content slot-content-with-asset"
                       >
-                        <strong>{item.consumableTypeId}</strong>
-                        <span className="stack-badge">Einzeln</span>
+                        {renderSlotAsset({
+                          folder: 'consumables',
+                          assetKey: item.consumableTypeId,
+                          label: item.consumableTypeId,
+                          size: 28
+                        })}
+                        <div className="slot-text">
+                          <strong>{item.consumableTypeId}</strong>
+                          <span className="stack-badge">Einzeln</span>
+                        </div>
                       </div>
                     ),
                     'item-panel',
@@ -2112,10 +2235,18 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'equipment', id: equipment.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
+                        className="slot-content slot-content-with-asset"
                       >
-                        <strong>{equipment.equipmentTypeId}</strong>
-                        <span>Einzeln</span>
+                        {renderSlotAsset({
+                          folder: 'equipment',
+                          assetKey: equipment.equipmentTypeId,
+                          label: equipment.equipmentTypeId,
+                          size: 28
+                        })}
+                        <div className="slot-text">
+                          <strong>{equipment.equipmentTypeId}</strong>
+                          <span>Einzeln</span>
+                        </div>
                       </div>
                     ),
                     'item-panel',
@@ -2136,10 +2267,18 @@ export function App(): JSX.Element {
                           setDragPayload({ kind: 'hat', id: hat.id })
                         }
                         onDragEnd={() => setDragPayload(null)}
-                        className="slot-content"
+                        className="slot-content slot-content-with-asset"
                       >
-                        <strong>{hat.hatId}</strong>
-                        <span>Einzeln</span>
+                        {renderSlotAsset({
+                          folder: 'hats',
+                          assetKey: hat.hatId,
+                          label: hat.hatId,
+                          size: 28
+                        })}
+                        <div className="slot-text">
+                          <strong>{hat.hatId}</strong>
+                          <span>Einzeln</span>
+                        </div>
                       </div>
                     ),
                     'item-panel',
