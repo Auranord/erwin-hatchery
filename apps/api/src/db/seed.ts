@@ -168,7 +168,7 @@ async function seed(): Promise<void> {
 
   await db.update(eggTypes).set({ isActive: false }).where(inArray(eggTypes.id, [...LEGACY_SEEDED_EGG_TYPE_IDS]));
 
-  await db.insert(petRarities).values(PET_RARITIES).onConflictDoUpdate({
+  await db.insert(petRarities).values([...PET_RARITIES]).onConflictDoUpdate({
     target: petRarities.id,
     set: {
       labelDe: sql`excluded.label_de`,
