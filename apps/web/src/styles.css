@@ -177,6 +177,12 @@ ul {
   margin-bottom: 1rem;
 }
 
+.resource-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .game-message {
   border: 1px solid rgba(250, 204, 21, 0.7);
   border-radius: 0.75rem;
@@ -380,6 +386,36 @@ ul {
   font-size: clamp(0.68rem, 2.8vw, 0.88rem);
 }
 
+.slot-content-with-asset {
+  align-items: flex-start;
+}
+
+.slot-asset {
+  flex: 0 0 auto;
+  image-rendering: pixelated;
+  object-fit: contain;
+  filter: drop-shadow(0 0.25rem 0.35rem rgba(0, 0, 0, 0.35));
+}
+
+.slot-asset--28 {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.slot-asset--56 {
+  width: min(3.5rem, 58%);
+  height: auto;
+  max-height: 3.5rem;
+  align-self: center;
+}
+
+.slot-text {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  width: 100%;
+}
+
 .slot-content strong {
   line-height: 1.1;
 }
@@ -554,6 +590,10 @@ ul {
 .equipment-set-slot span {
   display: grid;
   gap: 0.2rem;
+}
+
+.equipment-set-slot-content {
+  justify-items: center;
 }
 
 .equipment-set-slot small,
