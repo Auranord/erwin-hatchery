@@ -635,6 +635,8 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         baseSpd: pets.baseSpd,
         baseGain: pets.baseGain,
         basePow: pets.basePow,
+        experience: pets.experience,
+        level: pets.level,
         equippedHatId: pets.equippedHatId,
         selectedForEvent: pets.selectedForEvent,
         createdAt: pets.createdAt,
@@ -860,6 +862,8 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             baseSpd: row.baseSpd,
             baseGain: row.baseGain,
             basePow: row.basePow,
+            experience: row.experience,
+            level: row.level,
             equippedHatId: row.equippedHatId,
             traits: (traitsByPetId.get(row.id) ?? []).map(
               ({ petId: _petId, ...trait }) => trait

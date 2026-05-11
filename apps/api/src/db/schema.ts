@@ -441,6 +441,8 @@ export const pets = pgTable(
     baseGain: integer('base_gain').notNull(),
     basePow: integer('base_pow').notNull(),
     hatchVariance: jsonb('hatch_variance').notNull().default({}),
+    experience: integer('experience').notNull().default(0),
+    level: integer('level').notNull().default(0),
     equippedHatId: text('equipped_hat_id').references(() => hats.id),
     sourceUnhatchedEggId: uuid('source_unhatched_egg_id')
       .notNull()

@@ -8,7 +8,7 @@ This document describes the recommended database shape. Exact names can change, 
 - All economy mutations are server-side and ledgered.
 - Mystery eggs are stored as per-user integer balances by egg type.
 - Egg contents are determined at identify/open time for mystery eggs and are ledgered.
-- Database should support future features: more egg types, fusion, training, consumables, cosmetic hats, boss-event formulas, and runtime boss state.
+- Database should support future features: more egg types, fusion, training, consumables, cosmetic hats, boss-event formulas, and runtime boss state. Owned pets already carry level and experience fields so progression systems can be added without another base pet-row rewrite.
 - Events must be reversible where practical, especially admin-started battles.
 
 ## Core tables
@@ -328,7 +328,7 @@ updated_at timestamp
 
 ### pets
 
-Unique owned pet instances. A pet is created from its species defaults plus hatch variance and receives an individual `ability_id` copied from `pet_species.default_ability_id`. Its permanent base stats and individual ability live on the `pets` row so later training can change that individual pet without changing the species template.
+Unique owned pet instances. A pet is created from its species defaults plus hatch variance, receives an individual `ability_id` copied from `pet_species.default_ability_id`, and starts at level 0 with 0 experience. Its permanent base stats, individual ability, and progression fields live on the `pets` row so later training or fusion systems can change that individual pet without changing the species template.
 
 ```text
 id uuid primary key
@@ -346,6 +346,8 @@ base_spd integer not null
 base_gain integer not null
 base_pow integer not null
 hatch_variance jsonb not null -- source rolls used to derive initial permanent base stats
+experience integer not null default 0 -- future progression/fusion input; server-authoritative
+level integer not null default 0 -- future progression/fusion output; server-authoritative
 training_adjustments jsonb not null default '{}' -- future additive/permanent training changes
 equipped_hat_id text nullable references hats(id)
 source_unhatched_egg_id uuid references unhatched_eggs(id)
