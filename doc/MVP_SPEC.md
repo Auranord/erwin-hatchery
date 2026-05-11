@@ -24,7 +24,7 @@ The reward is created manually in Twitch for the MVP. The Twitch reward ID is co
 
 ## Current MVP implementation status
 
-Last reevaluated: **2026-05-09**.
+Last reevaluated: **2026-05-11**.
 
 - ✅ Milestones 0-3 are completed (repo/workspace foundation, backend baseline, Twitch OAuth auth flow, and idempotent EventSub Channel Point redemption ingestion with startup subscription auto-sync).
 - ✅ Milestone 4 is completed (authenticated player shell, live slotted inventory visibility, mystery egg identify, incubate -> hatch flow, pet selection, server-authoritative inventory moves, and public leaderboard are implemented).
