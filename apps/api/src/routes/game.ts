@@ -1457,6 +1457,84 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
+  app.post('/api/game/pets/:petId/nickname', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const { petId } = request.params as { petId: string };
+    const body = (request.body ?? {}) as { nickname?: unknown };
+    if (typeof body.nickname !== 'string') {
+      return reply.code(400).send({ message: 'nickname must be a string' });
+    }
+
+    const trimmedNickname = body.nickname.trim();
+    if (trimmedNickname.length > 32) {
+      return reply.code(400).send({ message: 'Der Name darf maximal 32 Zeichen lang sein.' });
+    }
+
+    const nextNickname = trimmedNickname.length > 0 ? trimmedNickname : null;
+    const result = await db.transaction(async (tx) => {
+      const [ownedPet] = await tx
+        .select({
+          id: pets.id,
+          speciesId: pets.speciesId,
+          nickname: pets.nickname
+        })
+        .from(pets)
+        .where(
+          and(
+            eq(pets.id, petId),
+            eq(pets.ownerUserId, identity.userId),
+            eq(pets.isScrapped, false)
+          )
+        )
+        .limit(1);
+
+      if (!ownedPet) return { kind: 'not_found' as const };
+
+      const [updatedPet] = await tx
+        .update(pets)
+        .set({ nickname: nextNickname })
+        .where(eq(pets.id, ownedPet.id))
+        .returning({ id: pets.id, nickname: pets.nickname });
+
+      if (!updatedPet) {
+        throw new Error('Failed to update pet nickname');
+      }
+
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'pet_nickname_changed',
+        sourceType: 'player_action',
+        sourceId: ownedPet.id,
+        delta: {
+          pets: [
+            {
+              id: ownedPet.id,
+              speciesId: ownedPet.speciesId,
+              previousNickname: ownedPet.nickname,
+              nickname: updatedPet.nickname
+            }
+          ],
+          resources: []
+        }
+      });
+
+      return { kind: 'ok' as const, pet: updatedPet };
+    });
+
+    if (result.kind === 'not_found') {
+      return reply.code(404).send({ message: 'Pet not found' });
+    }
+
+    return {
+      status: 'ok',
+      petId: result.pet.id,
+      nickname: result.pet.nickname
+    };
+  });
+
   app.post('/api/game/mystery-eggs/identify', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
@@ -2034,6 +2112,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           id: pets.id,
           speciesId: pets.speciesId,
           selectedForEvent: pets.selectedForEvent,
+          isFavorite: pets.isFavorite,
           rarityId: pets.rarityId,
           recycleCrackedEggs: petRarities.recycleCrackedEggs
         })
@@ -2048,6 +2127,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         )
         .limit(1);
       if (!pet) return { kind: 'not_found' as const };
+      if (pet.isFavorite) return { kind: 'favorite_pet_protected' as const };
 
       const rewardAmount = pet.recycleCrackedEggs;
       const now = new Date();
@@ -2087,6 +2167,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
               id: pet.id,
               speciesId: pet.speciesId,
               rarityId: pet.rarityId,
+              isFavorite: pet.isFavorite,
               change: -1,
               selectedForEvent: pet.selectedForEvent
             }
@@ -2103,6 +2184,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       return { kind: 'ok' as const, rewardAmount };
     });
 
+    if (result.kind === 'favorite_pet_protected') {
+      return reply.code(409).send({
+        message: 'Favoriten können nicht recycelt werden. Entferne zuerst den Favoritenstatus.'
+      });
+    }
     if (result.kind !== 'ok')
       return reply.code(404).send({ message: 'Pet nicht gefunden.' });
     return {
@@ -2271,7 +2357,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           id: pets.id,
           speciesId: pets.speciesId,
           slotIndex: pets.slotIndex,
-          selectedForEvent: pets.selectedForEvent
+          selectedForEvent: pets.selectedForEvent,
+          isFavorite: pets.isFavorite
         })
         .from(pets)
         .where(
@@ -2283,6 +2370,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         )
         .limit(1);
       if (!pet) return { kind: 'not_found' as const };
+      if (pet.isFavorite) return { kind: 'favorite_pet_protected' as const };
 
       const now = new Date();
       await tx
@@ -2307,6 +2395,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
               speciesId: pet.speciesId,
               slotIndex: pet.slotIndex,
               selectedForEvent: pet.selectedForEvent,
+              isFavorite: pet.isFavorite,
               change: -1
             }
           ],
@@ -2316,6 +2405,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       return { kind: 'ok' as const };
     });
 
+    if (result.kind === 'favorite_pet_protected') {
+      return reply.code(409).send({
+        message: 'Favoriten können nicht verworfen werden. Entferne zuerst den Favoritenstatus.'
+      });
+    }
     if (result.kind !== 'ok')
       return reply.code(404).send({ message: 'Pet nicht gefunden.' });
     return { ok: true };
