@@ -285,6 +285,8 @@ CREATE TABLE IF NOT EXISTS pets (
   base_gain integer NOT NULL,
   base_pow integer NOT NULL,
   hatch_variance jsonb NOT NULL DEFAULT '{}'::jsonb,
+  experience integer NOT NULL DEFAULT 0,
+  level integer NOT NULL DEFAULT 0,
   equipped_hat_id text REFERENCES hats(id),
   source_unhatched_egg_id uuid NOT NULL REFERENCES unhatched_eggs(id),
   slot_index integer,

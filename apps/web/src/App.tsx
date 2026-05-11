@@ -157,6 +157,8 @@ type PetItem = {
   baseSpd: number;
   baseGain: number;
   basePow: number;
+  experience: number;
+  level: number;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;
@@ -1689,6 +1691,8 @@ export function App(): JSX.Element {
           <div className="event-pet-stat-grid">
             <span>Seltenheit: {selectedPet?.rarityLabelDe ?? '—'}</span>
             <span>Klasse: {selectedPet?.classLabelDe ?? '—'}</span>
+            <span>Level: {selectedPet?.level ?? '—'}</span>
+            <span>EXP: {selectedPet?.experience ?? '—'}</span>
             <span>HP: {selectedPet?.baseHp ?? '—'}</span>
             <span>ATK: {selectedPet?.baseAtk ?? '—'}</span>
             <span>DEF: {selectedPet?.baseDef ?? '—'}</span>
@@ -2170,6 +2174,7 @@ export function App(): JSX.Element {
                             {pet.rarityLabelDe} · {pet.classLabelDe}
                           </span>
                           <span>Fähigkeit: {pet.abilityLabelDe}</span>
+                          <span>Level {pet.level} · EXP {pet.experience}</span>
                           {pet.traits.length > 0 ? (
                             <span>
                               Traits:{' '}

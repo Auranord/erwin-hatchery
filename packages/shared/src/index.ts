@@ -117,6 +117,8 @@ export type PetSlotItem = {
   baseSpd: number;
   baseGain: number;
   basePow: number;
+  experience: number;
+  level: number;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;
