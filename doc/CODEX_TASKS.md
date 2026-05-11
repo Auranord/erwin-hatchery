@@ -2,7 +2,7 @@
 
 ## Progress status
 
-Last reevaluated: **2026-05-09**.
+Last reevaluated: **2026-05-11**.
 
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
@@ -15,6 +15,13 @@ Last reevaluated: **2026-05-09**.
 - ✅ Milestone 8 completed (secret-protected overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, leaderboard snapshot, and OBS-safe layout are implemented).
 - 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, gift-sub ingestion, and fixed Gutschein grants are implemented; Bits ingestion/effects remain pending).
 - 🟨 Milestone 10 partially completed (production Docker image, GHCR branch tagging, TrueNAS example with Postgres/init/health checks, production env validation, secure production cookies, and frontend fallback routing are implemented; rate limiting, explicit CORS middleware, and backup scripts/restore notes remain pending).
+
+Reevaluation notes for 2026-05-11:
+
+- No milestone changed completion category after comparing the task list with the current API/web code and deployment docs.
+- Milestone 6 remains partial because admin user search/detail, role mutation, admin logs, ledger view, test mystery egg grant, and test grant revert exist, but freeze/reset/delete progress controls are not implemented.
+- Milestone 9 remains partial because subscription and gift-sub EventSub paths now grant fixed Gutschein resources, while Bits/cheer EventSub subscription, ingestion, and fixed-effect application are still absent.
+- Milestone 10 remains partial because the production image, GHCR workflow, TrueNAS example, health checks, production cookie behavior, and SPA fallback exist, while Fastify-level rate limiting, explicit CORS origin enforcement, and executable backup/restore automation are still missing.
 
 ## Milestone 0 - Repo skeleton
 
@@ -164,10 +171,10 @@ Acceptance:
 
 ## Milestone 9 - Bits/sub event support foundation
 
-- 🟨 Add schema/event ingestion for sub/gift sub/Bits events.
+- 🟨 Add schema/event ingestion for sub/gift sub/Bits events. Subscription and gift-sub ingestion are implemented; Bits/cheer ingestion remains pending.
 - ✅ Add schema/event ingestion for sub status events (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) with persisted renewal/end cache on `users`.
 - ✅ Add gift-sub EventSub subscription type and fixed Gutschein processing for gifter/recipient where Twitch identity is available.
-- ⏳ Add Bits/cheer EventSub subscription types and processing once fixed effects are defined.
+- ⏳ Add Bits/cheer EventSub subscription type, webhook processing, and fixed effect application once fixed effects are defined.
 - ✅ Do not add paid random eggs.
 - ✅ Remove subscriber incubators; subscriptions now grant fixed Gutschein resources instead.
 - ⏳ Bits effects should be fixed only and can remain disabled behind config.
@@ -176,7 +183,7 @@ Acceptance:
 
 - ✅ Subbed users receive fixed Gutschein resources instead of incubators.
 - ✅ Gift-sub ingestion grants Gutschein resources to the gifter and recipient when Twitch identity is available.
-- ⏳ Bits event foundation is still pending.
+- ⏳ Bits/cheer EventSub subscription, ingestion, and fixed-effect application are still pending.
 
 ## Milestone 10 - Deployment hardening
 

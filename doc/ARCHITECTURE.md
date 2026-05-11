@@ -128,8 +128,8 @@ Required MVP Twitch pieces:
 - broadcaster Twitch user ID
 - Channel Point reward ID for `1x Mystery Ei`
 - EventSub webhook endpoint
-- subscription types for Channel Point redemptions
-- optional future subscriptions for subs, gifted subs, Bits/cheer, stream online/offline, stream updates
+- subscription types for Channel Point redemptions, subscriber status, and gifted subscriptions
+- optional future subscriptions for Bits/cheer, stream online/offline, stream updates
 
 Manual setup for MVP is acceptable:
 
@@ -229,8 +229,8 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 
 ### EventSub subscription lifecycle
 
-- API startup runs an idempotent EventSub subscription sync against Twitch Helix for channel point redemption events.
-- If one correct subscription already exists, it is reused.
+- API startup runs an idempotent EventSub subscription sync against Twitch Helix for Channel Point redemption, subscriber status, and gifted-subscription events.
+- If one correct subscription for each target type already exists, it is reused.
 - If duplicates are found, extras are cleaned up and a warning status is exposed.
 - Sync errors do not crash startup by default; status is exposed via admin debug API/UI for operator troubleshooting.
 

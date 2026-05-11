@@ -71,7 +71,7 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 
 ## Implementation status snapshot
 
-Last reevaluated: **2026-05-09**.
+Last reevaluated: **2026-05-11**.
 
 The current repo implementation includes:
 
@@ -89,7 +89,7 @@ The current repo implementation includes:
 Still pending for later milestones:
 
 - Admin lifecycle controls (freeze/reset/delete progress and fuller role lifecycle)
-- Gift-sub/Bits feature foundation and fixed, non-random Bits effects
+- Bits EventSub foundation and fixed, non-random Bits effects
 - Deployment hardening beyond the current baseline: rate limiting, explicit CORS middleware, and backup/restore scripts or notes
 
 ## Admin testing seed dependency
