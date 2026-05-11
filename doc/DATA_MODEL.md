@@ -174,7 +174,8 @@ id uuid primary key
 owner_user_id uuid references users(id)
 egg_type_id text references egg_types(id)
 hidden_pet_species_id text references pet_species(id)
-state text not null -- ready, incubating, hatched, deleted
+state text not null -- ready_for_incubation, incubating, hatched, deleted
+slot_index integer nullable -- only ready_for_incubation eggs occupy unhatched inventory slots
 created_from_redemption_id uuid nullable references channel_point_redemptions(id)
 created_at timestamp
 ```
@@ -576,7 +577,7 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Event-Pet selection is represented by the `pets.selected_for_event` flag. The UI exposes it as a fixed drop target above the pet grid, but the selected pet remains in the pet grid and therefore continues to consume its normal pet inventory slot.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
-- Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
+- Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

@@ -239,6 +239,18 @@ async function getDimensionsInTx(
   return dimensionsFromRow(kind, row ?? null);
 }
 
+async function lockUserInventoryInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<void> {
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(
+      hashtext('erwin_hatchery_user_inventory'),
+      hashtext(${userId})
+    )`
+  );
+}
+
 async function findFreeEggSlotInTx(
   tx: DbTransaction,
   userId: string
@@ -247,12 +259,7 @@ async function findFreeEggSlotInTx(
   const occupiedRows = await tx
     .select({ slotIndex: unhatchedEggs.slotIndex })
     .from(unhatchedEggs)
-    .where(
-      and(
-        eq(unhatchedEggs.ownerUserId, userId),
-        eq(unhatchedEggs.state, 'ready_for_incubation')
-      )
-    );
+    .where(eq(unhatchedEggs.ownerUserId, userId));
   const occupied = new Set(
     occupiedRows
       .map((row) => row.slotIndex)
@@ -1339,6 +1346,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+
       const [inventoryRow] = await tx
         .select({ amount: mysteryEggInventory.amount })
         .from(mysteryEggInventory)

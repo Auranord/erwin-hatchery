@@ -8,6 +8,13 @@
       "when": 1760000000000,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778500000000,
+      "tag": "0001_clear_inactive_unhatched_egg_slots",
+      "breakpoints": true
     }
   ]
 }
