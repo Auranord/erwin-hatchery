@@ -365,11 +365,138 @@ ul {
   border-color: rgba(168, 85, 247, 0.82);
 }
 
+.pet-slot.occupied.pet-rarity-common {
+  border-color: rgba(148, 163, 184, 0.9);
+}
+
+.pet-slot.occupied.pet-rarity-uncommon {
+  border-color: rgba(74, 222, 128, 0.92);
+}
+
+.pet-slot.occupied.pet-rarity-rare {
+  border-color: rgba(96, 165, 250, 0.94);
+}
+
+.pet-slot.occupied.pet-rarity-epic {
+  border-color: rgba(192, 132, 252, 0.95);
+}
+
+.pet-slot.occupied.pet-rarity-legendary {
+  border-color: rgba(251, 191, 36, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.24);
+}
+
+.pet-slot-card {
+  display: grid;
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 0.28rem;
+  height: 100%;
+  min-height: 100%;
+}
+
+.pet-slot-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(2rem, 0.72fr);
+  gap: 0.25rem;
+  min-height: 0;
+}
+
+.pet-slot-picture {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+}
+
+.pet-slot-asset.slot-asset--56 {
+  width: min(3.75rem, 94%);
+  max-height: 4rem;
+}
+
+.pet-slot-emblems {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 0.18rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pet-emblem {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 0.42rem;
+  background: rgba(15, 23, 42, 0.52);
+  color: #e2e8f0;
+  font-size: clamp(0.72rem, 3vw, 0.95rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.pet-emblem-asset {
+  width: min(1rem, 72%);
+  height: auto;
+  max-height: 1rem;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.pet-emblem-favorite {
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+}
+
+.pet-emblem-favorite.is-visible {
+  border-color: rgba(251, 207, 232, 0.42);
+  background: rgba(244, 114, 182, 0.2);
+  color: #fbcfe8;
+  filter: drop-shadow(0 0 0.35rem rgba(244, 114, 182, 0.45));
+}
+
+.pet-emblem-level {
+  color: #fde68a;
+  font-variant-numeric: tabular-nums;
+}
+
+.pet-emblem-class {
+  color: #bfdbfe;
+}
+
+.pet-emblem-element {
+  color: #bbf7d0;
+}
+
+.pet-slot-name {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 0.18rem 0.28rem;
+  text-align: center;
+}
+
+.pet-slot-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .item-slot.occupied {
   border-color: rgba(56, 189, 248, 0.82);
 }
 
-.selected-event-pet,
+.selected-event-pet {
+  box-shadow:
+    0 0 0 3px rgba(250, 204, 21, 0.18),
+    inset 0 0 0 1px rgba(250, 204, 21, 0.35);
+}
+
 .selected-event-pet-slot {
   border-color: rgba(250, 204, 21, 0.95);
   box-shadow:
