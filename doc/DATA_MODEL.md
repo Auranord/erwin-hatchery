@@ -165,6 +165,21 @@ primary key(user_id, egg_type_id)
 When a redemption grants a mystery egg, increment this balance and write an economy ledger row.
 When a player identifies a mystery egg, decrement this balance in the same transaction that resolves the outcome and writes ledger rows.
 
+### inventory_dimensions
+
+Per-user grid configuration for slotted inventories. `bonus_rows` is the upgrade counter used for row expansion pricing: `500 * 2^bonus_rows` `cracked_eggs` for the next row when `upgrade_ref` is set.
+
+```text
+user_id uuid references users(id)
+inventory_kind text not null
+columns integer not null
+base_rows integer not null
+bonus_rows integer not null default 0
+upgrade_ref text nullable
+updated_at timestamp
+primary key(user_id, inventory_kind)
+```
+
 ### unhatched_eggs
 
 Pet eggs that are known to contain a pet, but not which pet.
@@ -591,7 +606,7 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
 - Capacity applies only to slotted inventories: unhatched eggs, pets, consumables, equipment, and hats. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
-- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for row expansion. Upgradeable slotted inventories are expanded one row at a time; the first row upgrade for each inventory costs 500 `cracked_eggs`, and each subsequent upgrade for that same inventory doubles the cost based on its current `bonus_rows`.
 - Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - Event-Pet selection is represented by the `pets.selected_for_event` flag. The UI exposes it as a fixed drop target above the pet grid, but the selected pet remains in the pet grid and therefore continues to consume its normal pet inventory slot.
@@ -600,4 +615,4 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
-- Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
+- Every placement mutation and inventory row upgrade is server-authoritative, transactional, and recorded in `economy_ledger`.
