@@ -19,6 +19,7 @@ export type InventoryGridDimensions = {
   bonusRows: number;
   capacity: number;
   upgradeRef: string | null;
+  nextRowUpgradeCostCrackedEggs: number | null;
 };
 
 export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; baseRows: number; bonusRows: number; upgradeRef: string | null }> = {
@@ -29,6 +30,12 @@ export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; b
   equipment: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'equipment_inventory_rows' },
   hats: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'hat_inventory_rows' }
 };
+
+export const INVENTORY_ROW_UPGRADE_BASE_COST_CRACKED_EGGS = 500;
+
+export function getInventoryRowUpgradeCostCrackedEggs(bonusRows: number): number {
+  return INVENTORY_ROW_UPGRADE_BASE_COST_CRACKED_EGGS * 2 ** bonusRows;
+}
 
 export const DEFAULT_CONSUMABLE_STACK_LIMIT = 1;
 

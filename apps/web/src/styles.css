@@ -838,3 +838,41 @@ ul {
   background: rgba(15, 23, 42, 0.75);
   color: #fff7ed;
 }
+
+.inventory-upgrade-panel {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 0.9rem;
+  background: rgba(120, 53, 15, 0.24);
+}
+
+.inventory-upgrade-panel strong {
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.inventory-upgrade-panel p {
+  margin: 0;
+  color: #fde68a;
+  font-size: 0.85rem;
+}
+
+.inventory-upgrade-panel button {
+  min-height: 2.6rem;
+  border-color: rgba(250, 204, 21, 0.55);
+}
+
+.inventory-upgrade-panel button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (min-width: 560px) {
+  .inventory-upgrade-panel {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+}

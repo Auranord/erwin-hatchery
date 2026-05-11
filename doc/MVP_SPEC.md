@@ -199,6 +199,7 @@ Suggested MVP upgrades:
 | Incubator Level 2 | Shortens incubation time by a small percentage |
 | Incubator Level 3 | Larger incubation speed bonus                  |
 | Incubator Level 4 | Larger incubation speed bonus                  |
+| Inventory row    | Adds one row to a slotted inventory; costs 500 Aufgebrochene Eier for the first row on each inventory and doubles after every upgrade |
 
 ## Bits and subs
 

@@ -36,6 +36,7 @@ import {
 } from '../services/streamState.js';
 import {
   DEFAULT_INVENTORY_GRIDS,
+  getInventoryRowUpgradeCostCrackedEggs,
   isSlotInsideGrid,
   type InventoryGridDimensions,
   type InventoryKind,
@@ -161,6 +162,7 @@ function dimensionsFromRow(
   const baseRows = row?.baseRows ?? defaults.baseRows;
   const bonusRows = row?.bonusRows ?? defaults.bonusRows;
   const rows = baseRows + bonusRows;
+  const upgradeRef = row?.upgradeRef ?? defaults.upgradeRef;
   return {
     kind,
     columns,
@@ -168,7 +170,10 @@ function dimensionsFromRow(
     baseRows,
     bonusRows,
     capacity: columns * rows,
-    upgradeRef: row?.upgradeRef ?? defaults.upgradeRef
+    upgradeRef,
+    nextRowUpgradeCostCrackedEggs: upgradeRef
+      ? getInventoryRowUpgradeCostCrackedEggs(bonusRows)
+      : null
   };
 }
 
@@ -1358,6 +1363,145 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const revision = await computeInventoryRevision(identity.userId);
     const inventory = await loadPlayerInventory(identity.userId);
     return { revision, inventory };
+  });
+
+  app.post('/api/game/inventory/upgrade-row', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const body = (request.body ?? {}) as { inventoryKind?: unknown };
+    if (typeof body.inventoryKind !== 'string') {
+      return reply.code(400).send({ message: 'Inventar-Typ fehlt.' });
+    }
+
+    const requestedKind = body.inventoryKind as InventoryKind;
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        DEFAULT_INVENTORY_GRIDS,
+        requestedKind
+      )
+    ) {
+      return reply.code(400).send({ message: 'Unbekannter Inventar-Typ.' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+      await ensureInventoryDimensionsInTx(tx, identity.userId);
+
+      const [dimension] = await tx
+        .select({
+          columns: inventoryDimensions.columns,
+          baseRows: inventoryDimensions.baseRows,
+          bonusRows: inventoryDimensions.bonusRows,
+          upgradeRef: inventoryDimensions.upgradeRef
+        })
+        .from(inventoryDimensions)
+        .where(
+          and(
+            eq(inventoryDimensions.userId, identity.userId),
+            eq(inventoryDimensions.inventoryKind, requestedKind)
+          )
+        )
+        .limit(1);
+
+      const currentDimensions = dimensionsFromRow(
+        requestedKind,
+        dimension ?? null
+      );
+      if (!currentDimensions.upgradeRef) {
+        return { kind: 'not_upgradeable' as const };
+      }
+
+      const cost = getInventoryRowUpgradeCostCrackedEggs(
+        currentDimensions.bonusRows
+      );
+      const now = new Date();
+      const debitedResources = await tx
+        .update(resources)
+        .set({
+          amount: sql`${resources.amount} - ${cost}`,
+          updatedAt: now
+        })
+        .where(
+          and(
+            eq(resources.userId, identity.userId),
+            eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+            sql`${resources.amount} >= ${cost}`
+          )
+        )
+        .returning({ amount: resources.amount });
+
+      if (debitedResources.length === 0) {
+        return { kind: 'insufficient_resources' as const, cost };
+      }
+
+      const [updatedDimensions] = await tx
+        .update(inventoryDimensions)
+        .set({
+          bonusRows: currentDimensions.bonusRows + 1,
+          updatedAt: now
+        })
+        .where(
+          and(
+            eq(inventoryDimensions.userId, identity.userId),
+            eq(inventoryDimensions.inventoryKind, requestedKind)
+          )
+        )
+        .returning({
+          columns: inventoryDimensions.columns,
+          baseRows: inventoryDimensions.baseRows,
+          bonusRows: inventoryDimensions.bonusRows,
+          upgradeRef: inventoryDimensions.upgradeRef
+        });
+
+      const nextDimensions = dimensionsFromRow(
+        requestedKind,
+        updatedDimensions ?? null
+      );
+
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'inventory_row_upgraded',
+        sourceType: 'player_action',
+        delta: {
+          inventoryDimensions: [
+            {
+              inventoryKind: requestedKind,
+              upgradeRef: currentDimensions.upgradeRef,
+              columns: currentDimensions.columns,
+              previousRows: currentDimensions.rows,
+              newRows: nextDimensions.rows,
+              previousBonusRows: currentDimensions.bonusRows,
+              newBonusRows: nextDimensions.bonusRows,
+              capacityDelta: currentDimensions.columns
+            }
+          ],
+          resources: [
+            {
+              resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+              amountDelta: -cost
+            }
+          ]
+        }
+      });
+
+      return { kind: 'ok' as const, dimensions: nextDimensions, cost };
+    });
+
+    if (result.kind === 'not_upgradeable') {
+      return reply
+        .code(400)
+        .send({ message: 'Dieses Inventar kann nicht erweitert werden.' });
+    }
+    if (result.kind === 'insufficient_resources') {
+      return reply.code(409).send({
+        message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`
+      });
+    }
+
+    const inventory = await loadPlayerInventory(identity.userId);
+    return { inventory };
   });
 
   app.post('/api/game/pets/:petId/selection', async (request, reply) => {

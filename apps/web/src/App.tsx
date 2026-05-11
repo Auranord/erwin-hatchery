@@ -96,6 +96,7 @@ type GridDimensions = {
   bonusRows: number;
   capacity: number;
   upgradeRef: string | null;
+  nextRowUpgradeCostCrackedEggs: number | null;
 };
 type GridCell<T> = { slotIndex: number; item: T | null };
 type InventoryGrid<T> = {
@@ -321,6 +322,7 @@ const EGG_RESOURCE_LABELS: Record<string, string> = {
 };
 
 const EGG_RESOURCE_ASSET_KEYS = new Set(['cracked_eggs']);
+const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 
 function formatMysteryEggType(eggTypeId: string): string {
   return MYSTERY_EGG_LABELS[eggTypeId] ?? eggTypeId;
@@ -417,6 +419,9 @@ export function App(): JSX.Element {
     useState<InventoryDiscardTarget | null>(null);
   const [isInventoryDiscardSubmitting, setIsInventoryDiscardSubmitting] =
     useState(false);
+  const [upgradingInventoryKind, setUpgradingInventoryKind] = useState<
+    string | null
+  >(null);
   const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
@@ -642,6 +647,40 @@ export function App(): JSX.Element {
     payload: Record<string, string | number | boolean>
   ): Promise<void> {
     await postInventoryAction(endpoint, payload);
+  }
+
+  function getCrackedEggBalance(): number {
+    return (
+      playerInventory?.crackedEggResources.find(
+        (resource) => resource.resourceType === CRACKED_EGGS_RESOURCE_TYPE
+      )?.amount ?? 0
+    );
+  }
+
+  async function upgradeInventoryRow(inventoryKind: string): Promise<void> {
+    if (upgradingInventoryKind) return;
+    setUpgradingInventoryKind(inventoryKind);
+    try {
+      const response = await fetch('/api/game/inventory/upgrade-row', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryKind })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        inventory?: PlayerInventory;
+        message?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ?? 'Inventar-Erweiterung fehlgeschlagen.'
+        );
+      }
+      if (payload?.inventory) setPlayerInventory(payload.inventory);
+      else await refreshOwnInventory();
+    } finally {
+      setUpgradingInventoryKind(null);
+    }
   }
 
   async function discardInventoryItem(
@@ -1877,6 +1916,32 @@ export function App(): JSX.Element {
             </div>
           ))}
         </div>
+        {grid.dimensions.nextRowUpgradeCostCrackedEggs !== null ? (
+          <div className="inventory-upgrade-panel">
+            <div>
+              <strong>Inventar erweitern</strong>
+              <p>
+                +1 Reihe ({grid.dimensions.columns} neue Slots) · Du hast {getCrackedEggBalance()} Aufgebrochene Eier.
+                Das nächste Upgrade kostet danach doppelt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void upgradeInventoryRow(grid.dimensions.kind);
+              }}
+              disabled={
+                upgradingInventoryKind !== null ||
+                getCrackedEggBalance() <
+                  grid.dimensions.nextRowUpgradeCostCrackedEggs
+              }
+            >
+              {upgradingInventoryKind === grid.dimensions.kind
+                ? 'Erweitere …'
+                : `${grid.dimensions.nextRowUpgradeCostCrackedEggs} Aufgebrochene Eier`}
+            </button>
+          </div>
+        ) : null}
       </section>
     );
   }
