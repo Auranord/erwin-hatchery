@@ -27,7 +27,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 - `pet_species` defines species templates, default stats, and the default ability; `pets` stores owned instances with permanent base stats and an individual `ability_id` copied from the species at hatch so later training can change that one pet without changing the species template.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
-- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` placeholder ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only; gems are out of scope for this pass.
+- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only; gems are out of scope for this pass.
 - Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
@@ -78,7 +78,7 @@ The current repo implementation includes:
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
 - React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment/hat grids, queue/incubate/finish hatch actions, pet event selection, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
-- PostgreSQL + Drizzle schema/migration scaffolding and MVP seed scripts
+- PostgreSQL + a consolidated Drizzle base schema migration and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route
 - Twitch EventSub webhook ingestion with signature validation, idempotent redemption processing, subscription/gift subscription auto-sync diagnostics, subscriber status cache updates, and fixed Gutschein grants
 - Admin foundation: user search/detail, role mutation, admin action logs, ledger view, test mystery egg grants, and ledger revert

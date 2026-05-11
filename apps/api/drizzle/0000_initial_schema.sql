@@ -8,9 +8,21 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url text,
   is_provisional boolean NOT NULL DEFAULT true,
   is_deleted boolean NOT NULL DEFAULT false,
+  is_subscriber boolean NOT NULL DEFAULT false,
+  subscriber_ends_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   last_login_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id),
+  session_token_hash text UNIQUE NOT NULL,
+  csrf_state text,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz
 );
 
 CREATE TABLE IF NOT EXISTS roles (
@@ -18,6 +30,18 @@ CREATE TABLE IF NOT EXISTS roles (
   user_id uuid NOT NULL REFERENCES users(id),
   role text NOT NULL,
   created_by_user_id uuid REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS roles_user_id_role_idx ON roles(user_id, role);
+
+CREATE TABLE IF NOT EXISTS admin_action_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_user_id uuid NOT NULL REFERENCES users(id),
+  target_user_id uuid REFERENCES users(id),
+  action_type text NOT NULL,
+  request_id text UNIQUE NOT NULL,
+  payload jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -32,6 +56,16 @@ CREATE TABLE IF NOT EXISTS twitch_events (
   processed_at timestamptz,
   processing_status text NOT NULL DEFAULT 'received',
   error text
+);
+
+CREATE TABLE IF NOT EXISTS twitch_user_tokens (
+  user_id uuid PRIMARY KEY REFERENCES users(id),
+  access_token text NOT NULL,
+  refresh_token text NOT NULL,
+  scope text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS channel_point_redemptions (
@@ -71,6 +105,14 @@ CREATE TABLE IF NOT EXISTS egg_types (
   id text PRIMARY KEY,
   display_name text NOT NULL,
   base_incubation_seconds integer NOT NULL,
+  twitch_reward_id text,
+  twitch_reward_title text,
+  twitch_reward_prompt text,
+  twitch_reward_cost integer,
+  twitch_reward_background_color text,
+  twitch_reward_global_cooldown_minutes integer,
+  twitch_reward_max_per_stream integer,
+  twitch_reward_max_per_user_per_stream integer,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -78,13 +120,15 @@ CREATE TABLE IF NOT EXISTS egg_types (
 CREATE TABLE IF NOT EXISTS pet_rarities (
   id text PRIMARY KEY,
   label_de text NOT NULL,
-  rank integer NOT NULL UNIQUE,
+  rank integer NOT NULL,
   recycle_cracked_eggs integer NOT NULL DEFAULT 0,
   display_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   economy_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   combine_progression_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   is_active boolean NOT NULL DEFAULT true
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS pet_rarities_rank_idx ON pet_rarities(rank);
 
 CREATE TABLE IF NOT EXISTS pet_classes (
   id text PRIMARY KEY,
@@ -131,6 +175,7 @@ CREATE TABLE IF NOT EXISTS pet_species (
   default_spd integer NOT NULL,
   default_gain integer NOT NULL,
   default_pow integer NOT NULL,
+  default_ability_id text NOT NULL REFERENCES pet_abilities(id),
   asset_key text NOT NULL,
   is_active boolean NOT NULL DEFAULT true
 );
@@ -142,8 +187,7 @@ CREATE TABLE IF NOT EXISTS egg_loot_table_entries (
   outcome_type text NOT NULL,
   resource_type text,
   resource_amount integer,
-  pet_species_id text REFERENCES pet_species(id),
-  is_active boolean NOT NULL DEFAULT true
+  pet_species_id text REFERENCES pet_species(id)
 );
 
 CREATE TABLE IF NOT EXISTS mystery_egg_inventory (
@@ -154,26 +198,47 @@ CREATE TABLE IF NOT EXISTS mystery_egg_inventory (
   PRIMARY KEY(user_id, egg_type_id)
 );
 
+CREATE TABLE IF NOT EXISTS inventory_dimensions (
+  user_id uuid NOT NULL REFERENCES users(id),
+  inventory_kind text NOT NULL,
+  columns integer NOT NULL,
+  base_rows integer NOT NULL,
+  bonus_rows integer NOT NULL DEFAULT 0,
+  upgrade_ref text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(user_id, inventory_kind)
+);
+
 CREATE TABLE IF NOT EXISTS unhatched_eggs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
   egg_type_id text NOT NULL REFERENCES egg_types(id),
   hidden_pet_species_id text NOT NULL REFERENCES pet_species(id),
   state text NOT NULL,
+  slot_index integer,
   created_from_redemption_id uuid REFERENCES channel_point_redemptions(id),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS unhatched_eggs_owner_slot_idx ON unhatched_eggs(owner_user_id, slot_index);
 
 CREATE TABLE IF NOT EXISTS incubator_slots (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_user_id uuid NOT NULL REFERENCES users(id),
   slot_source text NOT NULL,
   slot_level integer NOT NULL DEFAULT 1,
+  slot_index integer,
+  speed_multiplier_basis_points integer NOT NULL DEFAULT 10000,
+  special_bonus_basis_points integer NOT NULL DEFAULT 0,
+  fuel_behavior text NOT NULL DEFAULT 'none',
+  special_effect_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   is_available boolean NOT NULL DEFAULT true,
   remove_when_empty boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS incubator_slots_owner_slot_idx ON incubator_slots(owner_user_id, slot_index);
 
 CREATE TABLE IF NOT EXISTS incubation_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -184,7 +249,24 @@ CREATE TABLE IF NOT EXISTS incubation_jobs (
   started_at timestamptz NOT NULL DEFAULT now(),
   completed_at timestamptz,
   required_progress_seconds integer NOT NULL,
+  progress_seconds_accumulated integer NOT NULL DEFAULT 0,
+  last_progressed_at timestamptz,
   progress_snapshot jsonb NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pet_traits (
+  id text PRIMARY KEY,
+  label_de text NOT NULL,
+  description text NOT NULL DEFAULT '',
+  hp_modifier integer NOT NULL DEFAULT 0,
+  atk_modifier integer NOT NULL DEFAULT 0,
+  def_modifier integer NOT NULL DEFAULT 0,
+  spd_modifier integer NOT NULL DEFAULT 0,
+  gain_modifier integer NOT NULL DEFAULT 0,
+  pow_modifier integer NOT NULL DEFAULT 0,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS pets (
@@ -205,10 +287,22 @@ CREATE TABLE IF NOT EXISTS pets (
   hatch_variance jsonb NOT NULL DEFAULT '{}'::jsonb,
   equipped_hat_id text REFERENCES hats(id),
   source_unhatched_egg_id uuid NOT NULL REFERENCES unhatched_eggs(id),
+  slot_index integer,
   is_favorite boolean NOT NULL DEFAULT false,
   selected_for_event boolean NOT NULL DEFAULT false,
+  is_scrapped boolean NOT NULL DEFAULT false,
+  scrapped_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now(),
   hatched_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS pets_owner_slot_idx ON pets(owner_user_id, slot_index);
+
+CREATE TABLE IF NOT EXISTS pet_trait_assignments (
+  pet_id uuid NOT NULL REFERENCES pets(id),
+  trait_id text NOT NULL REFERENCES pet_traits(id),
+  assigned_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY(pet_id, trait_id)
 );
 
 CREATE TABLE IF NOT EXISTS consumable_types (
@@ -220,12 +314,48 @@ CREATE TABLE IF NOT EXISTS consumable_types (
   is_active boolean NOT NULL DEFAULT true
 );
 
-CREATE TABLE IF NOT EXISTS consumable_inventory (
+CREATE TABLE IF NOT EXISTS consumable_inventory_slots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL REFERENCES users(id),
   consumable_type_id text NOT NULL REFERENCES consumable_types(id),
-  amount integer NOT NULL DEFAULT 0,
-  PRIMARY KEY(user_id, consumable_type_id)
+  slot_index integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS consumable_inventory_slots_user_slot_idx ON consumable_inventory_slots(user_id, slot_index);
+
+CREATE TABLE IF NOT EXISTS equipment_types (
+  id text PRIMARY KEY,
+  display_name text NOT NULL,
+  description text NOT NULL,
+  equipment_slot text NOT NULL,
+  config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS equipment_inventory_slots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id),
+  equipment_type_id text NOT NULL REFERENCES equipment_types(id),
+  slot_index integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS equipment_inventory_slots_user_slot_idx ON equipment_inventory_slots(user_id, slot_index);
+
+CREATE TABLE IF NOT EXISTS hat_inventory_slots (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES users(id),
+  hat_id text NOT NULL REFERENCES hats(id),
+  slot_index integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS hat_inventory_slots_user_slot_idx ON hat_inventory_slots(user_id, slot_index);
 
 CREATE TABLE IF NOT EXISTS hatchery_upgrades (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

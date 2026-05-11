@@ -134,7 +134,7 @@ MVP has a 30-species Beta pet pool seeded behind one egg type, `beta_egg` (`Beta
 
 Definitions:
 
-- `pet_species` defines species templates, default stats, and the shared MVP placeholder ability `beta_instinct`.
+- `pet_species` defines species templates, default stats, and the shared MVP baseline ability `beta_instinct`.
 - `pets` stores owned pet instances with their own permanent base stats and individual ability.
 - A hatched pet starts from species defaults plus server-side hatch variance and copies the species default ability into `pets.ability_id`. Later training may permanently change the owned pet's base stats or ability without changing the species template.
 - The seeded MVP pool does not include traits. The trait tables remain schema-only for future training/content systems.

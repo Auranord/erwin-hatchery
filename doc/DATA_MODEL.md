@@ -493,7 +493,7 @@ primary key(user_id, leaderboard_type)
 
 ### Pet species
 
-The MVP seed creates one 30-species Beta pet pool. Every species uses the shared placeholder ability `beta_instinct`, no seeded traits are included, and Erwin is not a pet. Default non-HP stats are 10 plus 2 for each rarity rank above Common; HP is that default stat value times 10.
+The MVP seed creates one 30-species Beta pet pool. Every species uses the shared MVP baseline ability `beta_instinct`, no seeded traits are included, and Erwin is not a pet. Default non-HP stats are 10 plus 2 for each rarity rank above Common; HP is that default stat value times 10.
 
 | code | display_name | rarity | weight | element | class | HP | ATK/DEF/SPD/GAIN/POW |
 | --- | --- | --- | ---: | --- | --- | ---: | ---: |
@@ -528,7 +528,7 @@ The MVP seed creates one 30-species Beta pet pool. Every species uses the shared
 | bergwyrm_kondor | Bergwyrm-Kondor | epic | 11 | earth | drainer | 160 | 16 |
 | lichtseraph | Lichtseraph | legendary | 3 | light | nullifier | 180 | 18 |
 
-Seed `pet_rarities`, `pet_classes`, `elements`, the shared `pet_abilities` placeholder, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata and the static seed defaults above.
+Seed `pet_rarities`, `pet_classes`, `elements`, the shared MVP baseline `pet_abilities` row, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata and the static seed defaults above.
 
 ### Egg type
 
