@@ -8,7 +8,7 @@ This document describes the recommended database shape. Exact names can change, 
 - All economy mutations are server-side and ledgered.
 - Mystery eggs are stored as per-user integer balances by egg type.
 - Egg contents are determined at identify/open time for mystery eggs and are ledgered.
-- Database should support future features: more egg types, fusion, training, consumables, cosmetic hats, boss-event formulas, and runtime boss state. Owned pets already carry level and experience fields so progression systems can be added without another base pet-row rewrite.
+- Database should support future features: more egg types, fusion, training, consumables, cosmetic hats, boss-event formulas, and runtime boss state. Owned pets already carry level, experience, and favorite fields so progression/fusion systems can be added without another base pet-row rewrite.
 - Events must be reversible where practical, especially admin-started battles.
 
 ## Core tables
@@ -328,7 +328,7 @@ updated_at timestamp
 
 ### pets
 
-Unique owned pet instances. A pet is created from its species defaults plus hatch variance, receives an individual `ability_id` copied from `pet_species.default_ability_id`, and starts at level 0 with 0 experience. Its permanent base stats, individual ability, and progression fields live on the `pets` row so later training or fusion systems can change that individual pet without changing the species template.
+Unique owned pet instances. A pet is created from its species defaults plus hatch variance, receives an individual `ability_id` copied from `pet_species.default_ability_id`, starts at level 0 with 0 experience, and starts with `is_favorite = false`. Its permanent base stats, individual ability, and progression fields live on the `pets` row so later training or fusion systems can change that individual pet without changing the species template.
 
 ```text
 id uuid primary key
@@ -351,7 +351,7 @@ level integer not null default 0 -- future progression/fusion output; server-aut
 training_adjustments jsonb not null default '{}' -- future additive/permanent training changes
 equipped_hat_id text nullable references hats(id)
 source_unhatched_egg_id uuid references unhatched_eggs(id)
-is_favorite boolean not null default false
+is_favorite boolean not null default false -- future fusion material protection; favorite pets cannot be selected as fusion materials
 selected_for_event boolean not null default false
 is_scrapped boolean not null default false
 scrapped_at timestamp nullable

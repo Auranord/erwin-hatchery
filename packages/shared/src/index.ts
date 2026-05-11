@@ -119,6 +119,7 @@ export type PetSlotItem = {
   basePow: number;
   experience: number;
   level: number;
+  isFavorite: boolean;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;

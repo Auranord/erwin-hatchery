@@ -637,6 +637,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         basePow: pets.basePow,
         experience: pets.experience,
         level: pets.level,
+        isFavorite: pets.isFavorite,
         equippedHatId: pets.equippedHatId,
         selectedForEvent: pets.selectedForEvent,
         createdAt: pets.createdAt,
@@ -864,6 +865,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             basePow: row.basePow,
             experience: row.experience,
             level: row.level,
+            isFavorite: row.isFavorite,
             equippedHatId: row.equippedHatId,
             traits: (traitsByPetId.get(row.id) ?? []).map(
               ({ petId: _petId, ...trait }) => trait
@@ -1419,6 +1421,39 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       status: 'ok',
       petId: result.pet.id,
       selectedForEvent: result.pet.selectedForEvent
+    };
+  });
+
+  app.post('/api/game/pets/:petId/favorite', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const { petId } = request.params as { petId: string };
+    const body = (request.body ?? {}) as { isFavorite?: boolean };
+    if (typeof body.isFavorite !== 'boolean') {
+      return reply.code(400).send({ message: 'isFavorite must be a boolean' });
+    }
+
+    const [updatedPet] = await db
+      .update(pets)
+      .set({ isFavorite: body.isFavorite })
+      .where(
+        and(
+          eq(pets.id, petId),
+          eq(pets.ownerUserId, identity.userId),
+          eq(pets.isScrapped, false)
+        )
+      )
+      .returning({ id: pets.id, isFavorite: pets.isFavorite });
+
+    if (!updatedPet) {
+      return reply.code(404).send({ message: 'Pet not found' });
+    }
+
+    return {
+      status: 'ok',
+      petId: updatedPet.id,
+      isFavorite: updatedPet.isFavorite
     };
   });
 
