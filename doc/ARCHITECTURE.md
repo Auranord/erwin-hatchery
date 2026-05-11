@@ -249,3 +249,14 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
+
+## Slot asset paths
+
+Slot assets are served from `apps/web/public/assets/slots/`.
+
+Filename format: `{id-or-assetKey}-{size}.png`.
+
+Per-type fallback format: `{type}/fallback-{size}.png`.
+
+Seeded pet assets use `pet_species.asset_key`. Egg, equipment, hat, and future consumable assets use their seeded type IDs.
+
