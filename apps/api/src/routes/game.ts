@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { and, eq, inArray, not, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, not, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
   consumableInventorySlots,
   equipmentInventorySlots,
+  equipmentSets,
   hatInventorySlots,
   economyLedger,
   eggLootTableEntries,
@@ -85,6 +86,8 @@ type OverlayAlertEvent = {
 const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
+const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
+const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
 type PetInstanceDefaults = {
   rarityId: string;
   classId: string;
@@ -213,6 +216,26 @@ async function ensureInventoryDimensionsInTx(
         target: [inventoryDimensions.userId, inventoryDimensions.inventoryKind]
       });
   }
+}
+
+async function ensureEquipmentSetsInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<void> {
+  await tx
+    .insert(equipmentSets)
+    .values({
+      userId,
+      setIndex: 0,
+      label: 'Standard-Set',
+      baseSlotCount: DEFAULT_EQUIPMENT_SET_BASE_SLOTS,
+      bonusSlotCount: 0,
+      selectedForEvent: false,
+      upgradeRef: DEFAULT_EQUIPMENT_SET_UPGRADE_REF
+    })
+    .onConflictDoNothing({
+      target: [equipmentSets.userId, equipmentSets.setIndex]
+    });
 }
 
 async function getDimensionsInTx(
@@ -546,12 +569,14 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     await syncIncubationQueueInTx(tx, userId);
   });
   await ensureInventoryDimensions(userId);
+  await db.transaction(async (tx) => ensureEquipmentSetsInTx(tx, userId));
   const [
     dimensionRows,
     mysteryEggs,
     unhatchedEggRows,
     petRows,
     consumableRows,
+    equipmentSetRows,
     equipmentRows,
     hatRows,
     resourceRows,
@@ -632,9 +657,24 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       .where(eq(consumableInventorySlots.userId, userId)),
     db
       .select({
+        id: equipmentSets.id,
+        setIndex: equipmentSets.setIndex,
+        label: equipmentSets.label,
+        baseSlotCount: equipmentSets.baseSlotCount,
+        bonusSlotCount: equipmentSets.bonusSlotCount,
+        selectedForEvent: equipmentSets.selectedForEvent,
+        upgradeRef: equipmentSets.upgradeRef
+      })
+      .from(equipmentSets)
+      .where(eq(equipmentSets.userId, userId))
+      .orderBy(equipmentSets.setIndex),
+    db
+      .select({
         id: equipmentInventorySlots.id,
         equipmentTypeId: equipmentInventorySlots.equipmentTypeId,
-        slotIndex: equipmentInventorySlots.slotIndex
+        slotIndex: equipmentInventorySlots.slotIndex,
+        equipmentSetId: equipmentInventorySlots.equipmentSetId,
+        equipmentSetSlotIndex: equipmentInventorySlots.equipmentSetSlotIndex
       })
       .from(equipmentInventorySlots)
       .where(eq(equipmentInventorySlots.userId, userId)),
@@ -848,12 +888,40 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       dimensions: equipmentDimensions,
       slots: cellsForGrid(
         equipmentDimensions,
-        equipmentRows.map((row) => ({
-          slotIndex: row.slotIndex,
-          item: { id: row.id, equipmentTypeId: row.equipmentTypeId }
-        }))
+        equipmentRows
+          .filter((row) => row.equipmentSetId === null)
+          .map((row) => ({
+            slotIndex: row.slotIndex,
+            item: { id: row.id, equipmentTypeId: row.equipmentTypeId }
+          }))
       )
     },
+    equipmentSets: equipmentSetRows.map((set) => {
+      const slotCount = set.baseSlotCount + set.bonusSlotCount;
+      const bySlot = new Map<number, { id: string; equipmentTypeId: string }>();
+      for (const row of equipmentRows) {
+        if (row.equipmentSetId === set.id && row.equipmentSetSlotIndex !== null) {
+          bySlot.set(row.equipmentSetSlotIndex, {
+            id: row.id,
+            equipmentTypeId: row.equipmentTypeId
+          });
+        }
+      }
+      return {
+        id: set.id,
+        setIndex: set.setIndex,
+        label: set.label,
+        baseSlotCount: set.baseSlotCount,
+        bonusSlotCount: set.bonusSlotCount,
+        slotCount,
+        selectedForEvent: set.selectedForEvent,
+        upgradeRef: set.upgradeRef,
+        slots: Array.from({ length: slotCount }, (_, slotIndex) => ({
+          slotIndex,
+          item: bySlot.get(slotIndex) ?? null
+        }))
+      };
+    }),
     hats: {
       dimensions: hatDimensions,
       slots: cellsForGrid(
@@ -877,6 +945,7 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     slotStats,
     consumableStats,
     equipmentStats,
+    equipmentSetStats,
     hatStats,
     dimensionStats,
     userStats
@@ -945,6 +1014,15 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     db
       .select({
         count: sql<number>`count(*)`,
+        updatedAt: sql<Date>`max(${equipmentSets.updatedAt})`,
+        selectedSum: sql<number>`coalesce(sum(case when ${equipmentSets.selectedForEvent} then 1 else 0 end), 0)`,
+        slotSum: sql<number>`coalesce(sum(${equipmentSets.baseSlotCount} + ${equipmentSets.bonusSlotCount}), 0)`
+      })
+      .from(equipmentSets)
+      .where(eq(equipmentSets.userId, userId)),
+    db
+      .select({
+        count: sql<number>`count(*)`,
         updatedAt: sql<Date>`max(${hatInventorySlots.updatedAt})`,
         slotSum: sql<number>`coalesce(sum(${hatInventorySlots.slotIndex}), 0)`
       })
@@ -997,6 +1075,12 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     equipmentStats[0]?.slotSum ?? 0,
     equipmentStats[0]?.updatedAt
       ? toIsoTimestamp(equipmentStats[0].updatedAt)
+      : '0',
+    equipmentSetStats[0]?.count ?? 0,
+    equipmentSetStats[0]?.slotSum ?? 0,
+    equipmentSetStats[0]?.selectedSum ?? 0,
+    equipmentSetStats[0]?.updatedAt
+      ? toIsoTimestamp(equipmentSetStats[0].updatedAt)
       : '0',
     hatStats[0]?.count ?? 0,
     hatStats[0]?.slotSum ?? 0,
@@ -2453,6 +2537,74 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
+
+  app.post('/api/game/equipment-sets/:setId/selection', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const { setId } = request.params as { setId: string };
+    const body = (request.body ?? {}) as { selectedForEvent?: boolean };
+    if (typeof body.selectedForEvent !== 'boolean')
+      return reply.code(400).send({ message: 'selectedForEvent must be a boolean' });
+
+    const result = await db.transaction(async (tx) => {
+      await ensureEquipmentSetsInTx(tx, identity.userId);
+      await lockUserInventoryInTx(tx, identity.userId);
+      const [ownedSet] = await tx.select({ id: equipmentSets.id }).from(equipmentSets).where(and(eq(equipmentSets.id, setId), eq(equipmentSets.userId, identity.userId))).limit(1);
+      if (!ownedSet) return { kind: 'not_found' as const };
+      if (body.selectedForEvent) {
+        await tx.update(equipmentSets).set({ selectedForEvent: false, updatedAt: new Date() }).where(and(eq(equipmentSets.userId, identity.userId), eq(equipmentSets.selectedForEvent, true)));
+      }
+      const [updatedSet] = await tx.update(equipmentSets).set({ selectedForEvent: body.selectedForEvent, updatedAt: new Date() }).where(eq(equipmentSets.id, ownedSet.id)).returning({ id: equipmentSets.id, selectedForEvent: equipmentSets.selectedForEvent });
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_equipment_set_selection_changed', sourceType: 'player_action', sourceId: ownedSet.id, delta: { equipmentSets: [{ id: ownedSet.id, selectedForEvent: body.selectedForEvent }] } });
+      return { kind: 'ok' as const, set: updatedSet! };
+    });
+    if (result.kind === 'not_found') return reply.code(404).send({ message: 'Equipment set not found' });
+    return { status: 'ok', setId: result.set.id, selectedForEvent: result.set.selectedForEvent };
+  });
+
+  app.post('/api/game/inventory/equipment-set-slots/move', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    const body = (request.body ?? {}) as { equipmentSlotId?: string; toEquipmentSetId?: string | null; toSetSlotIndex?: number | null; toSlotIndex?: number | null };
+    if (!body.equipmentSlotId) return reply.code(400).send({ message: 'equipmentSlotId is required' });
+
+    const result = await db.transaction(async (tx) => {
+      await ensureEquipmentSetsInTx(tx, identity.userId);
+      await lockUserInventoryInTx(tx, identity.userId);
+      const [source] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex, equipmentSetId: equipmentInventorySlots.equipmentSetId, equipmentSetSlotIndex: equipmentInventorySlots.equipmentSetSlotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.id, body.equipmentSlotId!), eq(equipmentInventorySlots.userId, identity.userId))).limit(1);
+      if (!source) return { kind: 'not_found' as const };
+      const now = new Date();
+
+      if (body.toEquipmentSetId) {
+        if (!Number.isInteger(body.toSetSlotIndex)) return { kind: 'slot_out_of_bounds' as const };
+        const toSetSlotIndex = body.toSetSlotIndex as number;
+        const [targetSet] = await tx.select({ id: equipmentSets.id, baseSlotCount: equipmentSets.baseSlotCount, bonusSlotCount: equipmentSets.bonusSlotCount }).from(equipmentSets).where(and(eq(equipmentSets.id, body.toEquipmentSetId), eq(equipmentSets.userId, identity.userId))).limit(1);
+        if (!targetSet) return { kind: 'set_not_found' as const };
+        const capacity = targetSet.baseSlotCount + targetSet.bonusSlotCount;
+        if (toSetSlotIndex < 0 || toSetSlotIndex >= capacity) return { kind: 'slot_out_of_bounds' as const };
+        const [destination] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex, equipmentSetId: equipmentInventorySlots.equipmentSetId, equipmentSetSlotIndex: equipmentInventorySlots.equipmentSetSlotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.equipmentSetId, targetSet.id), eq(equipmentInventorySlots.equipmentSetSlotIndex, toSetSlotIndex), not(eq(equipmentInventorySlots.id, source.id)))).limit(1);
+        await tx.update(equipmentInventorySlots).set({ slotIndex: null, equipmentSetId: null, equipmentSetSlotIndex: null, updatedAt: now }).where(eq(equipmentInventorySlots.id, source.id));
+        if (destination) await tx.update(equipmentInventorySlots).set({ slotIndex: source.slotIndex, equipmentSetId: source.equipmentSetId, equipmentSetSlotIndex: source.equipmentSetSlotIndex, updatedAt: now }).where(eq(equipmentInventorySlots.id, destination.id));
+        await tx.update(equipmentInventorySlots).set({ slotIndex: null, equipmentSetId: targetSet.id, equipmentSetSlotIndex: toSetSlotIndex, updatedAt: now }).where(eq(equipmentInventorySlots.id, source.id));
+        await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_equipment_set_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { equipmentSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, fromEquipmentSetId: source.equipmentSetId, fromSetSlotIndex: source.equipmentSetSlotIndex, toEquipmentSetId: targetSet.id, toSetSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
+        return { kind: 'ok' as const };
+      }
+
+      if (!Number.isInteger(body.toSlotIndex)) return { kind: 'slot_out_of_bounds' as const };
+      const toSlotIndex = body.toSlotIndex as number;
+      const dimensions = await getDimensionsInTx(tx, identity.userId, 'equipment');
+      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
+      const [destination] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex, equipmentSetId: equipmentInventorySlots.equipmentSetId, equipmentSetSlotIndex: equipmentInventorySlots.equipmentSetSlotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.userId, identity.userId), eq(equipmentInventorySlots.slotIndex, toSlotIndex), isNull(equipmentInventorySlots.equipmentSetId), not(eq(equipmentInventorySlots.id, source.id)))).limit(1);
+      await tx.update(equipmentInventorySlots).set({ slotIndex: null, equipmentSetId: null, equipmentSetSlotIndex: null, updatedAt: now }).where(eq(equipmentInventorySlots.id, source.id));
+      if (destination) await tx.update(equipmentInventorySlots).set({ slotIndex: null, equipmentSetId: source.equipmentSetId, equipmentSetSlotIndex: source.equipmentSetSlotIndex, updatedAt: now }).where(eq(equipmentInventorySlots.id, destination.id));
+      await tx.update(equipmentInventorySlots).set({ slotIndex: toSlotIndex, equipmentSetId: null, equipmentSetSlotIndex: null, updatedAt: now }).where(eq(equipmentInventorySlots.id, source.id));
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_equipment_set_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { equipmentSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, fromEquipmentSetId: source.equipmentSetId, fromSetSlotIndex: source.equipmentSetSlotIndex, toSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
+      return { kind: 'ok' as const };
+    });
+    if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
+    return { ok: true };
+  });
+
   app.post('/api/game/inventory/equipment-slots/move', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
@@ -2461,11 +2613,12 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ message: 'equipmentSlotId and toSlotIndex are required' });
     const toSlotIndex = body.toSlotIndex as number;
     const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
       const dimensions = await getDimensionsInTx(tx, identity.userId, 'equipment');
       if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
-      const [source] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.id, body.equipmentSlotId!), eq(equipmentInventorySlots.userId, identity.userId))).limit(1);
+      const [source] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.id, body.equipmentSlotId!), eq(equipmentInventorySlots.userId, identity.userId), isNull(equipmentInventorySlots.equipmentSetId))).limit(1);
       if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.userId, identity.userId), eq(equipmentInventorySlots.slotIndex, toSlotIndex), not(eq(equipmentInventorySlots.id, source.id)))).limit(1);
+      const [destination] = await tx.select({ id: equipmentInventorySlots.id, slotIndex: equipmentInventorySlots.slotIndex }).from(equipmentInventorySlots).where(and(eq(equipmentInventorySlots.userId, identity.userId), eq(equipmentInventorySlots.slotIndex, toSlotIndex), isNull(equipmentInventorySlots.equipmentSetId), not(eq(equipmentInventorySlots.id, source.id)))).limit(1);
       await tx.update(equipmentInventorySlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, source.id));
       if (destination) await tx.update(equipmentInventorySlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, destination.id));
       await tx.update(equipmentInventorySlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, source.id));

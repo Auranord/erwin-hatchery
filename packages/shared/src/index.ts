@@ -134,6 +134,23 @@ export type EquipmentSlotItem = {
   equipmentTypeId: string;
 };
 
+export type EquipmentSetSlotCell = {
+  slotIndex: number;
+  item: EquipmentSlotItem | null;
+};
+
+export type EquipmentSetPayload = {
+  id: string;
+  setIndex: number;
+  label: string;
+  baseSlotCount: number;
+  bonusSlotCount: number;
+  slotCount: number;
+  selectedForEvent: boolean;
+  upgradeRef: string | null;
+  slots: EquipmentSetSlotCell[];
+};
+
 export type HatSlotItem = {
   id: string;
   hatId: string;
@@ -156,5 +173,6 @@ export type PlayerInventoryPayload = {
   pets: SlottedGrid<PetSlotItem>;
   consumables: SlottedGrid<ConsumableSlotItem>;
   equipment: SlottedGrid<EquipmentSlotItem>;
+  equipmentSets: EquipmentSetPayload[];
   hats: SlottedGrid<HatSlotItem>;
 };

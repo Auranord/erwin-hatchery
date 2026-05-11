@@ -162,6 +162,18 @@ type ConsumableItem = {
   quantity: number;
 };
 type EquipmentItem = { id: string; equipmentTypeId: string };
+type EquipmentSetSlot = { slotIndex: number; item: EquipmentItem | null };
+type EquipmentSet = {
+  id: string;
+  setIndex: number;
+  label: string;
+  baseSlotCount: number;
+  bonusSlotCount: number;
+  slotCount: number;
+  selectedForEvent: boolean;
+  upgradeRef: string | null;
+  slots: EquipmentSetSlot[];
+};
 type HatItem = { id: string; hatId: string };
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
@@ -171,6 +183,7 @@ type PlayerInventory = {
   pets: InventoryGrid<PetItem>;
   consumables: InventoryGrid<ConsumableItem>;
   equipment: InventoryGrid<EquipmentItem>;
+  equipmentSets: EquipmentSet[];
   hats: InventoryGrid<HatItem>;
 };
 type DragPayload =
@@ -179,6 +192,7 @@ type DragPayload =
   | { kind: 'pet'; id: string }
   | { kind: 'consumable'; id: string }
   | { kind: 'equipment'; id: string }
+  | { kind: 'equipment-set'; id: string }
   | { kind: 'hat'; id: string };
 type PetScrapTarget = { petId: string; label: string; rarity: string };
 type InventoryDiscardKind = 'egg' | 'consumable' | 'equipment' | 'hat';
@@ -497,7 +511,7 @@ export function App(): JSX.Element {
 
   async function postInventoryMove(
     endpoint: string,
-    payload: Record<string, string | number>
+    payload: Record<string, string | number | boolean>
   ): Promise<void> {
     await postInventoryAction(endpoint, payload);
   }
@@ -599,7 +613,7 @@ export function App(): JSX.Element {
   }
 
   async function handleDropToSlot(
-    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat' | 'trashcan' | 'discard',
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat' | 'trashcan' | 'discard',
     slotIndex: number,
     targetIncubatorId?: string
   ): Promise<void> {
@@ -647,6 +661,23 @@ export function App(): JSX.Element {
           consumableSlotId: payload.id,
           toSlotIndex: slotIndex
         });
+      else if (payload.kind === 'equipment' && targetKind === 'equipment-set')
+        await postInventoryMove('/api/game/inventory/equipment-set-slots/move', {
+          equipmentSlotId: payload.id,
+          toEquipmentSetId: targetIncubatorId ?? '',
+          toSetSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'equipment-set' && targetKind === 'equipment-set')
+        await postInventoryMove('/api/game/inventory/equipment-set-slots/move', {
+          equipmentSlotId: payload.id,
+          toEquipmentSetId: targetIncubatorId ?? '',
+          toSetSlotIndex: slotIndex
+        });
+      else if (payload.kind === 'equipment-set' && targetKind === 'equipment')
+        await postInventoryMove('/api/game/inventory/equipment-set-slots/move', {
+          equipmentSlotId: payload.id,
+          toSlotIndex: slotIndex
+        });
       else if (payload.kind === 'equipment' && targetKind === 'equipment')
         await postInventoryMove('/api/game/inventory/equipment-slots/move', {
           equipmentSlotId: payload.id,
@@ -664,7 +695,7 @@ export function App(): JSX.Element {
 
   function selectOrRun(
     payload: DragPayload,
-    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'hat' | 'trashcan' | 'discard',
+    targetKind: 'incubator' | 'egg' | 'pet' | 'consumable' | 'equipment' | 'equipment-set' | 'hat' | 'trashcan' | 'discard',
     slotIndex: number,
     targetIncubatorId?: string
   ): void {
@@ -677,6 +708,8 @@ export function App(): JSX.Element {
       setGameMessage('Inkubator, Verwerfen-Slot oder Ziel-Slot antippen.');
     } else if (payload.kind === 'pet') {
       setGameMessage('Event-Slot, Verwerten-Slot oder Ziel-Slot antippen.');
+    } else if (payload.kind === 'equipment' || payload.kind === 'equipment-set') {
+      setGameMessage('Set-Slot, Ausrüstungsinventar oder Verwerfen-Slot antippen.');
     } else {
       setGameMessage('Verwerfen-Slot oder Ziel-Slot antippen.');
     }
@@ -851,6 +884,40 @@ export function App(): JSX.Element {
       await setEventPetSelection(petId, false);
       await refreshOwnInventory();
       setGameMessage('Event-Pet abgewählt.');
+    } catch (error) {
+      showGameError(error);
+    }
+  }
+
+  async function setEventEquipmentSetSelection(
+    setId: string,
+    selectedForEvent: boolean
+  ): Promise<void> {
+    const response = await fetch(`/api/game/equipment-sets/${setId}/selection`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ selectedForEvent })
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Event-Set konnte nicht aktualisiert werden.'
+      );
+    }
+  }
+
+  async function handleEventEquipmentSetSelection(
+    setId: string,
+    selectedForEvent: boolean
+  ): Promise<void> {
+    try {
+      await setEventEquipmentSetSelection(setId, selectedForEvent);
+      await refreshOwnInventory();
+      setGameMessage(selectedForEvent ? 'Event-Set ausgewählt.' : 'Event-Set abgewählt.');
     } catch (error) {
       showGameError(error);
     }
@@ -1363,6 +1430,8 @@ export function App(): JSX.Element {
     playerInventory?.pets.slots
       .map((cell) => cell.item)
       .find((pet): pet is PetItem => pet?.selectedForEvent === true) ?? null;
+  const selectedEventSet =
+    playerInventory?.equipmentSets.find((set) => set.selectedForEvent) ?? null;
 
   function renderGrid<T extends { id: string }>(
     title: string,
@@ -1417,6 +1486,76 @@ export function App(): JSX.Element {
           ))}
         </div>
         {renderAfterGrid}
+      </section>
+    );
+  }
+
+  function renderEquipmentSetsPanel(sets: EquipmentSet[]): JSX.Element {
+    return (
+      <section className="inventory-panel equipment-set-panel">
+        <div className="equipment-set-header">
+          <div>
+            <h3>Ausrüstungssets</h3>
+            <p className="inventory-capacity">Ausrüstung im Set verschwindet aus dem normalen Raster.</p>
+          </div>
+        </div>
+        <div className="equipment-set-list">
+          {sets.map((set) => (
+            <article
+              key={set.id}
+              className={`equipment-set-card ${set.selectedForEvent ? 'selected-event-set' : ''}`}
+            >
+              <div className="equipment-set-title">
+                <strong>{set.label || `Set ${set.setIndex + 1}`}</strong>
+                {set.selectedForEvent ? <span>Event-Set</span> : null}
+              </div>
+              <div className="equipment-set-slots">
+                {set.slots.map((slot) => (
+                  <button
+                    key={slot.slotIndex}
+                    type="button"
+                    className={`equipment-set-slot ${slot.item ? 'occupied' : 'empty'} ${(selectedPayload?.kind === 'equipment' || selectedPayload?.kind === 'equipment-set') ? 'select-target' : ''}`}
+                    draggable={Boolean(slot.item)}
+                    onDragStart={() => {
+                      if (slot.item) setDragPayload({ kind: 'equipment-set', id: slot.item.id });
+                    }}
+                    onDragEnd={() => setDragPayload(null)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      void handleDropToSlot('equipment-set', slot.slotIndex, set.id);
+                    }}
+                    onClick={() => {
+                      if (slot.item) {
+                        selectOrRun({ kind: 'equipment-set', id: slot.item.id }, 'equipment-set', slot.slotIndex, set.id);
+                      } else {
+                        void handleDropToSlot('equipment-set', slot.slotIndex, set.id);
+                      }
+                    }}
+                  >
+                    {slot.item ? (
+                      <span>
+                        <strong>{slot.item.equipmentTypeId}</strong>
+                        <small>Ausrüstung zurücklegen: ins Raster ziehen</small>
+                      </span>
+                    ) : (
+                      <span>Slot frei</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="event-set-button"
+                onClick={() =>
+                  void handleEventEquipmentSetSelection(set.id, !set.selectedForEvent)
+                }
+              >
+                {set.selectedForEvent ? 'Event-Set abwählen' : 'Set auswählen'}
+              </button>
+            </article>
+          ))}
+        </div>
       </section>
     );
   }
@@ -1893,6 +2032,11 @@ export function App(): JSX.Element {
                       Event-Slot wählen.
                     </p>
                     {renderEventPetSelectionSlot(selectedEventPet)}
+                    <div className="event-set-summary">
+                      <span>Event-Set</span>
+                      <strong>{selectedEventSet?.label ?? 'Kein Set ausgewählt'}</strong>
+                      <small>{selectedEventSet ? `${selectedEventSet.slots.filter((slot) => slot.item).length}/${selectedEventSet.slotCount} Slots belegt` : 'Optional für Beta-Battles'}</small>
+                    </div>
                   </section>
                   {renderGrid(
                     'Pet-Inventar',
@@ -1956,6 +2100,7 @@ export function App(): JSX.Element {
                       'consumable'
                     )
                   )}
+                  {renderEquipmentSetsPanel(playerInventory.equipmentSets)}
                   {renderGrid(
                     'Ausrüstung',
                     playerInventory.equipment,

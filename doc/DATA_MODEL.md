@@ -376,14 +376,14 @@ Pet invariants:
 - Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
-- Gems are intentionally not part of the pet equipment model in this pass. Do not add gem equip slots or gem combat effects yet.
+- Final gem combat mechanics are intentionally not part of the pet equipment model in this pass. This Beta adds a placeholder equipment item named `Beta Gem` (`equipment_slot = gem`) only to test server-authoritative equipment-set placement; it has no combat effect and does not define final gem mechanics.
 - Current AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
 
 Future fields can include level, experience, fusion count, and richer training history.
 
 ### consumables, equipment, and hats
 
-Consumables are no longer a generic item stack. They are nonstackable slotted instances in their own 8×3 inventory. Equipment and hats use separate, similar nonstackable inventories so future pet battle gear and cosmetics can evolve independently.
+Consumables are no longer a generic item stack. They are nonstackable slotted instances in their own 8×3 inventory. Equipment and hats use separate, similar nonstackable inventories so future pet battle gear and cosmetics can evolve independently. Equipment can also be assigned to player-owned equipment sets; assigned equipment no longer occupies or appears in the normal equipment grid.
 
 ```text
 consumable_types:
@@ -412,14 +412,32 @@ config jsonb
 is_active boolean
 created_at timestamp
 
+equipment_sets:
+id uuid primary key
+user_id uuid references users(id)
+set_index integer
+label text
+base_slot_count integer -- default 3
+bonus_slot_count integer -- default 0
+selected_for_event boolean
+upgrade_ref text -- equipment_set_slots
+created_at timestamp
+updated_at timestamp
+unique(user_id, set_index)
+
 equipment_inventory_slots:
 id uuid primary key
 user_id uuid references users(id)
 equipment_type_id text references equipment_types(id)
-slot_index integer nullable
+slot_index integer nullable -- normal equipment grid location
+equipment_set_id uuid nullable references equipment_sets(id)
+equipment_set_slot_index integer nullable -- set-local location
 created_at timestamp
 updated_at timestamp
 unique(user_id, slot_index)
+unique(equipment_set_id, equipment_set_slot_index)
+
+Each equipment item must have exactly one stable location: a normal `slot_index`, an `(equipment_set_id, equipment_set_slot_index)`, or a temporary all-null location while a transaction performs a swap. Equipment assigned to a set is omitted from the normal equipment inventory payload.
 
 hats:
 id text primary key
@@ -579,5 +597,5 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
