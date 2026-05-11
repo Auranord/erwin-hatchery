@@ -141,7 +141,7 @@ Definitions:
 - Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
 - Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
-- Gems are not equipped on pets and should not be implemented for this pass.
+- Gems are not equipped directly on pets and final gem combat mechanics remain out of scope. The Beta includes a placeholder equipment item named `Beta Gem` for testing equipment-set inventory placement only; it has no combat effect.
 
 Seeded class roles:
 
@@ -315,5 +315,5 @@ Implement this in a simple and transparent way.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space. Scrapping a pet deletes the pet after explicit confirmation, grants `cracked_eggs` from rarity recycle metadata, and writes a ledger row; rarity still never multiplies stats.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.

@@ -503,6 +503,8 @@ export const consumableInventorySlots = pgTable(
       .notNull()
       .references(() => consumableTypes.id),
     slotIndex: integer('slot_index'),
+    equipmentSetId: uuid('equipment_set_id').references(() => equipmentSets.id),
+    equipmentSetSlotIndex: integer('equipment_set_slot_index'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -530,6 +532,31 @@ export const equipmentTypes = pgTable('equipment_types', {
     .defaultNow()
 });
 
+
+export const equipmentSets = pgTable(
+  'equipment_sets',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    setIndex: integer('set_index').notNull(),
+    label: text('label').notNull(),
+    baseSlotCount: integer('base_slot_count').notNull().default(3),
+    bonusSlotCount: integer('bonus_slot_count').notNull().default(0),
+    selectedForEvent: boolean('selected_for_event').notNull().default(false),
+    upgradeRef: text('upgrade_ref'),
+    createdAt: timestamps.createdAt,
+    updatedAt: timestamps.updatedAt
+  },
+  (table) => ({
+    userSetIndexUnique: uniqueIndex('equipment_sets_user_index_idx').on(
+      table.userId,
+      table.setIndex
+    )
+  })
+);
+
 export const equipmentInventorySlots = pgTable(
   'equipment_inventory_slots',
   {
@@ -541,6 +568,8 @@ export const equipmentInventorySlots = pgTable(
       .notNull()
       .references(() => equipmentTypes.id),
     slotIndex: integer('slot_index'),
+    equipmentSetId: uuid('equipment_set_id').references(() => equipmentSets.id),
+    equipmentSetSlotIndex: integer('equipment_set_slot_index'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -552,6 +581,10 @@ export const equipmentInventorySlots = pgTable(
     userSlotUnique: uniqueIndex('equipment_inventory_slots_user_slot_idx').on(
       table.userId,
       table.slotIndex
+    ),
+    setSlotUnique: uniqueIndex('equipment_inventory_slots_set_slot_idx').on(
+      table.equipmentSetId,
+      table.equipmentSetSlotIndex
     )
   })
 );

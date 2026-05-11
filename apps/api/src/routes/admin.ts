@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
   adminActionLogs,
   consumableInventorySlots,
   equipmentInventorySlots,
+  equipmentSets,
   hatInventorySlots,
   economyLedger,
   eggTypes,
@@ -548,6 +549,56 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         };
       }
 
+      const selectedSetRows = await tx
+        .select({
+          id: equipmentSets.id,
+          userId: equipmentSets.userId,
+          setIndex: equipmentSets.setIndex,
+          label: equipmentSets.label,
+          baseSlotCount: equipmentSets.baseSlotCount,
+          bonusSlotCount: equipmentSets.bonusSlotCount,
+          itemId: equipmentInventorySlots.id,
+          equipmentTypeId: equipmentInventorySlots.equipmentTypeId,
+          setSlotIndex: equipmentInventorySlots.equipmentSetSlotIndex
+        })
+        .from(equipmentSets)
+        .leftJoin(equipmentInventorySlots, eq(equipmentInventorySlots.equipmentSetId, equipmentSets.id))
+        .where(
+          and(
+            inArray(equipmentSets.userId, selectedPets.map((pet) => pet.ownerUserId)),
+            eq(equipmentSets.selectedForEvent, true)
+          )
+        );
+      const selectedEquipmentSetByUserId = new Map<string, unknown>();
+      for (const row of selectedSetRows) {
+        const existing = selectedEquipmentSetByUserId.get(row.userId) as
+          | {
+              id: string;
+              setIndex: number;
+              label: string;
+              slotCount: number;
+              items: Array<{ id: string; equipmentTypeId: string; slotIndex: number }>;
+            }
+          | undefined;
+        const snapshot =
+          existing ??
+          {
+            id: row.id,
+            setIndex: row.setIndex,
+            label: row.label,
+            slotCount: row.baseSlotCount + row.bonusSlotCount,
+            items: []
+          };
+        if (row.itemId && row.equipmentTypeId && row.setSlotIndex !== null) {
+          snapshot.items.push({
+            id: row.itemId,
+            equipmentTypeId: row.equipmentTypeId,
+            slotIndex: row.setSlotIndex
+          });
+        }
+        selectedEquipmentSetByUserId.set(row.userId, snapshot);
+      }
+
       const [createdEvent] = await tx
         .insert(gameEvents)
         .values({
@@ -581,7 +632,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
             attacks_made: 0,
             effective_stats: null,
             class_stacks: {},
-            element_stacks: {}
+            element_stacks: {},
+            selected_equipment_set:
+              selectedEquipmentSetByUserId.get(pet.ownerUserId) ?? null
           }
         });
 
@@ -616,7 +669,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
                 leaderboardType: 'battle_points',
                 pointsDelta: score.pointsAwarded,
                 placement: score.placement,
-                petId: pet.id
+                petId: pet.id,
+                selectedEquipmentSet:
+                  selectedEquipmentSetByUserId.get(pet.ownerUserId) ?? null
               }
             ]
           }
@@ -638,7 +693,9 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
               petId: pet.id,
               userId: pet.ownerUserId,
               placement: placements[index]!.placement,
-              pointsAwarded: placements[index]!.pointsAwarded
+              pointsAwarded: placements[index]!.pointsAwarded,
+              selectedEquipmentSet:
+                selectedEquipmentSetByUserId.get(pet.ownerUserId) ?? null
             }))
           }
         })

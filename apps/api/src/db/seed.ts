@@ -3,6 +3,7 @@ import { eq, sql } from 'drizzle-orm';
 import {
   eggLootTableEntries,
   eggTypes,
+  equipmentTypes,
   elements,
   hats,
   petAbilities,
@@ -233,6 +234,25 @@ async function seed(): Promise<void> {
     }
   });
 
+
+  await db.insert(equipmentTypes).values({
+    id: 'beta_gem',
+    displayName: 'Beta Gem',
+    description: 'Beta-Test-Platzhalter ohne Kampfeffekt.',
+    equipmentSlot: 'gem',
+    config: { placeholder: true, combatEffect: 'none' },
+    isActive: true
+  }).onConflictDoUpdate({
+    target: equipmentTypes.id,
+    set: {
+      displayName: sql`excluded.display_name`,
+      description: sql`excluded.description`,
+      equipmentSlot: sql`excluded.equipment_slot`,
+      config: sql`excluded.config`,
+      isActive: true
+    }
+  });
+
   await db.insert(hats).values([
     { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
   ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
@@ -295,7 +315,7 @@ async function seed(): Promise<void> {
     }))
   ]);
 
-  console.info('Seed completed for Beta Ei, MVP pet pool, and weighted pet/resource loot table.');
+  console.info('Seed completed for Beta Ei, Beta Gem, MVP pet pool, and weighted pet/resource loot table.');
 }
 
 void seed()
