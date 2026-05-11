@@ -151,7 +151,7 @@ async function seed(): Promise<void> {
     }
   });
 
-  await db.insert(petRarities).values(PET_RARITIES).onConflictDoUpdate({
+  await db.insert(petRarities).values([...PET_RARITIES]).onConflictDoUpdate({
     target: petRarities.id,
     set: {
       labelDe: sql`excluded.label_de`,
