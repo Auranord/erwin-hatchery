@@ -237,7 +237,13 @@ type LeaderboardEntry = {
 };
 
 
-type SlotAssetFolder = 'eggs' | 'pets' | 'consumables' | 'equipment' | 'hats';
+type SlotAssetFolder =
+  | 'eggs'
+  | 'pets'
+  | 'consumables'
+  | 'equipment'
+  | 'hats'
+  | 'resources';
 
 type SlotAssetProps = {
   folder: SlotAssetFolder;
@@ -314,12 +320,18 @@ const EGG_RESOURCE_LABELS: Record<string, string> = {
   voucher: 'Gutschein'
 };
 
+const EGG_RESOURCE_ASSET_KEYS = new Set(['cracked_eggs']);
+
 function formatMysteryEggType(eggTypeId: string): string {
   return MYSTERY_EGG_LABELS[eggTypeId] ?? eggTypeId;
 }
 
 function formatEggResourceType(resourceType: string): string {
   return EGG_RESOURCE_LABELS[resourceType] ?? resourceType;
+}
+
+function getEggResourceAssetKey(resourceType: string): string | null {
+  return EGG_RESOURCE_ASSET_KEYS.has(resourceType) ? resourceType : null;
 }
 
 function formatIncubatorSource(slotSource: string): string {
@@ -2041,7 +2053,6 @@ export function App(): JSX.Element {
         <h2>Spielbereich</h2>
         {me?.authenticated ? (
           <>
-            <p>Dein Inventar wird automatisch aktualisiert.</p>
             {playerInventory ? (
               <>
                 {gameMessage ? (
@@ -2127,58 +2138,91 @@ export function App(): JSX.Element {
                 ) : null}
                 <div className="resource-summary">
                   <h3>Gezählte Vorräte</h3>
-                  <p>
-                    <strong>Mystery-Eier:</strong>{' '}
-                    {playerInventory.mysteryEggs.reduce(
-                      (sum, entry) => sum + entry.amount,
-                      0
-                    )}
-                  </p>
-                  {playerInventory.mysteryEggs
-                    .filter((entry) => entry.amount > 0)
-                    .map((entry) => (
-                      <p key={entry.eggTypeId} className="resource-row">
-                        {renderSlotAsset({
-                          folder: 'eggs',
-                          assetKey: getEggAssetKey(entry.eggTypeId),
-                          label: formatMysteryEggType(entry.eggTypeId),
-                          size: 28
-                        })}
-                        <span>
-                          <strong>
-                            {formatMysteryEggType(entry.eggTypeId)}:
-                          </strong>{' '}
-                          {entry.amount}
-                        </span>{' '}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void identifyMysteryEgg(entry.eggTypeId)
-                              .then(refreshOwnInventory)
-                              .catch(showGameError)
-                          }
-                        >
-                          Typ bestimmen
-                        </button>
-                      </p>
-                    ))}
-                  <p>
-                    <strong>Ei-Ressourcen:</strong>{' '}
-                    {playerInventory.crackedEggResources.reduce(
-                      (sum, entry) => sum + entry.amount,
-                      0
-                    )}
-                  </p>
-                  {playerInventory.crackedEggResources
-                    .filter((entry) => entry.amount > 0)
-                    .map((entry) => (
-                      <p key={entry.resourceType}>
-                        <strong>
-                          {formatEggResourceType(entry.resourceType)}:
-                        </strong>{' '}
-                        {entry.amount}
-                      </p>
-                    ))}
+                  <div className="resource-summary-grid">
+                    <section
+                      className="resource-column"
+                      aria-labelledby="inventory-eggs-title"
+                    >
+                      <h4 id="inventory-eggs-title">Eier</h4>
+                      {playerInventory.mysteryEggs.filter(
+                        (entry) => entry.amount > 0
+                      ).length > 0 ? (
+                        playerInventory.mysteryEggs
+                          .filter((entry) => entry.amount > 0)
+                          .map((entry) => (
+                            <p key={entry.eggTypeId} className="resource-row">
+                              {renderSlotAsset({
+                                folder: 'eggs',
+                                assetKey: getEggAssetKey(entry.eggTypeId),
+                                label: formatMysteryEggType(entry.eggTypeId),
+                                size: 28
+                              })}
+                              <span>
+                                <strong>
+                                  {formatMysteryEggType(entry.eggTypeId)}:
+                                </strong>{' '}
+                                {entry.amount}
+                              </span>{' '}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void identifyMysteryEgg(entry.eggTypeId)
+                                    .then(refreshOwnInventory)
+                                    .catch(showGameError)
+                                }
+                              >
+                                Typ bestimmen
+                              </button>
+                            </p>
+                          ))
+                      ) : (
+                        <p className="resource-empty">Keine Eier.</p>
+                      )}
+                    </section>
+                    <section
+                      className="resource-column"
+                      aria-labelledby="inventory-resources-title"
+                    >
+                      <h4 id="inventory-resources-title">Ressourcen</h4>
+                      {playerInventory.crackedEggResources.filter(
+                        (entry) => entry.amount > 0
+                      ).length > 0 ? (
+                        playerInventory.crackedEggResources
+                          .filter((entry) => entry.amount > 0)
+                          .map((entry) => {
+                            const resourceAssetKey = getEggResourceAssetKey(
+                              entry.resourceType
+                            );
+
+                            return (
+                              <p
+                                key={entry.resourceType}
+                                className="resource-row"
+                              >
+                                {resourceAssetKey
+                                  ? renderSlotAsset({
+                                      folder: 'resources',
+                                      assetKey: resourceAssetKey,
+                                      label: formatEggResourceType(
+                                        entry.resourceType
+                                      ),
+                                      size: 28
+                                    })
+                                  : null}
+                                <span>
+                                  <strong>
+                                    {formatEggResourceType(entry.resourceType)}:
+                                  </strong>{' '}
+                                  {entry.amount}
+                                </span>
+                              </p>
+                            );
+                          })
+                      ) : (
+                        <p className="resource-empty">Keine Ressourcen.</p>
+                      )}
+                    </section>
+                  </div>
                 </div>
                 <div className="inventory-stack">
                   {renderIncubatorInventory(playerInventory.incubators)}
