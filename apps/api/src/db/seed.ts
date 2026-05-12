@@ -271,6 +271,9 @@ async function seed(): Promise<void> {
         defaultSpd: statValue,
         defaultGain: statValue,
         defaultPow: statValue,
+        rarityId: pet.rarity,
+        classId: pet.classId,
+        elementId: pet.element,
         defaultAbilityId: DEFAULT_ABILITY_ID,
         assetKey: `pet_${pet.code}`,
         isActive: true
@@ -288,6 +291,9 @@ async function seed(): Promise<void> {
       defaultSpd: sql`excluded.default_spd`,
       defaultGain: sql`excluded.default_gain`,
       defaultPow: sql`excluded.default_pow`,
+      rarityId: sql`excluded.rarity_id`,
+      classId: sql`excluded.class_id`,
+      elementId: sql`excluded.element_id`,
       defaultAbilityId: sql`excluded.default_ability_id`,
       assetKey: sql`excluded.asset_key`,
       isActive: true

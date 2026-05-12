@@ -294,8 +294,7 @@ CREATE TABLE IF NOT EXISTS pets (
   selected_for_event boolean NOT NULL DEFAULT false,
   is_scrapped boolean NOT NULL DEFAULT false,
   scrapped_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  hatched_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS pets_owner_slot_idx ON pets(owner_user_id, slot_index);

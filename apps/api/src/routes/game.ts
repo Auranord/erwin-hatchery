@@ -89,51 +89,6 @@ const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
-type PetInstanceDefaults = {
-  rarityId: string;
-  classId: string;
-  elementId: string;
-};
-
-const DEFAULT_PET_INSTANCE: PetInstanceDefaults = {
-  rarityId: 'common',
-  classId: 'protector',
-  elementId: 'earth'
-};
-
-const DEFAULT_PET_INSTANCE_BY_SPECIES: Record<string, PetInstanceDefaults> = {
-  glutfink: { rarityId: 'common', classId: 'nullifier', elementId: 'fire' },
-  bachente: { rarityId: 'common', classId: 'nullifier', elementId: 'water' },
-  windlerche: { rarityId: 'common', classId: 'nullifier', elementId: 'air' },
-  kieseltaube: { rarityId: 'common', classId: 'protector', elementId: 'earth' },
-  funkenmeise: { rarityId: 'common', classId: 'protector', elementId: 'fire' },
-  schilfreiher: { rarityId: 'common', classId: 'sunderer', elementId: 'water' },
-  mooswachtel: { rarityId: 'common', classId: 'sunderer', elementId: 'air' },
-  erdspatz: { rarityId: 'common', classId: 'saboteur', elementId: 'earth' },
-  rauchsegler: { rarityId: 'common', classId: 'saboteur', elementId: 'fire' },
-  tropfenmoewe: { rarityId: 'common', classId: 'drainer', elementId: 'water' },
-  wolkenzaunkoenig: { rarityId: 'common', classId: 'drainer', elementId: 'air' },
-  knollenhuhn: { rarityId: 'common', classId: 'drainer', elementId: 'earth' },
-  kerzenkauz: { rarityId: 'uncommon', classId: 'protector', elementId: 'fire' },
-  perlentaucher: { rarityId: 'uncommon', classId: 'protector', elementId: 'water' },
-  sturmschwalbe: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'air' },
-  lehmspecht: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'earth' },
-  kupferfasan: { rarityId: 'uncommon', classId: 'sunderer', elementId: 'fire' },
-  regenkranich: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'water' },
-  boeenfalke: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'air' },
-  wurzelrabe: { rarityId: 'uncommon', classId: 'saboteur', elementId: 'earth' },
-  phoenixkueken: { rarityId: 'rare', classId: 'nullifier', elementId: 'fire' },
-  mondreiher: { rarityId: 'rare', classId: 'nullifier', elementId: 'water' },
-  himmelsgreifchen: { rarityId: 'rare', classId: 'protector', elementId: 'air' },
-  runenwachtel: { rarityId: 'rare', classId: 'protector', elementId: 'air' },
-  kristallkraehe: { rarityId: 'rare', classId: 'drainer', elementId: 'earth' },
-  obsidianule: { rarityId: 'rare', classId: 'drainer', elementId: 'earth' },
-  sonnenroc: { rarityId: 'epic', classId: 'sunderer', elementId: 'fire' },
-  tiefseealk: { rarityId: 'epic', classId: 'saboteur', elementId: 'water' },
-  bergwyrm_kondor: { rarityId: 'epic', classId: 'drainer', elementId: 'earth' },
-  lichtseraph: { rarityId: 'legendary', classId: 'nullifier', elementId: 'light' }
-};
-
 const PET_SCRAP_REWARD_BY_RARITY: Record<string, number> = {
   common: 1,
   uncommon: 3,
@@ -2070,23 +2025,25 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           defaultSpd: petSpecies.defaultSpd,
           defaultGain: petSpecies.defaultGain,
           defaultPow: petSpecies.defaultPow,
+          rarityId: petSpecies.rarityId,
+          classId: petSpecies.classId,
+          elementId: petSpecies.elementId,
           defaultAbilityId: petSpecies.defaultAbilityId
         })
         .from(petSpecies)
         .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
         .limit(1);
       if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
-      const instanceDefaults =
-        DEFAULT_PET_INSTANCE_BY_SPECIES[petSpeciesRow.id] ?? DEFAULT_PET_INSTANCE;
+      const completedAt = new Date();
 
       const [newPet] = await tx
         .insert(pets)
         .values({
           ownerUserId: identity.userId,
           speciesId: petSpeciesRow.id,
-          rarityId: instanceDefaults.rarityId,
-          classId: instanceDefaults.classId,
-          elementId: instanceDefaults.elementId,
+          rarityId: petSpeciesRow.rarityId,
+          classId: petSpeciesRow.classId,
+          elementId: petSpeciesRow.elementId,
           abilityId: petSpeciesRow.defaultAbilityId,
           baseHp: petSpeciesRow.defaultHp,
           baseAtk: petSpeciesRow.defaultAtk,
@@ -2096,13 +2053,14 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           basePow: petSpeciesRow.defaultPow,
           hatchVariance: { hp: 0, atk: 0, def: 0, spd: 0, gain: 0, pow: 0 },
           sourceUnhatchedEggId: egg.id,
-          slotIndex: freePetSlot
+          slotIndex: freePetSlot,
+          createdAt: completedAt
         })
         .returning({ id: pets.id });
 
       await tx
         .update(incubationJobs)
-        .set({ state: 'completed', completedAt: new Date() })
+        .set({ state: 'completed', completedAt })
         .where(eq(incubationJobs.id, job.id));
       await tx
         .update(unhatchedEggs)
@@ -2111,7 +2069,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const nextSlotAvailability = true;
       await tx
         .update(incubatorSlots)
-        .set({ isAvailable: nextSlotAvailability, updatedAt: new Date() })
+        .set({ isAvailable: nextSlotAvailability, updatedAt: completedAt })
         .where(eq(incubatorSlots.id, job.incubatorSlotId));
       await tx.insert(economyLedger).values({
         userId: identity.userId,

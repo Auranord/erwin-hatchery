@@ -99,10 +99,10 @@ The generated pet has:
 
 - pet species
 - permanent base stats derived from species defaults plus hatch variance
-- exactly one rarity, class, element, and individual ability assigned to the owned pet instance by server-side hatch rules; the initial ability is copied from the species default and can be changed later by training
+- exactly one rarity, class, element, and individual ability assigned to the owned pet instance from the species database row; the initial ability is copied from the species default and can be changed later by training
 - unique pet instance ID
 - owner
-- creation/hatch metadata
+- creation timestamp, which is the hatch time for normal hatches
 
 ## Initial incubator
 
@@ -134,9 +134,9 @@ MVP has a 30-species Beta pet pool seeded behind one egg type, `beta_egg` (`Beta
 
 Definitions:
 
-- `pet_species` defines species templates, default stats, and the shared MVP baseline ability `beta_instinct`.
+- `pet_species` defines species templates, default stats, fixed rarity/class/element assignments, and the shared MVP baseline ability `beta_instinct`.
 - `pets` stores owned pet instances with their own permanent base stats, individual ability, level, experience, and favorite flag.
-- A hatched pet starts from species defaults plus server-side hatch variance, copies the species default ability into `pets.ability_id`, starts at level 0 with 0 experience, and is not a favorite by default. Later training or fusion systems may permanently change the owned pet's progression, base stats, or ability without changing the species template. Future fusion selection must exclude favorite pets as materials unless the favorite flag is removed first.
+- A hatched pet starts from species defaults plus server-side hatch variance, copies the species rarity/class/element assignments and default ability into the `pets` row, starts at level 0 with 0 experience, and is not a favorite by default. Later training or fusion systems may permanently change the owned pet's progression, base stats, or ability without changing the species template. Future fusion selection must exclude favorite pets as materials unless the favorite flag is removed first.
 - The seeded MVP pool does not include traits. The trait tables remain schema-only for future training/content systems.
 - Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
 - Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.

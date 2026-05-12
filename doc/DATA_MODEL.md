@@ -302,7 +302,7 @@ Ability trigger rule for future boss-event logic: after an attack and AP gain ar
 
 ### pet_species
 
-Config table for species templates, default stats, and the species default ability. Species defaults are the starting template only; hatched pets store their own permanent base stats and copied individual ability in `pets`.
+Config table for species templates, default stats, fixed rarity/class/element assignments, and the species default ability. Species defaults are the starting template only; hatched pets store their own permanent base stats, copied rarity/class/element IDs, and copied individual ability in `pets`.
 
 ```text
 id text primary key
@@ -315,6 +315,9 @@ default_def integer not null
 default_spd integer not null
 default_gain integer not null
 default_pow integer not null
+rarity_id text not null references pet_rarities(id)
+class_id text not null references pet_classes(id)
+element_id text not null references elements(id)
 default_ability_id text not null references pet_abilities(id)
 asset_key text not null
 is_active boolean not null default true
@@ -343,7 +346,7 @@ updated_at timestamp
 
 ### pets
 
-Unique owned pet instances. A pet is created from its species defaults plus hatch variance, receives an individual `ability_id` copied from `pet_species.default_ability_id`, starts at level 0 with 0 experience, and starts with `is_favorite = false`. Its permanent base stats, individual ability, and progression fields live on the `pets` row so later training or fusion systems can change that individual pet without changing the species template.
+Unique owned pet instances. A pet is created from its species defaults plus hatch variance, receives `rarity_id`, `class_id`, and `element_id` from its `pet_species` row, receives an individual `ability_id` copied from `pet_species.default_ability_id`, starts at level 0 with 0 experience, and starts with `is_favorite = false`. Its permanent base stats, individual ability, and progression fields live on the `pets` row so later training or fusion systems can change that individual pet without changing the species template.
 
 ```text
 id uuid primary key
@@ -370,8 +373,7 @@ is_favorite boolean not null default false -- future fusion material protection;
 selected_for_event boolean not null default false
 is_scrapped boolean not null default false
 scrapped_at timestamp nullable
-created_at timestamp
-hatched_at timestamp
+created_at timestamp -- owned pet row creation time; this is also the hatch time for normal hatches
 ```
 
 ### pet_trait_assignments
@@ -388,8 +390,8 @@ primary key (pet_id, trait_id)
 Pet invariants:
 
 - Every pet has exactly one class, one element, and one individual ability.
-- `pet_species` defines default stats and the default ability; `pets` stores the owned instance, its own permanent base stats, and its own ability.
-- Hatch generation starts from species defaults, applies hatch variance, copies `pet_species.default_ability_id` into `pets.ability_id`, assigns rarity/class/element from explicit server-side hatch rules, and writes an immutable ledger row.
+- `pet_species` defines default stats, fixed rarity/class/element assignments, and the default ability; `pets` stores the owned instance, its own permanent base stats, its copied rarity/class/element IDs, and its own ability.
+- Hatch generation starts from species defaults, applies hatch variance, copies `pet_species.rarity_id`, `pet_species.class_id`, `pet_species.element_id`, and `pet_species.default_ability_id` into the owned pet row, and writes an immutable ledger row.
 - Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
