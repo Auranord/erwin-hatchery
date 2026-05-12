@@ -2658,7 +2658,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         }
       });
 
-      return { kind: 'resources' as const };
+      return {
+        kind: 'resources' as const,
+        resourceType: picked.resourceType,
+        resourceAmount: effectiveResourceAmount
+      };
     });
 
     if (result.kind === 'none') {
@@ -2671,6 +2675,15 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         code: 'UNHATCHED_EGG_INVENTORY_FULL',
         message: 'Dein Eier-Inventar ist voll. Bitte schaffe zuerst Platz.'
       });
+    }
+
+    if (result.kind === 'resources') {
+      return {
+        ok: true,
+        result: result.kind,
+        resourceType: result.resourceType,
+        resourceAmount: result.resourceAmount
+      };
     }
 
     return { ok: true, result: result.kind };
@@ -2899,6 +2912,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [petSpeciesRow] = await tx
         .select({
           id: petSpecies.id,
+          displayName: petSpecies.displayName,
           defaultHp: petSpecies.defaultHp,
           defaultAtk: petSpecies.defaultAtk,
           defaultDef: petSpecies.defaultDef,
@@ -2908,9 +2922,11 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           rarityId: petSpecies.rarityId,
           classId: petSpecies.classId,
           elementId: petSpecies.elementId,
-          defaultAbilityId: petSpecies.defaultAbilityId
+          defaultAbilityId: petSpecies.defaultAbilityId,
+          rarityLabelDe: petRarities.labelDe
         })
         .from(petSpecies)
+        .innerJoin(petRarities, eq(petSpecies.rarityId, petRarities.id))
         .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
         .limit(1);
       if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
@@ -2937,6 +2953,9 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           createdAt: completedAt
         })
         .returning({ id: pets.id });
+      if (!newPet) {
+        throw new Error('Failed to create hatched pet');
+      }
 
       await tx
         .update(incubationJobs)
@@ -2960,7 +2979,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         delta: {
           hatchedPets: [
             {
-              id: newPet?.id ?? null,
+              id: newPet.id,
               speciesId: petSpeciesRow.id,
               slotIndex: freePetSlot
             }
@@ -2977,7 +2996,15 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       });
       await syncIncubationQueueInTx(tx, identity.userId);
 
-      return { kind: 'ok' as const };
+      return {
+        kind: 'ok' as const,
+        pet: {
+          id: newPet.id,
+          speciesDisplayName: petSpeciesRow.displayName,
+          rarityId: petSpeciesRow.rarityId,
+          rarityLabelDe: petSpeciesRow.rarityLabelDe
+        }
+      };
     });
 
     if (result.kind !== 'ok') {
@@ -2989,7 +3016,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       }
       return reply.code(409).send({ message: result.kind });
     }
-    return { ok: true };
+    return { ok: true, pet: result.pet };
   });
 
   app.post('/api/game/inventory/egg-slots/move', async (request, reply) => {
