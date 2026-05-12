@@ -251,6 +251,15 @@ export const petSpecies = pgTable('pet_species', {
   defaultSpd: integer('default_spd').notNull(),
   defaultGain: integer('default_gain').notNull(),
   defaultPow: integer('default_pow').notNull(),
+  rarityId: text('rarity_id')
+    .notNull()
+    .references(() => petRarities.id),
+  classId: text('class_id')
+    .notNull()
+    .references(() => petClasses.id),
+  elementId: text('element_id')
+    .notNull()
+    .references(() => elements.id),
   defaultAbilityId: text('default_ability_id')
     .notNull()
     .references(() => petAbilities.id),
@@ -453,9 +462,6 @@ export const pets = pgTable(
     isScrapped: boolean('is_scrapped').notNull().default(false),
     scrappedAt: timestamp('scrapped_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    hatchedAt: timestamp('hatched_at', { withTimezone: true })
       .notNull()
       .defaultNow()
   },

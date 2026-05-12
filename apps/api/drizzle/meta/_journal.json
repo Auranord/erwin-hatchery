@@ -29,6 +29,20 @@
       "when": 1778500002000,
       "tag": "0003_pet_progression",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778500003000,
+      "tag": "0004_species_instance_dimensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778500004000,
+      "tag": "0005_remove_pet_hatched_at",
+      "breakpoints": true
     }
   ]
 }
