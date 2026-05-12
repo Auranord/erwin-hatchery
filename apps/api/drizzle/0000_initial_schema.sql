@@ -312,6 +312,9 @@ CREATE TABLE IF NOT EXISTS consumable_types (
   description text NOT NULL,
   effect_type text NOT NULL,
   config jsonb NOT NULL,
+  resource_price integer NOT NULL DEFAULT 0,
+  stock integer NOT NULL DEFAULT 0,
+  is_shop_purchasable boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true
 );
 
@@ -332,6 +335,9 @@ CREATE TABLE IF NOT EXISTS equipment_types (
   description text NOT NULL,
   equipment_slot text NOT NULL,
   config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  resource_price integer NOT NULL DEFAULT 0,
+  stock integer NOT NULL DEFAULT 0,
+  is_shop_purchasable boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
