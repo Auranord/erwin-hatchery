@@ -37,6 +37,164 @@ type SeedPet = {
   classId: ClassId;
 };
 
+type EquipmentStat = 'hp' | 'atk' | 'def' | 'spd' | 'gain' | 'pow';
+
+type SeedEquipment = {
+  id: string;
+  displayName: string;
+  description: string;
+  stat: EquipmentStat;
+  bonus: number;
+  tier: 1 | 2 | 3;
+};
+
+const GEM_EQUIPMENT = [
+  {
+    id: 'heart_quartz_1',
+    displayName: 'Herzquarz I',
+    description: 'Ein zarter Quarz, der den Lebensfunken stärkt. Gewährt +10 HP.',
+    stat: 'hp',
+    bonus: 10,
+    tier: 1
+  },
+  {
+    id: 'heart_quartz_2',
+    displayName: 'Herzquarz II',
+    description: 'Ein klarer Quarz, der den Lebensfunken kräftigt. Gewährt +20 HP.',
+    stat: 'hp',
+    bonus: 20,
+    tier: 2
+  },
+  {
+    id: 'heart_quartz_3',
+    displayName: 'Herzquarz III',
+    description: 'Ein strahlender Quarz, der den Lebensfunken entfacht. Gewährt +30 HP.',
+    stat: 'hp',
+    bonus: 30,
+    tier: 3
+  },
+  {
+    id: 'ember_ruby_1',
+    displayName: 'Glutrubin I',
+    description: 'Ein warmer Rubin, der Angriffe mit Funkenmut füllt. Gewährt +1 ATK.',
+    stat: 'atk',
+    bonus: 1,
+    tier: 1
+  },
+  {
+    id: 'ember_ruby_2',
+    displayName: 'Glutrubin II',
+    description: 'Ein heißer Rubin, der Angriffe mit Flammenmut füllt. Gewährt +2 ATK.',
+    stat: 'atk',
+    bonus: 2,
+    tier: 2
+  },
+  {
+    id: 'ember_ruby_3',
+    displayName: 'Glutrubin III',
+    description: 'Ein lodernder Rubin, der Angriffe mit Feuerseele füllt. Gewährt +3 ATK.',
+    stat: 'atk',
+    bonus: 3,
+    tier: 3
+  },
+  {
+    id: 'bastion_emerald_1',
+    displayName: 'Bastionssmaragd I',
+    description: 'Ein ruhiger Smaragd, dessen Schimmer an feste Mauern erinnert. Gewährt +1 DEF.',
+    stat: 'def',
+    bonus: 1,
+    tier: 1
+  },
+  {
+    id: 'bastion_emerald_2',
+    displayName: 'Bastionssmaragd II',
+    description: 'Ein dichter Smaragd, dessen Schimmer an Bollwerke erinnert. Gewährt +2 DEF.',
+    stat: 'def',
+    bonus: 2,
+    tier: 2
+  },
+  {
+    id: 'bastion_emerald_3',
+    displayName: 'Bastionssmaragd III',
+    description: 'Ein tiefer Smaragd, dessen Schimmer an unbrechbare Wälle erinnert. Gewährt +3 DEF.',
+    stat: 'def',
+    bonus: 3,
+    tier: 3
+  },
+  {
+    id: 'gale_opal_1',
+    displayName: 'Böenopal I',
+    description: 'Ein leichter Opal, in dem eine kleine Böe tanzt. Gewährt +1 SPD.',
+    stat: 'spd',
+    bonus: 1,
+    tier: 1
+  },
+  {
+    id: 'gale_opal_2',
+    displayName: 'Böenopal II',
+    description: 'Ein schillernder Opal, in dem flinke Winde tanzen. Gewährt +2 SPD.',
+    stat: 'spd',
+    bonus: 2,
+    tier: 2
+  },
+  {
+    id: 'gale_opal_3',
+    displayName: 'Böenopal III',
+    description: 'Ein wirbelnder Opal, in dem Sturmwinde tanzen. Gewährt +3 SPD.',
+    stat: 'spd',
+    bonus: 3,
+    tier: 3
+  },
+  {
+    id: 'current_sapphire_1',
+    displayName: 'Stromsaphir I',
+    description: 'Ein blauer Saphir, der den Fluss gesammelter Energie lenkt. Gewährt +1 GAIN.',
+    stat: 'gain',
+    bonus: 1,
+    tier: 1
+  },
+  {
+    id: 'current_sapphire_2',
+    displayName: 'Stromsaphir II',
+    description: 'Ein tiefer Saphir, der den Fluss gesammelter Energie bündelt. Gewährt +2 GAIN.',
+    stat: 'gain',
+    bonus: 2,
+    tier: 2
+  },
+  {
+    id: 'current_sapphire_3',
+    displayName: 'Stromsaphir III',
+    description: 'Ein leuchtender Saphir, der den Fluss gesammelter Energie beschleunigt. Gewährt +3 GAIN.',
+    stat: 'gain',
+    bonus: 3,
+    tier: 3
+  },
+  {
+    id: 'sun_beryl_1',
+    displayName: 'Sonnenberyll I',
+    description: 'Ein goldener Beryll, der Fähigkeitseffekte sanft fokussiert. Gewährt +1 POW.',
+    stat: 'pow',
+    bonus: 1,
+    tier: 1
+  },
+  {
+    id: 'sun_beryl_2',
+    displayName: 'Sonnenberyll II',
+    description: 'Ein heller Beryll, der Fähigkeitseffekte klar fokussiert. Gewährt +2 POW.',
+    stat: 'pow',
+    bonus: 2,
+    tier: 2
+  },
+  {
+    id: 'sun_beryl_3',
+    displayName: 'Sonnenberyll III',
+    description: 'Ein gleißender Beryll, der Fähigkeitseffekte stark fokussiert. Gewährt +3 POW.',
+    stat: 'pow',
+    bonus: 3,
+    tier: 3
+  }
+] as const satisfies readonly SeedEquipment[];
+
 const BETA_EGG_RESOURCE_REWARDS = [
   { resourceType: CRACKED_EGGS_RESOURCE_TYPE, resourceAmount: 50, weight: 800 },
   { resourceType: CRACKED_EGGS_RESOURCE_TYPE, resourceAmount: 100, weight: 800 },
@@ -96,6 +254,30 @@ function assertCount(counts: Record<string, number>, key: string, expected: numb
   }
 }
 
+function validateGemEquipment(): void {
+  const expectedBonuses: Record<EquipmentStat, readonly number[]> = {
+    hp: [10, 20, 30],
+    atk: [1, 2, 3],
+    def: [1, 2, 3],
+    spd: [1, 2, 3],
+    gain: [1, 2, 3],
+    pow: [1, 2, 3]
+  };
+
+  for (const [stat, expectedValues] of Object.entries(expectedBonuses) as Array<
+    [EquipmentStat, readonly number[]]
+  >) {
+    const actualValues = GEM_EQUIPMENT.filter((equipment) => equipment.stat === stat)
+      .map((equipment) => equipment.bonus)
+      .sort((left, right) => left - right);
+    if (actualValues.join(',') !== expectedValues.join(',')) {
+      throw new Error(
+        `Invalid seed data: expected gem bonuses ${expectedValues.join(',')} for ${stat}, got ${actualValues.join(',')}`
+      );
+    }
+  }
+}
+
 function validatePetPool(): void {
   const totalWeight = PET_POOL.reduce((sum, pet) => sum + pet.weight, 0);
   if (totalWeight !== 1200) {
@@ -149,6 +331,7 @@ function validateBetaEggResourceRewards(): void {
 async function seed(): Promise<void> {
   validatePetPool();
   validateBetaEggResourceRewards();
+  validateGemEquipment();
 
   await db.insert(eggTypes).values({
     id: BETA_EGG_TYPE_ID,
@@ -235,14 +418,19 @@ async function seed(): Promise<void> {
   });
 
 
-  await db.insert(equipmentTypes).values({
-    id: 'beta_gem',
-    displayName: 'Beta Gem',
-    description: 'Beta-Test-Platzhalter ohne Kampfeffekt.',
-    equipmentSlot: 'gem',
-    config: { placeholder: true, combatEffect: 'none' },
-    isActive: true
-  }).onConflictDoUpdate({
+  await db.insert(equipmentTypes).values(
+    GEM_EQUIPMENT.map((equipment) => ({
+      id: equipment.id,
+      displayName: equipment.displayName,
+      description: equipment.description,
+      equipmentSlot: 'gem',
+      config: {
+        tier: equipment.tier,
+        statBonuses: { [equipment.stat]: equipment.bonus }
+      },
+      isActive: true
+    }))
+  ).onConflictDoUpdate({
     target: equipmentTypes.id,
     set: {
       displayName: sql`excluded.display_name`,
@@ -321,7 +509,7 @@ async function seed(): Promise<void> {
     }))
   ]);
 
-  console.info('Seed completed for Beta Ei, Beta Gem, MVP pet pool, and weighted pet/resource loot table.');
+  console.info('Seed completed for Beta Ei, tiered gem equipment, MVP pet pool, and weighted pet/resource loot table.');
 }
 
 void seed()

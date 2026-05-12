@@ -27,7 +27,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 - `pet_species` defines species templates, default stats, fixed rarity/class/element assignments, and the default ability; `pets` stores owned instances with permanent base stats, copied rarity/class/element IDs, and an individual `ability_id` copied from the species at hatch so later training can change that one pet without changing the species template.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
-- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only; gems are out of scope for this pass.
+- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only. Equipment seeding includes gem-themed gear in three tiers with config-only stat bonuses: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP.
 - Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
