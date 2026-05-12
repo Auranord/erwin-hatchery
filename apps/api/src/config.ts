@@ -45,7 +45,9 @@ const configSchema = z.object({
   INCUBATION_OFFLINE_MULTIPLIER: z.coerce.number().gt(0).default(1),
   INCUBATION_LIVE_BASE_MULTIPLIER: z.coerce.number().gt(0).default(2),
   INCUBATION_VIEWER_MULTIPLIER_PER_VIEWER: z.coerce.number().min(0).default(0.01),
-  INCUBATION_MAX_MULTIPLIER: z.coerce.number().gt(0).default(3)
+  INCUBATION_MAX_MULTIPLIER: z.coerce.number().gt(0).default(3),
+  SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
+  SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT: z.coerce.number().int().min(0).default(5)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

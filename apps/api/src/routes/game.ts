@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq, inArray, isNull, not, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { db } from '../db/client.js';
 import {
   consumableInventorySlots,
+  consumableTypes,
   equipmentInventorySlots,
+  equipmentTypes,
   equipmentSets,
   hatInventorySlots,
   economyLedger,
@@ -43,6 +46,8 @@ import {
   type InventoryGridDimensions,
   type InventoryKind,
   type PlayerInventoryPayload,
+  type ShopOfferItem,
+  type ShopOffersPayload,
   type SlottedInventoryCell
 } from '@erwin/shared';
 
@@ -76,6 +81,11 @@ function verifyOverlayAccess(rawToken: string | undefined): boolean {
 
 type PlayerInventory = PlayerInventoryPayload;
 type SlotMoveDelta = { id: string; fromSlotIndex: number; toSlotIndex: number };
+const buyShopItemSchema = z.object({
+  kind: z.enum(['equipment', 'consumable']),
+  typeId: z.string().min(1).max(128)
+});
+
 type OverlayAlertEvent = {
   id: string;
   type: 'pet_hatched';
@@ -88,6 +98,7 @@ type OverlayAlertEvent = {
 
 const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
+const SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'shop_item_purchased';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
@@ -289,6 +300,220 @@ async function findFreePetSlotInTx(
     if (!occupied.has(slotIndex)) return slotIndex;
   }
   return null;
+}
+
+async function findFreeConsumableSlotInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<number | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
+  const occupiedRows = await tx
+    .select({ slotIndex: consumableInventorySlots.slotIndex })
+    .from(consumableInventorySlots)
+    .where(eq(consumableInventorySlots.userId, userId));
+  const occupied = new Set(
+    occupiedRows
+      .map((row) => row.slotIndex)
+      .filter((slotIndex): slotIndex is number => slotIndex !== null)
+  );
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    if (!occupied.has(slotIndex)) return slotIndex;
+  }
+  return null;
+}
+
+async function findFreeEquipmentSlotInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<number | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
+  const occupiedRows = await tx
+    .select({ slotIndex: equipmentInventorySlots.slotIndex })
+    .from(equipmentInventorySlots)
+    .where(eq(equipmentInventorySlots.userId, userId));
+  const occupied = new Set(
+    occupiedRows
+      .map((row) => row.slotIndex)
+      .filter((slotIndex): slotIndex is number => slotIndex !== null)
+  );
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    if (!occupied.has(slotIndex)) return slotIndex;
+  }
+  return null;
+}
+
+type ShopWeek = {
+  key: string;
+  startsAt: Date;
+  endsAt: Date;
+};
+
+type ShopCandidate = {
+  kind: 'equipment' | 'consumable';
+  typeId: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+};
+
+function getShopWeek(now = new Date()): ShopWeek {
+  const day = now.getUTCDay();
+  const daysSinceMonday = (day + 6) % 7;
+  const startsAt = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - daysSinceMonday,
+      0,
+      0,
+      0,
+      0
+    )
+  );
+  const endsAt = new Date(startsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const key = startsAt.toISOString().slice(0, 10);
+  return { key, startsAt, endsAt };
+}
+
+function deterministicShopRank(
+  weekKey: string,
+  candidate: ShopCandidate
+): string {
+  return createHash('sha256')
+    .update(`${weekKey}:${candidate.kind}:${candidate.typeId}`)
+    .digest('hex');
+}
+
+function pickWeeklyShopCandidates(
+  candidates: ShopCandidate[],
+  weekKey: string,
+  count: number
+): ShopCandidate[] {
+  if (count <= 0) return [];
+  return [...candidates]
+    .sort((left, right) => {
+      const leftRank = deterministicShopRank(weekKey, left);
+      const rightRank = deterministicShopRank(weekKey, right);
+      if (leftRank !== rightRank) return leftRank.localeCompare(rightRank);
+      return left.typeId.localeCompare(right.typeId);
+    })
+    .slice(0, count);
+}
+
+async function loadWeeklyShopCandidatesInTx(
+  tx: DbTransaction,
+  weekKey: string
+): Promise<ShopCandidate[]> {
+  const equipmentRows = await tx
+    .select({
+      typeId: equipmentTypes.id,
+      displayName: equipmentTypes.displayName,
+      description: equipmentTypes.description,
+      resourcePrice: equipmentTypes.resourcePrice,
+      stock: equipmentTypes.stock
+    })
+    .from(equipmentTypes)
+    .where(
+      and(
+        eq(equipmentTypes.isActive, true),
+        eq(equipmentTypes.isShopPurchasable, true),
+        eq(equipmentTypes.equipmentSlot, 'gem'),
+        sql`${equipmentTypes.resourcePrice} > 0`,
+        sql`${equipmentTypes.stock} > 0`
+      )
+    );
+  const consumableRows = await tx
+    .select({
+      typeId: consumableTypes.id,
+      displayName: consumableTypes.displayName,
+      description: consumableTypes.description,
+      resourcePrice: consumableTypes.resourcePrice,
+      stock: consumableTypes.stock
+    })
+    .from(consumableTypes)
+    .where(
+      and(
+        eq(consumableTypes.isActive, true),
+        eq(consumableTypes.isShopPurchasable, true),
+        sql`${consumableTypes.resourcePrice} > 0`,
+        sql`${consumableTypes.stock} > 0`
+      )
+    );
+
+  return [
+    ...pickWeeklyShopCandidates(
+      equipmentRows.map((row) => ({ ...row, kind: 'equipment' as const })),
+      weekKey,
+      config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT
+    ),
+    ...pickWeeklyShopCandidates(
+      consumableRows.map((row) => ({ ...row, kind: 'consumable' as const })),
+      weekKey,
+      config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT
+    )
+  ];
+}
+
+async function countShopPurchasesThisWeekInTx(
+  tx: DbTransaction,
+  userId: string,
+  weekKey: string,
+  kind: 'equipment' | 'consumable',
+  typeId: string
+): Promise<number> {
+  const [row] = await tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(economyLedger)
+    .where(
+      and(
+        eq(economyLedger.userId, userId),
+        eq(economyLedger.eventType, SHOP_PURCHASE_LEDGER_EVENT_TYPE),
+        eq(economyLedger.isReverted, false),
+        sql`${economyLedger.delta}->>'shopWeekKey' = ${weekKey}`,
+        sql`${economyLedger.delta}->>'itemKind' = ${kind}`,
+        sql`${economyLedger.delta}->>'itemTypeId' = ${typeId}`
+      )
+    );
+  return row?.count ?? 0;
+}
+
+async function buildShopOffersInTx(
+  tx: DbTransaction,
+  userId: string,
+  now = new Date()
+): Promise<ShopOffersPayload> {
+  const week = getShopWeek(now);
+  const candidates = await loadWeeklyShopCandidatesInTx(tx, week.key);
+  const offers: ShopOfferItem[] = [];
+  for (const candidate of candidates) {
+    const purchasedThisWeek = await countShopPurchasesThisWeekInTx(
+      tx,
+      userId,
+      week.key,
+      candidate.kind,
+      candidate.typeId
+    );
+    offers.push({
+      ...candidate,
+      purchasedThisWeek,
+      remainingThisWeek: Math.max(0, candidate.stock - purchasedThisWeek)
+    });
+  }
+
+  return {
+    weekKey: week.key,
+    weekStartsAt: week.startsAt.toISOString(),
+    weekEndsAt: week.endsAt.toISOString(),
+    currencyResourceType: CRACKED_EGGS_RESOURCE_TYPE,
+    equipmentOfferCount: config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT,
+    consumableOfferCount: config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT,
+    offers
+  };
+}
+
+async function loadShopOffers(userId: string): Promise<ShopOffersPayload> {
+  return db.transaction((tx) => buildShopOffersInTx(tx, userId));
 }
 
 async function ensureIncubatorSlots(userId: string): Promise<void> {
@@ -1341,6 +1566,173 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         score: row.score
       }))
     };
+  });
+
+  app.get('/api/game/shop', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    return { shop: await loadShopOffers(identity.userId) };
+  });
+
+  app.post('/api/game/shop/buy', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const parsedBody = buyShopItemSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      return reply.code(400).send({ message: 'Ungültiger Shop-Kauf.' });
+    }
+    const { kind, typeId } = parsedBody.data;
+
+    const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+      await ensureInventoryDimensionsInTx(tx, identity.userId);
+      const shop = await buildShopOffersInTx(tx, identity.userId);
+      const offer = shop.offers.find(
+        (item) => item.kind === kind && item.typeId === typeId
+      );
+      if (!offer) return { kind: 'not_offered' as const };
+      if (offer.remainingThisWeek <= 0) {
+        return { kind: 'sold_out' as const, offer };
+      }
+
+      const freeSlot =
+        kind === 'equipment'
+          ? await findFreeEquipmentSlotInTx(tx, identity.userId)
+          : await findFreeConsumableSlotInTx(tx, identity.userId);
+      if (freeSlot === null) {
+        return { kind: 'inventory_full' as const, inventoryKind: kind };
+      }
+
+      const now = new Date();
+      const debitedResources = await tx
+        .update(resources)
+        .set({
+          amount: sql`${resources.amount} - ${offer.resourcePrice}`,
+          updatedAt: now
+        })
+        .where(
+          and(
+            eq(resources.userId, identity.userId),
+            eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+            sql`${resources.amount} >= ${offer.resourcePrice}`
+          )
+        )
+        .returning({ amount: resources.amount });
+
+      if (debitedResources.length === 0) {
+        return {
+          kind: 'insufficient_resources' as const,
+          cost: offer.resourcePrice
+        };
+      }
+
+      if (kind === 'equipment') {
+        const [createdSlot] = await tx
+          .insert(equipmentInventorySlots)
+          .values({
+            userId: identity.userId,
+            equipmentTypeId: typeId,
+            slotIndex: freeSlot,
+            updatedAt: now
+          })
+          .returning({ id: equipmentInventorySlots.id });
+        await tx.insert(economyLedger).values({
+          userId: identity.userId,
+          actorUserId: identity.userId,
+          eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+          sourceType: 'player_action',
+          sourceId: createdSlot?.id ?? null,
+          delta: {
+            shopWeekKey: shop.weekKey,
+            itemKind: kind,
+            itemTypeId: typeId,
+            equipmentInventorySlots: [
+              {
+                id: createdSlot?.id ?? null,
+                equipmentTypeId: typeId,
+                slotIndex: freeSlot,
+                change: 1
+              }
+            ],
+            resources: [
+              {
+                resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                amountDelta: -offer.resourcePrice
+              }
+            ]
+          }
+        });
+      } else {
+        const [createdSlot] = await tx
+          .insert(consumableInventorySlots)
+          .values({
+            userId: identity.userId,
+            consumableTypeId: typeId,
+            slotIndex: freeSlot,
+            updatedAt: now
+          })
+          .returning({ id: consumableInventorySlots.id });
+        await tx.insert(economyLedger).values({
+          userId: identity.userId,
+          actorUserId: identity.userId,
+          eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+          sourceType: 'player_action',
+          sourceId: createdSlot?.id ?? null,
+          delta: {
+            shopWeekKey: shop.weekKey,
+            itemKind: kind,
+            itemTypeId: typeId,
+            consumableInventorySlots: [
+              {
+                id: createdSlot?.id ?? null,
+                consumableTypeId: typeId,
+                slotIndex: freeSlot,
+                change: 1
+              }
+            ],
+            resources: [
+              {
+                resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                amountDelta: -offer.resourcePrice
+              }
+            ]
+          }
+        });
+      }
+
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind === 'not_offered') {
+      return reply
+        .code(404)
+        .send({ message: 'Dieses Angebot ist diese Woche nicht im Shop.' });
+    }
+    if (result.kind === 'sold_out') {
+      return reply.code(409).send({
+        message: 'Dein Wochenbestand für dieses Angebot ist aufgebraucht.'
+      });
+    }
+    if (result.kind === 'inventory_full') {
+      return reply.code(409).send({
+        message:
+          result.inventoryKind === 'equipment'
+            ? 'Dein Ausrüstungsinventar ist voll.'
+            : 'Dein Verbrauchbaren-Inventar ist voll.'
+      });
+    }
+    if (result.kind === 'insufficient_resources') {
+      return reply.code(409).send({
+        message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`
+      });
+    }
+
+    const [inventory, shop] = await Promise.all([
+      loadPlayerInventory(identity.userId),
+      loadShopOffers(identity.userId)
+    ]);
+    return { inventory, shop };
   });
 
   app.get('/api/game/inventory', async (request, reply) => {

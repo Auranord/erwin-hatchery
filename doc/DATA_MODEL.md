@@ -634,3 +634,10 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - `twitch_backfill_runs`: resumable/auditable backfill runs for subscriptions and Bits with status, source, timestamps, and error.
 - `twitch_bits_balances`: per-user Bits accounting with imported leaderboard baseline, live EventSub Bits total, total counted Bits, and granted voucher thresholds.
 - `twitch_events`: stores EventSub notifications and stable backfill source keys. These rows are used as immutable `economy_ledger.source_id` references for idempotent voucher grants.
+
+
+## Weekly player shop
+
+The player UI includes a mobile-first `Shop` box that lists deterministic weekly offers for purchasable gem equipment and consumables. Only active records with `is_shop_purchasable = true`, a positive `resource_price`, and positive `stock` can appear. The weekly selection is server-side and deterministic from the UTC Monday week key plus item kind/type ID, so every process computes the same offer set for a given week without storing generated shop rows. `SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT` and `SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT` configure how many equipment gems and consumables appear each week; both default to 5.
+
+Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy at most the item type's `stock` amount per weekly offer. The server enforces this by counting non-reverted `shop_item_purchased` economy ledger rows for the player, week key, item kind, and item type before inserting the new inventory slot and debit ledger entry in one transaction.
