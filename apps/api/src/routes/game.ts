@@ -409,28 +409,24 @@ async function createConsumableShopSlotInTx(
 ): Promise<CreatedShopInventorySlot | null> {
   const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
   for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
-    const [existingSlot] = await tx
-      .select({ id: consumableInventorySlots.id })
-      .from(consumableInventorySlots)
-      .where(
-        and(
-          eq(consumableInventorySlots.userId, userId),
-          eq(consumableInventorySlots.slotIndex, slotIndex)
-        )
-      )
-      .limit(1);
-    if (existingSlot) continue;
-
-    const [createdSlot] = await tx
-      .insert(consumableInventorySlots)
-      .values({
-        userId,
-        consumableTypeId,
-        slotIndex,
-        updatedAt: now
-      })
-      .returning({ id: consumableInventorySlots.id });
-    if (createdSlot) return { id: createdSlot.id, slotIndex };
+    try {
+      const createdSlot = await tx.transaction(async (attemptTx) => {
+        const [row] = await attemptTx
+          .insert(consumableInventorySlots)
+          .values({
+            userId,
+            consumableTypeId,
+            slotIndex,
+            updatedAt: now
+          })
+          .returning({ id: consumableInventorySlots.id });
+        return row ? { id: row.id, slotIndex } : null;
+      });
+      if (createdSlot) return createdSlot;
+    } catch {
+      // Try the next slot. The nested transaction rolls back this failed slot
+      // attempt without aborting the surrounding shop purchase transaction.
+    }
   }
   return null;
 }
@@ -443,28 +439,24 @@ async function createEquipmentShopSlotInTx(
 ): Promise<CreatedShopInventorySlot | null> {
   const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
   for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
-    const [existingSlot] = await tx
-      .select({ id: equipmentInventorySlots.id })
-      .from(equipmentInventorySlots)
-      .where(
-        and(
-          eq(equipmentInventorySlots.userId, userId),
-          eq(equipmentInventorySlots.slotIndex, slotIndex)
-        )
-      )
-      .limit(1);
-    if (existingSlot) continue;
-
-    const [createdSlot] = await tx
-      .insert(equipmentInventorySlots)
-      .values({
-        userId,
-        equipmentTypeId,
-        slotIndex,
-        updatedAt: now
-      })
-      .returning({ id: equipmentInventorySlots.id });
-    if (createdSlot) return { id: createdSlot.id, slotIndex };
+    try {
+      const createdSlot = await tx.transaction(async (attemptTx) => {
+        const [row] = await attemptTx
+          .insert(equipmentInventorySlots)
+          .values({
+            userId,
+            equipmentTypeId,
+            slotIndex,
+            updatedAt: now
+          })
+          .returning({ id: equipmentInventorySlots.id });
+        return row ? { id: row.id, slotIndex } : null;
+      });
+      if (createdSlot) return createdSlot;
+    } catch {
+      // Try the next slot. The nested transaction rolls back this failed slot
+      // attempt without aborting the surrounding shop purchase transaction.
+    }
   }
   return null;
 }
