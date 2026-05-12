@@ -19,15 +19,25 @@ export function buildApp() {
     logger: true
   });
 
-  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
-    const rawBody = typeof body === 'string' ? body : body.toString('utf8');
-    (request as typeof request & { rawBody?: string }).rawBody = rawBody;
-    try {
-      done(null, JSON.parse(rawBody));
-    } catch (error) {
-      done(error as Error, undefined);
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (request, body, done) => {
+      const rawBody = typeof body === 'string' ? body : body.toString('utf8');
+      (request as typeof request & { rawBody?: string }).rawBody = rawBody;
+
+      if (rawBody.trim() === '') {
+        done(null, {});
+        return;
+      }
+
+      try {
+        done(null, JSON.parse(rawBody));
+      } catch (error) {
+        done(error as Error, undefined);
+      }
     }
-  });
+  );
 
   app.register(registerHealthRoute);
   app.register(registerAuthRoutes);

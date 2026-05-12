@@ -807,7 +807,8 @@ export function App(): JSX.Element {
       const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
       });
       const payload = (await response.json().catch(() => null)) as {
         inventory?: PlayerInventory;
