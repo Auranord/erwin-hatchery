@@ -3,8 +3,119 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type FormEvent,
+  type ReactNode,
   type SyntheticEvent
 } from 'react';
+
+
+type PlayerDialogAction = {
+  label: string;
+  onClick?: () => void;
+  type?: 'button' | 'submit';
+  disabled?: boolean;
+  variant?: 'primary' | 'secondary';
+};
+
+type PlayerDialogProps = {
+  id: string;
+  title: string;
+  children?: ReactNode;
+  description?: ReactNode;
+  role?: 'dialog' | 'alertdialog';
+  variant?: 'danger' | 'info';
+  className?: string;
+  actions: PlayerDialogAction[];
+  onCancel?: () => void;
+  cancelDisabled?: boolean;
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+function PlayerDialog({
+  id,
+  title,
+  children,
+  description,
+  role = 'dialog',
+  variant = 'danger',
+  className = '',
+  actions,
+  onCancel,
+  cancelDisabled = false,
+  onSubmit
+}: PlayerDialogProps): JSX.Element {
+  const firstActionRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = `${id}-title`;
+  const descriptionId = description ? `${id}-description` : undefined;
+
+  useEffect(() => {
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.setTimeout(() => firstActionRef.current?.focus(), 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && onCancel && !cancelDisabled) {
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [cancelDisabled, onCancel]);
+
+  const body = (
+    <>
+      <strong id={titleId}>{title}</strong>
+      {description ? <p id={descriptionId}>{description}</p> : null}
+      {children}
+      <div className="confirm-actions">
+        {actions.map((action, index) => (
+          <button
+            key={`${action.label}:${index}`}
+            ref={index === 0 ? firstActionRef : undefined}
+            type={action.type ?? 'button'}
+            className={action.variant ? `dialog-action-${action.variant}` : undefined}
+            onClick={action.onClick}
+            disabled={action.disabled}
+          >
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+  const dialogClassName = `confirm-modal player-dialog player-dialog--${variant} ${className}`.trim();
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      {onSubmit ? (
+        <form
+          className={dialogClassName}
+          role={role}
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          onSubmit={onSubmit}
+        >
+          {body}
+        </form>
+      ) : (
+        <div
+          className={dialogClassName}
+          role={role}
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+        >
+          {body}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Role = 'owner' | 'admin' | 'moderator' | 'user';
 
@@ -264,6 +375,8 @@ type InventoryDiscardTarget = {
   id: string;
   label: string;
 };
+type ShopErrorDialog = { title: string; message: string };
+type ShopPurchaseDialog = { itemCount: number; totalPrice: number };
 
 type OverlayAlertEvent = {
   id: string;
@@ -477,10 +590,13 @@ export function App(): JSX.Element {
     useState<InventoryDiscardTarget | null>(null);
   const [isInventoryDiscardSubmitting, setIsInventoryDiscardSubmitting] =
     useState(false);
+  const [pendingShopError, setPendingShopError] =
+    useState<ShopErrorDialog | null>(null);
+  const [pendingShopPurchase, setPendingShopPurchase] =
+    useState<ShopPurchaseDialog | null>(null);
   const [upgradingInventoryKind, setUpgradingInventoryKind] = useState<
     string | null
   >(null);
-  const petScrapConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
@@ -604,26 +720,6 @@ export function App(): JSX.Element {
 
     return () => source.close();
   }, [isAdminRoute, me?.authenticated]);
-
-  useEffect(() => {
-    if (!pendingPetScrap) return;
-
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    petScrapConfirmButtonRef.current?.focus();
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !isPetScrapSubmitting) {
-        setPendingPetScrap(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isPetScrapSubmitting, pendingPetScrap]);
 
   async function refreshOwnInventory(): Promise<void> {
     const response = await fetch('/api/game/inventory', {
@@ -754,11 +850,24 @@ export function App(): JSX.Element {
     return queuedShopItems.reduce((total, item) => total + item.resourcePrice, 0);
   }
 
+  function showShopError(message: string, title = 'Shop-Hinweis'): void {
+    setPendingShopError({ title, message });
+  }
+
   function queueShopOffer(offer: ShopOfferItem): void {
     if (isBuyingShopQueue) return;
     const queuedCount = getQueuedShopCount(offer);
+    const queueTotal = getShopQueueTotal();
+    if (offer.remainingThisWeek <= 0) {
+      showShopError('Der Wochenbestand dieses Angebots ist bereits aufgebraucht.');
+      return;
+    }
     if (offer.remainingThisWeek - queuedCount <= 0) {
-      setGameMessage('Der Wochenbestand dieses Angebots ist bereits eingeplant.');
+      showShopError('Der Wochenbestand dieses Angebots ist bereits eingeplant.');
+      return;
+    }
+    if (getCrackedEggBalance() < queueTotal + offer.resourcePrice) {
+      showShopError('Du hast nicht genug Aufgebrochene Eier für diese Kaufliste.');
       return;
     }
     setQueuedShopItems((items) => [...items, offer]);
@@ -773,13 +882,21 @@ export function App(): JSX.Element {
     });
   }
 
-  async function buyQueuedShopItems(): Promise<void> {
+  function requestQueuedShopPurchase(): void {
     if (isBuyingShopQueue || queuedShopItems.length === 0) return;
     const totalPrice = getShopQueueTotal();
-    const confirmed = window.confirm(
-      `${queuedShopItems.length} Shop-Item(s) für insgesamt ${totalPrice} Aufgebrochene Eier kaufen?`
-    );
-    if (!confirmed) return;
+    if (totalPrice > getCrackedEggBalance()) {
+      showShopError('Du hast nicht genug Aufgebrochene Eier für diese Kaufliste.');
+      return;
+    }
+    setPendingShopPurchase({
+      itemCount: queuedShopItems.length,
+      totalPrice
+    });
+  }
+
+  async function buyQueuedShopItems(): Promise<void> {
+    if (isBuyingShopQueue || queuedShopItems.length === 0) return;
 
     setIsBuyingShopQueue(true);
     try {
@@ -807,9 +924,14 @@ export function App(): JSX.Element {
       if (payload?.shop) setShopOffers(payload.shop);
       else await loadShop();
       setQueuedShopItems([]);
+      setPendingShopPurchase(null);
       setGameMessage(`${queuedShopItems.length} Shop-Item(s) gekauft.`);
     } catch (error) {
-      showGameError(error);
+      setPendingShopPurchase(null);
+      showShopError(
+        error instanceof Error ? error.message : 'Shop-Kauf fehlgeschlagen.',
+        'Shop-Kauf fehlgeschlagen'
+      );
     } finally {
       setIsBuyingShopQueue(false);
     }
@@ -2179,7 +2301,7 @@ export function App(): JSX.Element {
                               type="button"
                               className={`shop-offer-card ${queuedCount > 0 ? 'queued' : ''}`}
                               onClick={() => queueShopOffer(offer)}
-                              disabled={isBuyingShopQueue || isSoldOut || isQueuedOut || isTooExpensive}
+                              disabled={isBuyingShopQueue}
                               title={
                                 isSoldOut || isQueuedOut
                                   ? 'Wochenbestand aufgebraucht'
@@ -2236,7 +2358,7 @@ export function App(): JSX.Element {
               ) : null}
               <button
                 type="button"
-                onClick={() => void buyQueuedShopItems()}
+                onClick={requestQueuedShopPurchase}
                 disabled={
                   isBuyingShopQueue ||
                   queuedShopItems.length === 0 ||
@@ -2702,141 +2824,163 @@ export function App(): JSX.Element {
                   </p>
                 ) : null}
                 {pendingPetScrap ? (
-                  <div className="modal-backdrop" role="presentation">
-                    <div
-                      className="confirm-modal"
-                      role="alertdialog"
-                      aria-modal="true"
-                      aria-labelledby="pet-scrap-confirm-title"
-                      aria-describedby="pet-scrap-confirm-description"
-                    >
-                      <strong id="pet-scrap-confirm-title">
-                        {pendingPetScrap.label} wirklich verwerten?
-                      </strong>
-                      <p id="pet-scrap-confirm-description">
+                  <PlayerDialog
+                    id="pet-scrap-confirm"
+                    title={`${pendingPetScrap.label} wirklich verwerten?`}
+                    role="alertdialog"
+                    description={
+                      <>
                         Dieses Pet wird dauerhaft gelöscht und du erhältst
                         Aufgebrochene Eier abhängig von der Seltenheit (
                         {pendingPetScrap.rarity}).
-                      </p>
-                      <div className="confirm-actions">
-                        <button
-                          ref={petScrapConfirmButtonRef}
-                          type="button"
-                          onClick={() => void confirmPetScrap()}
-                          disabled={isPetScrapSubmitting}
-                        >
-                          {isPetScrapSubmitting
-                            ? 'Wird verwertet …'
-                            : 'Ja, verwerten'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingPetScrap(null)}
-                          disabled={isPetScrapSubmitting}
-                        >
-                          Abbrechen
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                      </>
+                    }
+                    actions={[
+                      {
+                        label: isPetScrapSubmitting
+                          ? 'Wird verwertet …'
+                          : 'Ja, verwerten',
+                        onClick: () => void confirmPetScrap(),
+                        disabled: isPetScrapSubmitting,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingPetScrap(null),
+                        disabled: isPetScrapSubmitting,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingPetScrap(null)}
+                    cancelDisabled={isPetScrapSubmitting}
+                  />
                 ) : null}
                 {pendingInventoryDiscard ? (
-                  <div className="modal-backdrop" role="presentation">
-                    <div
-                      className="confirm-modal"
-                      role="alertdialog"
-                      aria-modal="true"
-                      aria-labelledby="inventory-discard-confirm-title"
-                      aria-describedby="inventory-discard-confirm-description"
-                    >
-                      <strong id="inventory-discard-confirm-title">
-                        {pendingInventoryDiscard.label} wirklich verwerfen?
-                      </strong>
-                      <p id="inventory-discard-confirm-description">
-                        Der Gegenstand wird dauerhaft gelöscht. Du erhältst
-                        dafür keine Ressourcen oder andere Belohnungen.
-                      </p>
-                      <div className="confirm-actions">
-                        <button
-                          type="button"
-                          onClick={() => void confirmInventoryDiscard()}
-                          disabled={isInventoryDiscardSubmitting}
-                        >
-                          {isInventoryDiscardSubmitting
-                            ? 'Wird verworfen …'
-                            : 'Ja, verwerfen'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPendingInventoryDiscard(null)}
-                          disabled={isInventoryDiscardSubmitting}
-                        >
-                          Abbrechen
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <PlayerDialog
+                    id="inventory-discard-confirm"
+                    title={`${pendingInventoryDiscard.label} wirklich verwerfen?`}
+                    role="alertdialog"
+                    description="Der Gegenstand wird dauerhaft gelöscht. Du erhältst dafür keine Ressourcen oder andere Belohnungen."
+                    actions={[
+                      {
+                        label: isInventoryDiscardSubmitting
+                          ? 'Wird verworfen …'
+                          : 'Ja, verwerfen',
+                        onClick: () => void confirmInventoryDiscard(),
+                        disabled: isInventoryDiscardSubmitting,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingInventoryDiscard(null),
+                        disabled: isInventoryDiscardSubmitting,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingInventoryDiscard(null)}
+                    cancelDisabled={isInventoryDiscardSubmitting}
+                  />
+                ) : null}
+                {pendingShopError ? (
+                  <PlayerDialog
+                    id="shop-error-dialog"
+                    title={pendingShopError.title}
+                    role="alertdialog"
+                    variant="info"
+                    description={pendingShopError.message}
+                    actions={[
+                      {
+                        label: 'Verstanden',
+                        onClick: () => setPendingShopError(null),
+                        variant: 'primary'
+                      }
+                    ]}
+                    onCancel={() => setPendingShopError(null)}
+                  />
+                ) : null}
+                {pendingShopPurchase ? (
+                  <PlayerDialog
+                    id="shop-purchase-confirm"
+                    title="Kaufliste kaufen?"
+                    role="alertdialog"
+                    variant="info"
+                    description={`${pendingShopPurchase.itemCount} Shop-Item(s) für insgesamt ${pendingShopPurchase.totalPrice} Aufgebrochene Eier kaufen?`}
+                    actions={[
+                      {
+                        label: isBuyingShopQueue ? 'Kaufe …' : 'Ja, kaufen',
+                        onClick: () => void buyQueuedShopItems(),
+                        disabled: isBuyingShopQueue,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingShopPurchase(null),
+                        disabled: isBuyingShopQueue,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingShopPurchase(null)}
+                    cancelDisabled={isBuyingShopQueue}
+                  />
                 ) : null}
                 {statsPayload ? (
-                  <div className="modal-backdrop" role="presentation">
-                    <div
-                      className="confirm-modal stats-modal"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="inventory-stats-title"
-                    >
-                      <strong id="inventory-stats-title">
-                        Werte: {getInventoryItemLabel(statsPayload)}
-                      </strong>
-                      {renderStatsRows(statsPayload)}
-                      <div className="confirm-actions">
-                        <button type="button" onClick={() => setStatsPayload(null)}>
-                          Schließen
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <PlayerDialog
+                    id="inventory-stats"
+                    title={`Werte: ${getInventoryItemLabel(statsPayload)}`}
+                    className="stats-modal"
+                    actions={[
+                      {
+                        label: 'Schließen',
+                        onClick: () => setStatsPayload(null),
+                        variant: 'primary'
+                      }
+                    ]}
+                    onCancel={() => setStatsPayload(null)}
+                  >
+                    {renderStatsRows(statsPayload)}
+                  </PlayerDialog>
                 ) : null}
                 {renamePetDraft ? (
-                  <div className="modal-backdrop" role="presentation">
-                    <form
-                      className="confirm-modal"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-labelledby="pet-rename-title"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void confirmPetRename();
-                      }}
-                    >
-                      <strong id="pet-rename-title">Pet umbenennen</strong>
-                      <label className="rename-field">
-                        Neuer Spitzname
-                        <input
-                          value={renamePetDraft.nickname}
-                          maxLength={32}
-                          onChange={(event) =>
-                            setRenamePetDraft({
-                              ...renamePetDraft,
-                              nickname: event.target.value
-                            })
-                          }
-                        />
-                      </label>
-                      <div className="confirm-actions">
-                        <button type="submit" disabled={isPetRenameSubmitting}>
-                          {isPetRenameSubmitting ? 'Wird gespeichert …' : 'Speichern'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRenamePetDraft(null)}
-                          disabled={isPetRenameSubmitting}
-                        >
-                          Abbrechen
-                        </button>
-                      </div>
-                    </form>
-                  </div>
+                  <PlayerDialog
+                    id="pet-rename"
+                    title="Pet umbenennen"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void confirmPetRename();
+                    }}
+                    actions={[
+                      {
+                        label: isPetRenameSubmitting
+                          ? 'Wird gespeichert …'
+                          : 'Speichern',
+                        type: 'submit',
+                        disabled: isPetRenameSubmitting,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setRenamePetDraft(null),
+                        disabled: isPetRenameSubmitting,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setRenamePetDraft(null)}
+                    cancelDisabled={isPetRenameSubmitting}
+                  >
+                    <label className="rename-field">
+                      Neuer Spitzname
+                      <input
+                        value={renamePetDraft.nickname}
+                        maxLength={32}
+                        onChange={(event) =>
+                          setRenamePetDraft({
+                            ...renamePetDraft,
+                            nickname: event.target.value
+                          })
+                        }
+                      />
+                    </label>
+                  </PlayerDialog>
                 ) : null}
                 <div className="resource-summary">
                   <h3>Gezählte Vorräte</h3>
