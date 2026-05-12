@@ -393,72 +393,10 @@ async function findFreeEquipmentSlotsInTx(
   return freeSlots;
 }
 
-type CreatedShopInventorySlot = { id: string; slotIndex: number };
-
 class ShopInventoryFullError extends Error {
   constructor(readonly inventoryKind: 'equipment' | 'consumable') {
     super(`${inventoryKind}_inventory_full_after_preflight`);
   }
-}
-
-async function createConsumableShopSlotInTx(
-  tx: DbTransaction,
-  userId: string,
-  consumableTypeId: string,
-  now: Date
-): Promise<CreatedShopInventorySlot | null> {
-  const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
-  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
-    try {
-      const createdSlot = await tx.transaction(async (attemptTx) => {
-        const [row] = await attemptTx
-          .insert(consumableInventorySlots)
-          .values({
-            userId,
-            consumableTypeId,
-            slotIndex,
-            updatedAt: now
-          })
-          .returning({ id: consumableInventorySlots.id });
-        return row ? { id: row.id, slotIndex } : null;
-      });
-      if (createdSlot) return createdSlot;
-    } catch {
-      // Try the next slot. The nested transaction rolls back this failed slot
-      // attempt without aborting the surrounding shop purchase transaction.
-    }
-  }
-  return null;
-}
-
-async function createEquipmentShopSlotInTx(
-  tx: DbTransaction,
-  userId: string,
-  equipmentTypeId: string,
-  now: Date
-): Promise<CreatedShopInventorySlot | null> {
-  const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
-  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
-    try {
-      const createdSlot = await tx.transaction(async (attemptTx) => {
-        const [row] = await attemptTx
-          .insert(equipmentInventorySlots)
-          .values({
-            userId,
-            equipmentTypeId,
-            slotIndex,
-            updatedAt: now
-          })
-          .returning({ id: equipmentInventorySlots.id });
-        return row ? { id: row.id, slotIndex } : null;
-      });
-      if (createdSlot) return createdSlot;
-    } catch {
-      // Try the next slot. The nested transaction rolls back this failed slot
-      // attempt without aborting the surrounding shop purchase transaction.
-    }
-  }
-  return null;
 }
 
 type ShopWeek = {
@@ -1906,6 +1844,31 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           totalCost += offer.resourcePrice * request.count;
         }
 
+        const equipmentItemCount = items.filter(
+          (item) => item.kind === 'equipment'
+        ).length;
+        const consumableItemCount = items.length - equipmentItemCount;
+        const freeEquipmentSlots = equipmentItemCount
+          ? await findFreeEquipmentSlotsInTx(
+              tx,
+              identity.userId,
+              equipmentItemCount
+            )
+          : [];
+        if (freeEquipmentSlots.length < equipmentItemCount) {
+          throw new ShopInventoryFullError('equipment');
+        }
+        const freeConsumableSlots = consumableItemCount
+          ? await findFreeConsumableSlotsInTx(
+              tx,
+              identity.userId,
+              consumableItemCount
+            )
+          : [];
+        if (freeConsumableSlots.length < consumableItemCount) {
+          throw new ShopInventoryFullError('consumable');
+        }
+
         const now = new Date();
         const debitedResources = await tx
           .update(resources)
@@ -1926,6 +1889,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           return { kind: 'insufficient_resources' as const, cost: totalCost };
         }
 
+        let nextEquipmentSlotIndex = 0;
+        let nextConsumableSlotIndex = 0;
         for (const item of items) {
           const offer = offerByItemKey.get(`${item.kind}:${item.typeId}`);
           if (!offer) {
@@ -1933,12 +1898,20 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           }
 
           if (item.kind === 'equipment') {
-            const createdSlot = await createEquipmentShopSlotInTx(
-              tx,
-              identity.userId,
-              item.typeId,
-              now
-            );
+            const slotIndex = freeEquipmentSlots[nextEquipmentSlotIndex];
+            nextEquipmentSlotIndex += 1;
+            if (slotIndex === undefined) {
+              throw new ShopInventoryFullError('equipment');
+            }
+            const [createdSlot] = await tx
+              .insert(equipmentInventorySlots)
+              .values({
+                userId: identity.userId,
+                equipmentTypeId: item.typeId,
+                slotIndex,
+                updatedAt: now
+              })
+              .returning({ id: equipmentInventorySlots.id });
             if (!createdSlot) throw new ShopInventoryFullError('equipment');
             await tx.insert(economyLedger).values({
               userId: identity.userId,
@@ -1954,7 +1927,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
                   {
                     id: createdSlot.id,
                     equipmentTypeId: item.typeId,
-                    slotIndex: createdSlot.slotIndex,
+                    slotIndex,
                     change: 1
                   }
                 ],
@@ -1967,12 +1940,20 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
               }
             });
           } else {
-            const createdSlot = await createConsumableShopSlotInTx(
-              tx,
-              identity.userId,
-              item.typeId,
-              now
-            );
+            const slotIndex = freeConsumableSlots[nextConsumableSlotIndex];
+            nextConsumableSlotIndex += 1;
+            if (slotIndex === undefined) {
+              throw new ShopInventoryFullError('consumable');
+            }
+            const [createdSlot] = await tx
+              .insert(consumableInventorySlots)
+              .values({
+                userId: identity.userId,
+                consumableTypeId: item.typeId,
+                slotIndex,
+                updatedAt: now
+              })
+              .returning({ id: consumableInventorySlots.id });
             if (!createdSlot) throw new ShopInventoryFullError('consumable');
             await tx.insert(economyLedger).values({
               userId: identity.userId,
@@ -1988,7 +1969,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
                   {
                     id: createdSlot.id,
                     consumableTypeId: item.typeId,
-                    slotIndex: createdSlot.slotIndex,
+                    slotIndex,
                     change: 1
                   }
                 ],
