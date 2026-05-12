@@ -45,17 +45,34 @@ function PlayerDialog({
   onSubmit
 }: PlayerDialogProps): JSX.Element {
   const firstActionRef = useRef<HTMLButtonElement | null>(null);
+  const dialogElementRef = useRef<HTMLElement | null>(null);
+  const onCancelRef = useRef(onCancel);
+  const cancelDisabledRef = useRef(cancelDisabled);
   const titleId = `${id}-title`;
   const descriptionId = description ? `${id}-description` : undefined;
 
   useEffect(() => {
+    onCancelRef.current = onCancel;
+    cancelDisabledRef.current = cancelDisabled;
+  }, [cancelDisabled, onCancel]);
+
+  useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.setTimeout(() => firstActionRef.current?.focus(), 0);
+    window.setTimeout(() => {
+      const fieldToFocus = dialogElementRef.current?.querySelector<HTMLElement>(
+        'input, textarea, select'
+      );
+      (fieldToFocus ?? firstActionRef.current)?.focus();
+    }, 0);
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && onCancel && !cancelDisabled) {
-        onCancel();
+      if (
+        event.key === 'Escape' &&
+        onCancelRef.current &&
+        !cancelDisabledRef.current
+      ) {
+        onCancelRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -64,7 +81,7 @@ function PlayerDialog({
       document.body.style.overflow = previousBodyOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [cancelDisabled, onCancel]);
+  }, []);
 
   const body = (
     <>
@@ -93,6 +110,9 @@ function PlayerDialog({
     <div className="modal-backdrop" role="presentation">
       {onSubmit ? (
         <form
+          ref={(element) => {
+            dialogElementRef.current = element;
+          }}
           className={dialogClassName}
           role={role}
           aria-modal="true"
@@ -104,6 +124,9 @@ function PlayerDialog({
         </form>
       ) : (
         <div
+          ref={(element) => {
+            dialogElementRef.current = element;
+          }}
           className={dialogClassName}
           role={role}
           aria-modal="true"
