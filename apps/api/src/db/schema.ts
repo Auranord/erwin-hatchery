@@ -558,6 +558,7 @@ export const consumableTypes = pgTable('consumable_types', {
   config: jsonb('config').notNull(),
   resourcePrice: integer('resource_price').notNull().default(0),
   stock: integer('stock').notNull().default(0),
+  isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true)
 });
 
@@ -597,6 +598,7 @@ export const equipmentTypes = pgTable('equipment_types', {
   config: jsonb('config').notNull().default({}),
   resourcePrice: integer('resource_price').notNull().default(0),
   stock: integer('stock').notNull().default(0),
+  isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()

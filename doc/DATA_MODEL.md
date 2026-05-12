@@ -395,7 +395,7 @@ Pet invariants:
 - Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
-- Gem equipment is modeled through `equipment_types` with `equipment_slot = gem` and config-only stat bonuses. Seeded gems use three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 for HP. Event stat aggregation may consume these values server-side later; browsers must not be trusted to apply equipment effects.
+- Gem equipment is modeled through `equipment_types` with `equipment_slot = gem` and config-only stat bonuses. Seeded gems use three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 for HP. Tiered gem future shop metadata uses cracked-egg `resource_price`/`stock` pairs of 250/10 for tier 1, 750/5 for tier 2, and 1500/2 for tier 3, with `is_shop_purchasable = true` for all seeded gems. Event stat aggregation may consume these values server-side later; browsers must not be trusted to apply equipment effects.
 - Current AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
 
 Future fields can include level, experience, fusion count, and richer training history.
@@ -413,9 +413,10 @@ effect_type text
 config jsonb -- effect configuration
 resource_price integer -- cracked_eggs price for future shop purchases
 stock integer -- per-shop refresh stock for future shop purchases
+is_shop_purchasable boolean -- eligible to appear as a future shop purchase
 is_active boolean
 
-The seeded stat-tradeoff consumables cover every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW. Each sweet increases one stat by +1 and decreases a different stat by -1. Their `config` uses `{ target: 'pet', duration: 'permanent', statModifiers: { [increased_stat]: 1, [decreased_stat]: -1 } }`; display names and descriptions should hint at the effect without being named directly after stat codes. All seeded stat-tradeoff consumables carry future shop metadata of `resource_price = 100` cracked eggs and `stock = 25`.
+The seeded stat-tradeoff consumables cover every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW. Each sweet increases one stat by +1 and decreases a different stat by -1. Their `config` uses `{ target: 'pet', duration: 'permanent', statModifiers: { [increased_stat]: 1, [decreased_stat]: -1 } }`; display names and descriptions should hint at the effect without being named directly after stat codes. All seeded stat-tradeoff consumables carry future shop metadata of `resource_price = 100` cracked eggs, `stock = 25`, and `is_shop_purchasable = true`.
 
 consumable_inventory_slots:
 id uuid primary key
@@ -434,6 +435,7 @@ equipment_slot text
 config jsonb
 resource_price integer -- cracked_eggs price for future shop purchases
 stock integer -- per-shop refresh stock for future shop purchases
+is_shop_purchasable boolean -- eligible to appear as a future shop purchase
 is_active boolean
 created_at timestamp
 

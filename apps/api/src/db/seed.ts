@@ -18,12 +18,16 @@ const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_ABILITY_ID = 'beta_instinct';
 const CONSUMABLE_RESOURCE_PRICE = 100;
 const CONSUMABLE_STOCK = 25;
+const CONSUMABLE_IS_SHOP_PURCHASABLE = true;
 
 const GEM_SHOP_BY_TIER = {
-  1: { resourcePrice: 250, stock: 10 },
-  2: { resourcePrice: 750, stock: 5 },
-  3: { resourcePrice: 1500, stock: 2 }
-} as const satisfies Record<1 | 2 | 3, { resourcePrice: number; stock: number }>;
+  1: { resourcePrice: 250, stock: 10, isShopPurchasable: true },
+  2: { resourcePrice: 750, stock: 5, isShopPurchasable: true },
+  3: { resourcePrice: 1500, stock: 2, isShopPurchasable: true }
+} as const satisfies Record<
+  1 | 2 | 3,
+  { resourcePrice: number; stock: number; isShopPurchasable: boolean }
+>;
 
 const PET_RARITIES = [
   { id: 'common', labelDe: 'Gewöhnlich', rank: 1, recycleCrackedEggs: 1, isActive: true },
@@ -488,12 +492,25 @@ function assertCount(counts: Record<string, number>, key: string, expected: numb
   }
 }
 
-function validateShopMetadata(resourcePrice: number, stock: number, label: string): void {
+function validateShopMetadata(
+  resourcePrice: number,
+  stock: number,
+  isShopPurchasable: boolean,
+  label: string
+): void {
   if (!Number.isInteger(resourcePrice) || resourcePrice < 0) {
     throw new Error(`Invalid seed data: ${label} resourcePrice must be a non-negative integer`);
   }
   if (!Number.isInteger(stock) || stock < 0) {
     throw new Error(`Invalid seed data: ${label} stock must be a non-negative integer`);
+  }
+  if (typeof isShopPurchasable !== 'boolean') {
+    throw new Error(`Invalid seed data: ${label} isShopPurchasable must be boolean`);
+  }
+  if (isShopPurchasable && (resourcePrice <= 0 || stock <= 0)) {
+    throw new Error(
+      `Invalid seed data: ${label} purchasable shop entries must have positive resourcePrice and stock`
+    );
   }
 }
 
@@ -534,7 +551,12 @@ function validateGemEquipment(): void {
 
   for (const equipment of GEM_EQUIPMENT) {
     const shop = GEM_SHOP_BY_TIER[equipment.tier];
-    validateShopMetadata(shop.resourcePrice, shop.stock, equipment.id);
+    validateShopMetadata(
+      shop.resourcePrice,
+      shop.stock,
+      shop.isShopPurchasable,
+      equipment.id
+    );
   }
 }
 
@@ -616,7 +638,12 @@ function validateStatTradeoffConsumables(): void {
     }
   }
 
-  validateShopMetadata(CONSUMABLE_RESOURCE_PRICE, CONSUMABLE_STOCK, 'stat tradeoff consumables');
+  validateShopMetadata(
+    CONSUMABLE_RESOURCE_PRICE,
+    CONSUMABLE_STOCK,
+    CONSUMABLE_IS_SHOP_PURCHASABLE,
+    'stat tradeoff consumables'
+  );
 }
 
 async function seed(): Promise<void> {
@@ -724,6 +751,7 @@ async function seed(): Promise<void> {
         },
         resourcePrice: shop.resourcePrice,
         stock: shop.stock,
+        isShopPurchasable: shop.isShopPurchasable,
         isActive: true
       };
     })
@@ -736,6 +764,7 @@ async function seed(): Promise<void> {
       config: sql`excluded.config`,
       resourcePrice: sql`excluded.resource_price`,
       stock: sql`excluded.stock`,
+      isShopPurchasable: sql`excluded.is_shop_purchasable`,
       isActive: true
     }
   });
@@ -760,6 +789,7 @@ async function seed(): Promise<void> {
       },
       resourcePrice: CONSUMABLE_RESOURCE_PRICE,
       stock: CONSUMABLE_STOCK,
+      isShopPurchasable: CONSUMABLE_IS_SHOP_PURCHASABLE,
       isActive: true
     }))
   ).onConflictDoUpdate({
@@ -771,6 +801,7 @@ async function seed(): Promise<void> {
       config: sql`excluded.config`,
       resourcePrice: sql`excluded.resource_price`,
       stock: sql`excluded.stock`,
+      isShopPurchasable: sql`excluded.is_shop_purchasable`,
       isActive: true
     }
   });
