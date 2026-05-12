@@ -409,6 +409,18 @@ async function createConsumableShopSlotInTx(
 ): Promise<CreatedShopInventorySlot | null> {
   const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
   for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [existingSlot] = await tx
+      .select({ id: consumableInventorySlots.id })
+      .from(consumableInventorySlots)
+      .where(
+        and(
+          eq(consumableInventorySlots.userId, userId),
+          eq(consumableInventorySlots.slotIndex, slotIndex)
+        )
+      )
+      .limit(1);
+    if (existingSlot) continue;
+
     const [createdSlot] = await tx
       .insert(consumableInventorySlots)
       .values({
@@ -416,12 +428,6 @@ async function createConsumableShopSlotInTx(
         consumableTypeId,
         slotIndex,
         updatedAt: now
-      })
-      .onConflictDoNothing({
-        target: [
-          consumableInventorySlots.userId,
-          consumableInventorySlots.slotIndex
-        ]
       })
       .returning({ id: consumableInventorySlots.id });
     if (createdSlot) return { id: createdSlot.id, slotIndex };
@@ -437,6 +443,18 @@ async function createEquipmentShopSlotInTx(
 ): Promise<CreatedShopInventorySlot | null> {
   const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
   for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [existingSlot] = await tx
+      .select({ id: equipmentInventorySlots.id })
+      .from(equipmentInventorySlots)
+      .where(
+        and(
+          eq(equipmentInventorySlots.userId, userId),
+          eq(equipmentInventorySlots.slotIndex, slotIndex)
+        )
+      )
+      .limit(1);
+    if (existingSlot) continue;
+
     const [createdSlot] = await tx
       .insert(equipmentInventorySlots)
       .values({
@@ -444,12 +462,6 @@ async function createEquipmentShopSlotInTx(
         equipmentTypeId,
         slotIndex,
         updatedAt: now
-      })
-      .onConflictDoNothing({
-        target: [
-          equipmentInventorySlots.userId,
-          equipmentInventorySlots.slotIndex
-        ]
       })
       .returning({ id: equipmentInventorySlots.id });
     if (createdSlot) return { id: createdSlot.id, slotIndex };
