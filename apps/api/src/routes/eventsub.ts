@@ -12,6 +12,7 @@ import {
   users
 } from '../db/schema.js';
 import { config } from '../config.js';
+import { grantBitsVouchersForEvent, markEventSubRevoked } from '../services/twitchIntegration.js';
 
 type EventSubEnvelope = {
   subscription: { type: string };
@@ -25,6 +26,7 @@ type EventSubEnvelope = {
     recipient_user_login?: string;
     recipient_user_name?: string;
     total?: number;
+    bits?: number;
     is_anonymous?: boolean;
     reward?: { id: string; cost: number };
     status?: string;
@@ -355,7 +357,7 @@ async function processSubscriberStatus(
         await grantVoucherInTx(tx, {
           userId: recipient.id,
           twitchEventRowId,
-          amount: event?.total ?? 1,
+          amount: 1,
           reason: 'gift_subscription_recipient'
         });
       }
@@ -376,6 +378,36 @@ async function processSubscriberStatus(
   if (eventType === 'channel.subscription.gift') return 'subscribed';
   return shouldActivate ? 'subscribed' : 'unsubscribed';
 }
+
+async function processBitsEvent(
+  payload: EventSubEnvelope,
+  twitchEventRowId: string,
+  log: FastifyRequest['log']
+): Promise<'bits_counted' | 'anonymous_bits_ignored' | 'ignored'> {
+  const event = payload.event;
+  const bits = Number(event?.bits ?? 0);
+  if (!event || !Number.isFinite(bits) || bits <= 0) return 'ignored';
+  if (event.is_anonymous || !event.user_id?.trim()) {
+    log.info({ bits }, 'Anonymous Bits EventSub event audited without voucher grant');
+    return 'anonymous_bits_ignored';
+  }
+  await grantBitsVouchersForEvent({
+    twitchEventRowId,
+    twitchUserId: event.user_id.trim(),
+    login: event.user_login ?? null,
+    displayName: event.user_name ?? null,
+    bits,
+    reason: 'eventsub_bits_threshold'
+  });
+  return 'bits_counted';
+}
+
+async function processRevocation(payload: EventSubEnvelope, log: FastifyRequest['log']): Promise<void> {
+  const reason = (payload as EventSubEnvelope & { subscription?: { status?: string } }).subscription?.status ?? 'unknown_revocation';
+  await markEventSubRevoked(reason);
+  log.warn({ eventType: payload.subscription.type, reason }, 'EventSub subscription revoked');
+}
+
 function badRequest(reply: FastifyReply): FastifyReply {
   return reply.code(400).send({ message: 'Invalid EventSub request' });
 }
@@ -396,6 +428,10 @@ export async function registerEventSubRoutes(
     if (!payload?.subscription?.type) return badRequest(reply);
     if (messageType === 'webhook_callback_verification')
       return reply.type('text/plain').send(payload.challenge ?? '');
+    if (messageType === 'revocation') {
+      await processRevocation(payload, request.log);
+      return reply.code(204).send();
+    }
     if (messageType !== 'notification') return reply.code(204).send();
     if (!payload.event?.id || !messageId) return badRequest(reply);
 
@@ -429,12 +465,16 @@ export async function registerEventSubRoutes(
           eventRow.id,
           request.log
         );
+      } else if (payload.subscription.type === 'channel.cheer') {
+        outcome = await processBitsEvent(payload, eventRow.id, request.log);
       }
       const nonErrorOutcomes = new Set([
         'granted',
         'subscribed',
         'unsubscribed',
-        'ignored'
+        'ignored',
+        'bits_counted',
+        'anonymous_bits_ignored'
       ]);
       await db
         .update(twitchEvents)

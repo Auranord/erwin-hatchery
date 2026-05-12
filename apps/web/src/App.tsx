@@ -88,6 +88,31 @@ type EventSubSubscriptionStatus = {
   error: string | null;
 };
 
+
+type SetupStatus = {
+  completed: boolean;
+  requiresReauth: boolean;
+  broadcaster: { userId: string; login: string | null } | null;
+  requiredScopes: string[];
+  missingScopes: string[];
+  setupCompletedAt: string | null;
+  eventsubSyncedAt: string | null;
+  subscriptionBackfillCompletedAt: string | null;
+  bitsBackfillCompletedAt: string | null;
+  lastHealthCheckAt: string | null;
+  lastError: string | null;
+  eventSub: EventSubSubscriptionStatus & {
+    subscriptions?: Array<{
+      eventType: string;
+      status: string;
+      subscriptionId: string | null;
+      callbackUrl: string;
+      lastError: string | null;
+    }>;
+  };
+  lastBackfillRuns: Array<{ id: string; type: string; status: string; startedAt: string; completedAt: string | null; source: string; error: string | null }>;
+};
+
 type GridDimensions = {
   kind: string;
   columns: number;
@@ -401,6 +426,7 @@ export function App(): JSX.Element {
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
     useState<EventSubSubscriptionStatus | null>(null);
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [twitchCustomRewards, setTwitchCustomRewards] = useState<
     TwitchCustomReward[]
   >([]);
@@ -437,6 +463,17 @@ export function App(): JSX.Element {
   const [overlayLeaders, setOverlayLeaders] = useState<OverlayEventLeader[]>(
     []
   );
+
+  async function loadSetupStatus(): Promise<void> {
+    const response = await fetch('/api/setup/status', { credentials: 'include' });
+    if (response.ok) setSetupStatus((await response.json()) as SetupStatus);
+  }
+
+  async function postSetupAction(endpoint: string): Promise<void> {
+    const response = await fetch(endpoint, { method: 'POST', credentials: 'include' });
+    if (response.ok) setSetupStatus((await response.json()) as SetupStatus);
+    else await loadSetupStatus();
+  }
 
   async function loadMe(): Promise<void> {
     const response = await fetch('/api/me', { credentials: 'include' });
@@ -480,27 +517,29 @@ export function App(): JSX.Element {
   }
 
   useEffect(() => {
+    void loadSetupStatus();
     void loadMe();
     void loadLeaderboard();
   }, []);
 
   useEffect(() => {
     if (isAdminRoute && me?.authenticated) {
+      void loadSetupStatus();
       void loadUsers(query);
       void loadAdminHealth();
       void loadEventSubFeed();
       void loadEventSubSubscriptionStatus();
     }
-  }, [isAdminRoute, me?.authenticated]);
+  }, [isAdminRoute, setupStatus?.completed, me?.authenticated]);
 
   useEffect(() => {
-    if (isAdminRoute || !me?.authenticated || !playerInventory) return;
+    if (isAdminRoute || setupStatus?.completed === false || !me?.authenticated || !playerInventory) return;
     const intervalId = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(intervalId);
   }, [isAdminRoute, me?.authenticated, playerInventory]);
 
   useEffect(() => {
-    if (isAdminRoute || !me?.authenticated) {
+    if (isAdminRoute || setupStatus?.completed === false || !me?.authenticated) {
       setPlayerInventory(null);
       return;
     }
@@ -1551,6 +1590,36 @@ export function App(): JSX.Element {
         </section>
 
         <section className="card">
+          <h2>Twitch Setup & Integration</h2>
+          <button onClick={() => void loadSetupStatus()}>Setup-Status laden</button>
+          <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check</button>
+          <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub Resync</button>
+          <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
+          <a href="/api/setup/twitch/login">Broadcaster reauthentifizieren</a>
+          {setupStatus ? (
+            <>
+              <p>Setup: {setupStatus.completed ? '✅ vollständig' : '❌ unvollständig'}</p>
+              <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
+              <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
+              <p>Scopes fehlen: {setupStatus.missingScopes.join(', ') || 'keine'}</p>
+              <p>Letzter Health Check: {setupStatus.lastHealthCheckAt ? new Date(setupStatus.lastHealthCheckAt).toLocaleString() : '—'}</p>
+              {setupStatus.lastError ? <p>Letzter Fehler: {setupStatus.lastError}</p> : null}
+              <ul>
+                {(setupStatus.eventSub.subscriptions ?? []).map((subscription) => (
+                  <li key={subscription.eventType}>{subscription.eventType}: {subscription.status}</li>
+                ))}
+              </ul>
+              <h3>Backfill-Läufe</h3>
+              <ul>
+                {setupStatus.lastBackfillRuns.map((run) => (
+                  <li key={run.id}>{run.type}: {run.status} · {run.source}{run.error ? ` · ${run.error}` : ''}</li>
+                ))}
+              </ul>
+            </>
+          ) : <p>Noch kein Setup-Status geladen.</p>}
+        </section>
+
+        <section className="card">
           <h2>Debug: EventSub Subscription Status</h2>
           <button onClick={() => void loadEventSubSubscriptionStatus(true)}>
             Status aktualisieren
@@ -1640,6 +1709,51 @@ export function App(): JSX.Element {
               </li>
             ))}
           </ul>
+        </section>
+      </main>
+    );
+  }
+
+
+  function renderSetupScreen(): JSX.Element {
+    const status = setupStatus;
+    const eventSubs = status?.eventSub.subscriptions ?? [];
+    return (
+      <main className="container">
+        <header className="hero">
+          <p className="badge">Ersteinrichtung · Twitch</p>
+          <h1>Erwin Hatchery einrichten</h1>
+          <p>Twitch-abhängige Admin- und Spielfunktionen sind gesperrt, bis die Einrichtung abgeschlossen ist.</p>
+        </header>
+        <section className="card">
+          <h2>1. Broadcaster verbinden</h2>
+          <p>Bitte melde den konfigurierten Broadcaster-Account an. Die Anmeldung fordert Abos, Channel-Point-Rewards und Bits-Berechtigungen an.</p>
+          <p><strong>Wichtig:</strong> Twitch stellt keinen vollständigen historischen EventSub-Replay bereit.</p>
+          <p>Backfill importiert aktuell sichtbare Abos und Bits-Leaderboard-Werte bestmöglich.</p>
+          <a href="/api/setup/twitch/login">Broadcaster mit Twitch verbinden</a>
+          {status?.broadcaster ? <p>Verbunden: {status.broadcaster.login ?? status.broadcaster.userId}</p> : null}
+          {status?.requiresReauth ? <p>⚠ Reauth erforderlich.</p> : null}
+        </section>
+        <section className="card">
+          <h2>2. Status & Reparatur</h2>
+          <p>Setup: {status?.completed ? '✅ Vollständig' : '❌ Unvollständig'}</p>
+          <p>Fehlende Scopes: {status?.missingScopes.length ? status.missingScopes.join(', ') : 'keine'}</p>
+          <p>EventSub: {status?.eventSub.enabled ? '✅ aktiv' : '⚠ nicht vollständig aktiv'}</p>
+          <p>Abo-Backfill: {status?.subscriptionBackfillCompletedAt ? new Date(status.subscriptionBackfillCompletedAt).toLocaleString() : 'offen'}</p>
+          <p>Bits-Backfill: {status?.bitsBackfillCompletedAt ? new Date(status.bitsBackfillCompletedAt).toLocaleString() : 'offen'}</p>
+          {status?.lastError ? <p>Letzter Twitch-Fehler: {status.lastError}</p> : null}
+          <div>
+            <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check ausführen</button>
+            <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub neu synchronisieren</button>
+            <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
+          </div>
+          {eventSubs.length > 0 ? (
+            <ul>
+              {eventSubs.map((subscription) => (
+                <li key={subscription.eventType}>{subscription.eventType}: {subscription.status}{subscription.lastError ? ` · ${subscription.lastError}` : ''}</li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       </main>
     );
@@ -2175,6 +2289,10 @@ export function App(): JSX.Element {
         )}
       </section>
     );
+  }
+
+  if (setupStatus && !setupStatus.completed && !isAlertOverlayRoute && !isBattleOverlayRoute) {
+    return renderSetupScreen();
   }
 
   return (

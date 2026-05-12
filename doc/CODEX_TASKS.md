@@ -227,3 +227,7 @@ Acceptance:
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
+
+## Completed: Twitch reward ingestion milestone
+
+Implemented persisted Twitch setup state, broadcaster setup OAuth, EventSub sync/status persistence, subscription/gift-sub/Bits voucher handling, subscription and Bits backfill tables, setup/admin observability, revocation repair state, and documentation of Twitch historical replay limitations. Follow-up test work should add a real API test harness when the project introduces one; package scripts currently only contain placeholder tests.

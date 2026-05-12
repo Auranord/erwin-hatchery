@@ -260,3 +260,9 @@ Per-type fallback format: `{type}/fallback-{size}.png`.
 
 Seeded pet assets use `pet_species.asset_key`. Egg, equipment, hat, and future consumable assets use their seeded type IDs.
 
+
+## Twitch integration setup and repair
+
+The API exposes `/api/setup/status`, `/api/setup/twitch/login`, `/api/setup/twitch/callback`, `/api/setup/run-backfill`, `/api/setup/resync-eventsub`, and `/api/setup/health-check`. Setup persists broadcaster identity, required scopes, EventSub sync time, backfill completion times, health timestamps, repair flags, and last error in `twitch_integration_state`. EventSub subscription status is stored per event type in `twitch_eventsub_subscriptions` instead of relying on process memory alone.
+
+EventSub sync covers channel point redemptions, subscribe, subscription message, subscription end, subscription gift, and Bits cheer events. Startup/admin health checks refresh the broadcaster token, verify scopes through stored token metadata, verify required EventSub rows, and compare the persisted callback URL to `PUBLIC_APP_URL`'s `/api/twitch/eventsub`. Revocation webhook messages move the integration into repair state; authorization revocations require broadcaster reauth, while delivery problems keep EventSub unhealthy for safe resync.

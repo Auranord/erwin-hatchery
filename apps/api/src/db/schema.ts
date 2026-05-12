@@ -3,6 +3,7 @@ import {
   boolean,
   integer,
   jsonb,
+  bigint,
   pgTable,
   primaryKey,
   text,
@@ -96,6 +97,64 @@ export const twitchEvents = pgTable('twitch_events', {
   processedAt: timestamp('processed_at', { withTimezone: true }),
   processingStatus: text('processing_status').notNull().default('received'),
   error: text('error')
+});
+
+
+
+export const twitchIntegrationState = pgTable('twitch_integration_state', {
+  id: text('id').primaryKey().default('default'),
+  broadcasterUserId: text('broadcaster_user_id'),
+  broadcasterLogin: text('broadcaster_login'),
+  requiredScopes: text('required_scopes').notNull().default(''),
+  setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true }),
+  eventsubSyncedAt: timestamp('eventsub_synced_at', { withTimezone: true }),
+  subscriptionBackfillCompletedAt: timestamp('subscription_backfill_completed_at', { withTimezone: true }),
+  bitsBackfillCompletedAt: timestamp('bits_backfill_completed_at', { withTimezone: true }),
+  requiresReauth: boolean('requires_reauth').notNull().default(false),
+  eventsubHealthy: boolean('eventsub_healthy').notNull().default(false),
+  lastHealthCheckAt: timestamp('last_health_check_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+export const twitchEventSubSubscriptions = pgTable(
+  'twitch_eventsub_subscriptions',
+  {
+    eventType: text('event_type').notNull(),
+    version: text('version').notNull().default('1'),
+    twitchSubscriptionId: text('twitch_subscription_id'),
+    status: text('status').notNull().default('missing'),
+    callbackUrl: text('callback_url').notNull(),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.eventType, table.version] })
+  })
+);
+
+export const twitchBackfillRuns = pgTable('twitch_backfill_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  type: text('type').notNull(),
+  status: text('status').notNull(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+  source: text('source').notNull(),
+  error: text('error')
+});
+
+export const twitchBitsBalances = pgTable('twitch_bits_balances', {
+  userId: uuid('user_id').notNull().primaryKey().references(() => users.id),
+  twitchUserId: text('twitch_user_id').notNull().unique(),
+  importedBitsBaseline: bigint('imported_bits_baseline', { mode: 'number' }).notNull().default(0),
+  eventsubBitsTotal: bigint('eventsub_bits_total', { mode: 'number' }).notNull().default(0),
+  totalBitsCounted: bigint('total_bits_counted', { mode: 'number' }).notNull().default(0),
+  voucherThresholdsGranted: integer('voucher_thresholds_granted').notNull().default(0),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });
 
 export const twitchUserTokens = pgTable('twitch_user_tokens', {

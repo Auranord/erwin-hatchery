@@ -618,3 +618,11 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation and inventory row upgrade is server-authoritative, transactional, and recorded in `economy_ledger`.
+
+## Twitch reward-ingestion tables
+
+- `twitch_integration_state`: singleton setup state with broadcaster ID/login, required scopes, setup/EventSub/backfill completion timestamps, `requires_reauth`, health timestamp, EventSub health, and last error.
+- `twitch_eventsub_subscriptions`: one row per required EventSub type/version with Twitch subscription ID, status, callback URL, sync timestamp, and last error.
+- `twitch_backfill_runs`: resumable/auditable backfill runs for subscriptions and Bits with status, source, timestamps, and error.
+- `twitch_bits_balances`: per-user Bits accounting with imported leaderboard baseline, live EventSub Bits total, total counted Bits, and granted voucher thresholds.
+- `twitch_events`: stores EventSub notifications and stable backfill source keys. These rows are used as immutable `economy_ledger.source_id` references for idempotent voucher grants.

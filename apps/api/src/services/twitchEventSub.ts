@@ -1,16 +1,17 @@
 import { eq } from 'drizzle-orm';
 import { config, getEventSubCallbackUrl } from '../config.js';
 import { db } from '../db/client.js';
-import { twitchEvents, twitchUserTokens, users } from '../db/schema.js';
-import { getSubscriptionStatusFromEventType } from '../routes/eventsub.js';
+import { twitchEventSubSubscriptions, twitchIntegrationState, twitchEvents, twitchUserTokens, users } from '../db/schema.js';
 
-const TARGET_SUBSCRIPTION_TYPES = [
+export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.channel_points_custom_reward_redemption.add',
   'channel.subscribe',
   'channel.subscription.end',
   'channel.subscription.message',
-  'channel.subscription.gift'
+  'channel.subscription.gift',
+  'channel.cheer'
 ] as const;
+const TARGET_SUBSCRIPTION_TYPES = REQUIRED_EVENTSUB_SUBSCRIPTIONS;
 const TARGET_SUBSCRIPTION_VERSION = '1';
 
 type TwitchEventSubTransport = {
@@ -47,6 +48,15 @@ type EventSubSyncState = {
   error: string | null;
 };
 
+
+function getSubscriptionStatusFromEventType(eventType: string): boolean | null {
+  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
+  const deactivateTypes = new Set(['channel.subscription.end']);
+  if (activateTypes.has(eventType)) return true;
+  if (deactivateTypes.has(eventType)) return false;
+  return null;
+}
+
 async function readErrorDetails(response: Response): Promise<string> {
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
@@ -81,7 +91,8 @@ let eventSubSyncState: EventSubSyncState = {
 const REQUIRED_BROADCASTER_SCOPES = [
   'channel:read:redemptions',
   'channel:manage:redemptions',
-  'channel:read:subscriptions'
+  'channel:read:subscriptions',
+  'bits:read'
 ] as const;
 
 async function assertBroadcasterAuthorization(): Promise<void> {
@@ -180,6 +191,76 @@ async function twitchApi<T>(
   return (await response.json()) as T;
 }
 
+async function persistEventSubStatus(input: {
+  eventType: string;
+  subscriptionId: string | null;
+  status: string;
+  callbackUrl: string;
+  error: string | null;
+}): Promise<void> {
+  const now = new Date();
+  await db
+    .insert(twitchEventSubSubscriptions)
+    .values({
+      eventType: input.eventType,
+      version: TARGET_SUBSCRIPTION_VERSION,
+      twitchSubscriptionId: input.subscriptionId,
+      status: input.status,
+      callbackUrl: input.callbackUrl,
+      lastSyncedAt: now,
+      lastError: input.error,
+      updatedAt: now
+    })
+    .onConflictDoUpdate({
+      target: [
+        twitchEventSubSubscriptions.eventType,
+        twitchEventSubSubscriptions.version
+      ],
+      set: {
+        twitchSubscriptionId: input.subscriptionId,
+        status: input.status,
+        callbackUrl: input.callbackUrl,
+        lastSyncedAt: now,
+        lastError: input.error,
+        updatedAt: now
+      }
+    });
+}
+
+export async function checkEventSubHealth(): Promise<EventSubSyncState & { subscriptions: Array<{ eventType: string; status: string; subscriptionId: string | null; callbackUrl: string; lastError: string | null }> }> {
+  const rows = await db.select().from(twitchEventSubSubscriptions);
+  const byType = new Map(rows.map((row) => [row.eventType, row]));
+  const subscriptions = TARGET_SUBSCRIPTION_TYPES.map((eventType) => {
+    const row = byType.get(eventType);
+    return {
+      eventType,
+      status: row?.status ?? 'missing',
+      subscriptionId: row?.twitchSubscriptionId ?? null,
+      callbackUrl: row?.callbackUrl ?? getEventSubCallbackUrl(),
+      lastError: row?.lastError ?? null
+    };
+  });
+  const enabled = subscriptions.every(
+    (subscription) =>
+      subscription.status === 'enabled' &&
+      subscription.callbackUrl === getEventSubCallbackUrl()
+  );
+  const anyPending = subscriptions.some((subscription) => subscription.status === 'webhook_callback_verification_pending');
+  const firstStoredError = subscriptions.find((subscription) => subscription.lastError)?.lastError ?? null;
+  const callbackMismatch = subscriptions.some((subscription) => subscription.callbackUrl !== getEventSubCallbackUrl());
+  return {
+    enabled,
+    status: enabled ? 'enabled' : anyPending ? 'pending_verification' : 'missing',
+    subscriptionId: subscriptions.map((subscription) => subscription.subscriptionId).filter(Boolean).join(',') || null,
+    type: TARGET_SUBSCRIPTION_TYPES.join(','),
+    callback: getEventSubCallbackUrl(),
+    createdAt: null,
+    lastCheckedAt: new Date().toISOString(),
+    error: firstStoredError ?? (callbackMismatch ? 'EventSub callback URL does not match configured PUBLIC_APP_URL' : null),
+    subscriptions
+  };
+}
+
 export function getEventSubSubscriptionStatus(): EventSubSyncState {
   return { ...eventSubSyncState };
 }
@@ -238,6 +319,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
       const active = matching[0];
       if (active) {
         ensured.push(active);
+        await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: active.id, status: active.status, callbackUrl: active.transport.callback, error: null });
         continue;
       }
       const created = await twitchApi<{ data: TwitchEventSubSubscription[] }>(
@@ -263,6 +345,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
           `Twitch create subscription response was empty for ${subscriptionType}`
         );
       ensured.push(first);
+      await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: first.id, status: first.status, callbackUrl: first.transport.callback, error: null });
     }
     const allEnabled = ensured.every(
       (subscription) => subscription.status === 'enabled'
@@ -290,6 +373,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
           ? `Duplicate subscriptions detected and cleaned up (${duplicateCleanupCount}).`
           : null
     };
+    await db.update(twitchIntegrationState).set({ eventsubSyncedAt: new Date(), eventsubHealthy: allEnabled, lastError: eventSubSyncState.error, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
     log.info(
       {
         subscriptionIds: ensured.map((subscription) => subscription.id),
@@ -308,6 +392,10 @@ export async function syncChannelPointRedemptionEventSub(log: {
       lastCheckedAt: checkedAt,
       error: `EventSub sync failed: ${message}`
     };
+    for (const subscriptionType of TARGET_SUBSCRIPTION_TYPES) {
+      await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: null, status: 'error', callbackUrl: getEventSubCallbackUrl(), error: message });
+    }
+    await db.update(twitchIntegrationState).set({ eventsubHealthy: false, lastError: `EventSub sync failed: ${message}`, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
     log.error({ err: error }, 'EventSub sync failed');
   }
 }
