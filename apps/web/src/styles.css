@@ -205,12 +205,45 @@ ul {
   color: #94a3b8;
 }
 
-.game-message {
-  border: 1px solid rgba(250, 204, 21, 0.7);
-  border-radius: 0.75rem;
-  background: rgba(250, 204, 21, 0.14);
-  padding: 0.75rem;
+.toast-viewport {
+  position: fixed;
+  z-index: 80;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  padding: 0 0.85rem calc(0.85rem + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.status-toast {
+  width: min(100%, 34rem);
+  margin: 0;
+  border: 1px solid rgba(250, 204, 21, 0.72);
+  border-radius: 999px;
+  background: rgba(30, 27, 46, 0.96);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.38),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   color: #fef3c7;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  animation: status-toast-in 180ms ease-out both;
+}
+
+@keyframes status-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .inventory-stack {

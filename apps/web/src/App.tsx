@@ -600,7 +600,8 @@ export function App(): JSX.Element {
   const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
-  const [gameMessage, setGameMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ id: number; text: string } | null>(null);
+  const toastIdRef = useRef(0);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
   const isBattleOverlayRoute = window.location.pathname === '/overlay/battle';
@@ -925,7 +926,7 @@ export function App(): JSX.Element {
       else await loadShop();
       setQueuedShopItems([]);
       setPendingShopPurchase(null);
-      setGameMessage(`${queuedShopItems.length} Shop-Item(s) gekauft.`);
+      showGameMessage(`${queuedShopItems.length} Shop-Item(s) gekauft.`);
     } catch (error) {
       setPendingShopPurchase(null);
       showShopError(
@@ -1055,8 +1056,13 @@ export function App(): JSX.Element {
     return hat?.hatId ?? 'diesen Hut';
   }
 
+  function showGameMessage(text: string): void {
+    toastIdRef.current += 1;
+    setToastMessage({ id: toastIdRef.current, text });
+  }
+
   function showGameError(error: unknown): void {
-    setGameMessage(
+    showGameMessage(
       error instanceof Error ? error.message : 'Aktion fehlgeschlagen.'
     );
   }
@@ -1168,13 +1174,13 @@ export function App(): JSX.Element {
     }
     setSelectedPayload(payload);
     if (payload.kind === 'egg') {
-      setGameMessage('Inkubator oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
+      showGameMessage('Inkubator oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
     } else if (payload.kind === 'pet') {
-      setGameMessage('Event-Slot oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
+      showGameMessage('Event-Slot oder Ziel-Slot antippen. Aktionen oben rechts nutzen.');
     } else if (payload.kind === 'equipment' || payload.kind === 'equipment-set') {
-      setGameMessage('Set-Slot oder Ausrüstungsinventar antippen. Aktionen oben rechts nutzen.');
+      showGameMessage('Set-Slot oder Ausrüstungsinventar antippen. Aktionen oben rechts nutzen.');
     } else {
-      setGameMessage('Ziel-Slot antippen oder Aktionen oben rechts nutzen.');
+      showGameMessage('Ziel-Slot antippen oder Aktionen oben rechts nutzen.');
     }
   }
 
@@ -1355,7 +1361,7 @@ export function App(): JSX.Element {
     try {
       await setPetFavorite(petId, isFavorite);
       await refreshOwnInventory();
-      setGameMessage(
+      showGameMessage(
         isFavorite
           ? 'Pet als Favorit markiert.'
           : 'Pet ist kein Favorit mehr.'
@@ -1391,7 +1397,7 @@ export function App(): JSX.Element {
       await setPetNickname(renamePetDraft.petId, renamePetDraft.nickname);
       setRenamePetDraft(null);
       await refreshOwnInventory();
-      setGameMessage('Pet wurde umbenannt.');
+      showGameMessage('Pet wurde umbenannt.');
     } catch (error) {
       showGameError(error);
     } finally {
@@ -1407,7 +1413,7 @@ export function App(): JSX.Element {
     try {
       await setEventPetSelection(payload.id, true);
       await refreshOwnInventory();
-      setGameMessage('Event-Pet ausgewählt.');
+      showGameMessage('Event-Pet ausgewählt.');
     } catch (error) {
       showGameError(error);
     }
@@ -1417,7 +1423,7 @@ export function App(): JSX.Element {
     try {
       await setEventPetSelection(petId, false);
       await refreshOwnInventory();
-      setGameMessage('Event-Pet abgewählt.');
+      showGameMessage('Event-Pet abgewählt.');
     } catch (error) {
       showGameError(error);
     }
@@ -1451,7 +1457,7 @@ export function App(): JSX.Element {
     try {
       await setEventEquipmentSetSelection(setId, selectedForEvent);
       await refreshOwnInventory();
-      setGameMessage(selectedForEvent ? 'Event-Set ausgewählt.' : 'Event-Set abgewählt.');
+      showGameMessage(selectedForEvent ? 'Event-Set ausgewählt.' : 'Event-Set abgewählt.');
     } catch (error) {
       showGameError(error);
     }
@@ -1583,6 +1589,16 @@ export function App(): JSX.Element {
     }, activeOverlayAlert.durationMs);
     return () => window.clearTimeout(timeoutId);
   }, [activeOverlayAlert]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeoutId = window.setTimeout(() => {
+      setToastMessage((current) =>
+        current?.id === toastMessage.id ? null : current
+      );
+    }, 4500);
+    return () => window.clearTimeout(timeoutId);
+  }, [toastMessage]);
 
   useEffect(() => {
     if (!isBattleOverlayRoute) return;
@@ -2160,7 +2176,7 @@ export function App(): JSX.Element {
     if (selectedPayload.kind === 'pet') {
       const pet = getSelectedPet();
       if (pet?.isFavorite) {
-        setGameMessage('Favoriten können nicht recycelt werden. Entferne zuerst den Favoritenstatus.');
+        showGameMessage('Favoriten können nicht recycelt werden. Entferne zuerst den Favoritenstatus.');
         return;
       }
       setPendingPetScrap({
@@ -2818,11 +2834,6 @@ export function App(): JSX.Element {
           <>
             {playerInventory ? (
               <>
-                {gameMessage ? (
-                  <p className="game-message" role="status">
-                    {gameMessage}
-                  </p>
-                ) : null}
                 {pendingPetScrap ? (
                   <PlayerDialog
                     id="pet-scrap-confirm"
@@ -3265,6 +3276,13 @@ export function App(): JSX.Element {
           <p>Nach dem Login siehst du hier deinen Spielbereich.</p>
         )}
       </section>
+      {toastMessage ? (
+        <div className="toast-viewport" aria-live="polite" aria-atomic="true">
+          <p key={toastMessage.id} className="status-toast" role="status">
+            {toastMessage.text}
+          </p>
+        </div>
+      ) : null}
     </main>
   );
 }
