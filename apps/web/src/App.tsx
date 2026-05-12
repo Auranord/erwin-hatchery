@@ -400,6 +400,35 @@ type InventoryDiscardTarget = {
 };
 type ShopErrorDialog = { title: string; message: string };
 type ShopPurchaseDialog = { itemCount: number; totalPrice: number };
+type ToastTone = 'default' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+type ToastMessage = { id: number; text: string; tone: ToastTone };
+type MysteryEggIdentifyResponse =
+  | { ok: true; result: 'unhatched_egg' }
+  | {
+      ok: true;
+      result: 'resources';
+      resourceType: string;
+      resourceAmount: number;
+    };
+type MysteryEggIdentifyApiPayload = {
+  ok?: boolean;
+  result?: 'unhatched_egg' | 'resources';
+  resourceType?: string;
+  resourceAmount?: number;
+  message?: string;
+};
+type IncubationFinishResponse = {
+  ok: true;
+  pet: {
+    id: string;
+    speciesDisplayName: string;
+    rarityId: string;
+    rarityLabelDe: string;
+  };
+};
+type IncubationFinishApiPayload = Partial<IncubationFinishResponse> & {
+  message?: string;
+};
 
 type OverlayAlertEvent = {
   id: string;
@@ -540,6 +569,20 @@ function getPetRarityClassName(rarityId: string): string {
   return `pet-rarity-${toCssModifier(rarityId)}`;
 }
 
+function getToastToneForRarity(rarityId: string): ToastTone {
+  const normalized = toCssModifier(rarityId);
+  if (
+    normalized === 'common' ||
+    normalized === 'uncommon' ||
+    normalized === 'rare' ||
+    normalized === 'epic' ||
+    normalized === 'legendary'
+  ) {
+    return normalized;
+  }
+  return 'default';
+}
+
 function getEmblemAssetPath(assetPath: string): string {
   return `${SLOT_ASSET_ROOT}/emblems/${assetPath}-16.png`;
 }
@@ -623,7 +666,7 @@ export function App(): JSX.Element {
   const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
-  const [toastMessage, setToastMessage] = useState<{ id: number; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastIdRef = useRef(0);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -754,7 +797,7 @@ export function App(): JSX.Element {
     setPlayerInventory(payload.inventory);
   }
 
-  async function identifyMysteryEgg(eggTypeId: string): Promise<void> {
+  async function identifyMysteryEgg(eggTypeId: string): Promise<MysteryEggIdentifyResponse> {
     const response = await fetch('/api/game/mystery-eggs/identify', {
       method: 'POST',
       credentials: 'include',
@@ -762,14 +805,26 @@ export function App(): JSX.Element {
       body: JSON.stringify({ eggTypeId })
     });
 
+    const payload = (await response.json().catch(() => null)) as
+      | MysteryEggIdentifyApiPayload
+      | null;
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as {
-        message?: string;
-      } | null;
       throw new Error(
         payload?.message ?? 'Mystery-Ei konnte nicht bestimmt werden.'
       );
     }
+    if (payload?.ok !== true || !payload.result) {
+      throw new Error('Mystery-Ei wurde bestimmt, aber die Antwort war unvollständig.');
+    }
+    if (payload.result === 'resources') {
+      return {
+        ok: true,
+        result: 'resources',
+        resourceType: payload.resourceType ?? CRACKED_EGGS_RESOURCE_TYPE,
+        resourceAmount: payload.resourceAmount ?? 0
+      };
+    }
+    return { ok: true, result: 'unhatched_egg' };
   }
 
   async function startIncubation(
@@ -792,21 +847,25 @@ export function App(): JSX.Element {
     }
   }
 
-  async function finishIncubation(unhatchedEggId: string): Promise<void> {
+  async function finishIncubation(unhatchedEggId: string): Promise<IncubationFinishResponse> {
     const response = await fetch('/api/game/incubation/finish', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ unhatchedEggId })
     });
+    const payload = (await response.json().catch(() => null)) as
+      | IncubationFinishApiPayload
+      | null;
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as {
-        message?: string;
-      } | null;
       throw new Error(
         payload?.message ?? 'Inkubation konnte nicht abgeschlossen werden.'
       );
     }
+    if (payload?.ok !== true || !payload.pet) {
+      throw new Error('Inkubation wurde abgeschlossen, aber die Antwort war unvollständig.');
+    }
+    return { ok: true, pet: payload.pet };
   }
 
   async function scrapPet(petId: string): Promise<void> {
@@ -1079,9 +1138,33 @@ export function App(): JSX.Element {
     return hat?.hatId ?? 'diesen Hut';
   }
 
-  function showGameMessage(text: string): void {
+  function showGameMessage(text: string, tone: ToastTone = 'default'): void {
     toastIdRef.current += 1;
-    setToastMessage({ id: toastIdRef.current, text });
+    setToastMessage({ id: toastIdRef.current, text, tone });
+  }
+
+  function showMysteryEggResult(
+    eggTypeId: string,
+    result: MysteryEggIdentifyResponse
+  ): void {
+    const eggLabel = formatMysteryEggType(eggTypeId);
+    if (result.result === 'resources') {
+      showGameMessage(
+        `${eggLabel} bestimmt: ${result.resourceAmount} ${formatEggResourceType(
+          result.resourceType
+        )} erhalten.`
+      );
+      return;
+    }
+    showGameMessage(`${eggLabel} bestimmt: Ein Ei ist jetzt bereit für den Inkubator.`);
+  }
+
+  function showIncubationResult(result: IncubationFinishResponse): void {
+    const pet = result.pet;
+    showGameMessage(
+      `Geschlüpft: ${pet.speciesDisplayName} (${pet.rarityLabelDe})!`,
+      getToastToneForRarity(pet.rarityId)
+    );
   }
 
   function showGameError(error: unknown): void {
@@ -2777,7 +2860,10 @@ export function App(): JSX.Element {
                             onClick={(event) => {
                               event.stopPropagation();
                               void finishIncubation(active.unhatchedEggId)
-                                .then(refreshOwnInventory)
+                                .then(async (result) => {
+                                  showIncubationResult(result);
+                                  await refreshOwnInventory();
+                                })
                                 .catch(showGameError);
                             }}
                           >
@@ -3059,7 +3145,10 @@ export function App(): JSX.Element {
                                 type="button"
                                 onClick={() =>
                                   void identifyMysteryEgg(entry.eggTypeId)
-                                    .then(refreshOwnInventory)
+                                    .then(async (result) => {
+                                      showMysteryEggResult(entry.eggTypeId, result);
+                                      await refreshOwnInventory();
+                                    })
                                     .catch(showGameError)
                                 }
                               >
@@ -3313,7 +3402,11 @@ export function App(): JSX.Element {
       </section>
       {toastMessage ? (
         <div className="toast-viewport" aria-live="polite" aria-atomic="true">
-          <p key={toastMessage.id} className="status-toast" role="status">
+          <p
+            key={toastMessage.id}
+            className={`status-toast status-toast--${toastMessage.tone}`}
+            role="status"
+          >
             {toastMessage.text}
           </p>
         </div>
