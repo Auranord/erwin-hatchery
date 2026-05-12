@@ -141,7 +141,7 @@ Definitions:
 - Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
 - Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
-- Gems are equipment-set items rather than direct pet equipment. The seed data includes themed gem equipment in three tiers with explicit `config.statBonuses`: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP. Final event stat aggregation can consume these config values later; paid random gem rewards are not part of the MVP.
+- Gems are equipment-set items rather than direct pet equipment. The seed data includes themed gem equipment in three tiers with explicit `config.statBonuses`: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP. Seeded gem future shop metadata uses cracked-egg `resource_price`/`stock` pairs of 250/10 for tier 1, 750/5 for tier 2, and 1500/2 for tier 3. Final event stat aggregation can consume these config values later; paid random gem rewards are not part of the MVP.
 
 Seeded class roles:
 
@@ -190,7 +190,7 @@ Suggested MVP consumables:
 | Kraftfutter | Small permanent or temporary stat change to a selected pet, if implemented in MVP |
 | Wärmekissen | Reduces remaining incubation time for one selected egg                            |
 
-Seeded consumable content now includes 30 sweets-themed pet stat tradeoffs covering every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW: each sweet grants +1 to one stat and -1 to a different stat. Their German display names hint at the tradeoff through flavor text rather than using the stat names directly.
+Seeded consumable content now includes 30 sweets-themed pet stat tradeoffs covering every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW: each sweet grants +1 to one stat and -1 to a different stat. Their German display names hint at the tradeoff through flavor text rather than using the stat names directly. Each seeded sweet carries future shop metadata of `resource_price = 100` cracked eggs and `stock = 25`.
 
 If time is limited, implement only `Wärmekissen` first and keep the data model ready for more.
 
