@@ -410,8 +410,10 @@ id text primary key
 display_name text
 description text
 effect_type text
-config jsonb
+config jsonb -- effect configuration
 is_active boolean
+
+The seeded stat-tradeoff consumables cover every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW. Each sweet increases one stat by +1 and decreases a different stat by -1. Their `config` uses `{ target: 'pet', duration: 'permanent', statModifiers: { [increased_stat]: 1, [decreased_stat]: -1 } }`; display names and descriptions should hint at the effect without being named directly after stat codes.
 
 consumable_inventory_slots:
 id uuid primary key
