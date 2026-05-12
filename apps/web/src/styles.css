@@ -651,9 +651,14 @@ ul {
   gap: 0.75rem;
 }
 
+.equipment-set-upgrade-actions,
 .equipment-set-list {
   display: grid;
   gap: 0.75rem;
+}
+
+.equipment-set-upgrade-panel {
+  margin-top: 0;
 }
 
 .equipment-set-card {

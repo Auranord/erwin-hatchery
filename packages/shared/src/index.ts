@@ -32,9 +32,18 @@ export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; b
 };
 
 export const INVENTORY_ROW_UPGRADE_BASE_COST_CRACKED_EGGS = 500;
+export const EQUIPMENT_SET_UPGRADE_BASE_COST_CRACKED_EGGS = 500;
 
 export function getInventoryRowUpgradeCostCrackedEggs(bonusRows: number): number {
   return INVENTORY_ROW_UPGRADE_BASE_COST_CRACKED_EGGS * 2 ** bonusRows;
+}
+
+export function getEquipmentSetSlotUpgradeCostCrackedEggs(bonusSlots: number): number {
+  return EQUIPMENT_SET_UPGRADE_BASE_COST_CRACKED_EGGS * 2 ** bonusSlots;
+}
+
+export function getAdditionalEquipmentSetCostCrackedEggs(additionalSetCount: number): number {
+  return EQUIPMENT_SET_UPGRADE_BASE_COST_CRACKED_EGGS * 2 ** additionalSetCount;
 }
 
 export const DEFAULT_CONSUMABLE_STACK_LIMIT = 1;
@@ -175,6 +184,13 @@ export type IncubatorInventory = {
   incubators: IncubatorSlotItem[];
 };
 
+export type EquipmentSetUpgradesPayload = {
+  setCount: number;
+  setSlotBonusCount: number;
+  nextSlotUpgradeCostCrackedEggs: number;
+  nextSetCostCrackedEggs: number;
+};
+
 export type PlayerInventoryPayload = {
   mysteryEggs: MysteryEggBalance[];
   crackedEggResources: EggResourceBalance[];
@@ -184,5 +200,6 @@ export type PlayerInventoryPayload = {
   consumables: SlottedGrid<ConsumableSlotItem>;
   equipment: SlottedGrid<EquipmentSlotItem>;
   equipmentSets: EquipmentSetPayload[];
+  equipmentSetUpgrades: EquipmentSetUpgradesPayload;
   hats: SlottedGrid<HatSlotItem>;
 };

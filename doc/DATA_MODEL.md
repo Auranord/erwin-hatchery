@@ -439,7 +439,7 @@ label text
 base_slot_count integer -- default 3
 bonus_slot_count integer -- default 0
 selected_for_event boolean
-upgrade_ref text -- equipment_set_slots
+upgrade_ref text -- equipment_set_slots; additional set purchases are ledgered with additional_equipment_sets
 created_at timestamp
 updated_at timestamp
 unique(user_id, set_index)
@@ -456,7 +456,7 @@ updated_at timestamp
 unique(user_id, slot_index)
 unique(equipment_set_id, equipment_set_slot_index)
 
-Each equipment item must have exactly one stable location: a normal `slot_index`, an `(equipment_set_id, equipment_set_slot_index)`, or a temporary all-null location while a transaction performs a swap. Equipment assigned to a set is omitted from the normal equipment inventory payload.
+Equipment-set slot upgrades are modeled by increasing `bonus_slot_count` on every set owned by the player; new sets copy the current maximum `bonus_slot_count` so global set-slot upgrades apply to future sets. Additional equipment set purchases create another `equipment_sets` row with the next `set_index`. Each equipment item must have exactly one stable location: a normal `slot_index`, an `(equipment_set_id, equipment_set_slot_index)`, or a temporary all-null location while a transaction performs a swap. Equipment assigned to a set is omitted from the normal equipment inventory payload.
 
 hats:
 id text primary key
@@ -616,7 +616,7 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation and inventory row upgrade is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Twitch reward-ingestion tables
