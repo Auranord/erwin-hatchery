@@ -5,6 +5,7 @@ import {
   clearSetupStateCookie,
   completeSetupOAuth,
   createSetupStateCookie,
+  finalizeSetupIfReady,
   getSetupStatus,
   runAllBackfills,
   runHealthCheck,
@@ -50,6 +51,7 @@ export async function registerSetupRoutes(app: FastifyInstance): Promise<void> {
 
   app.post('/api/setup/resync-eventsub', async (request) => {
     await syncChannelPointRedemptionEventSub(request.log);
+    await finalizeSetupIfReady();
     return getSetupStatus();
   });
 
