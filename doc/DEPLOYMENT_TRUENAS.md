@@ -232,3 +232,9 @@ Troubleshooting:
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
+
+## First-run Twitch setup on TrueNAS
+
+Set `TWITCH_BITS_PER_VOUCHER` and the Twitch OAuth/EventSub variables before first boot. After migrations run, open the web app and complete the German setup screen with the configured broadcaster account. The app will persist setup state, sync EventSub subscriptions against `PUBLIC_APP_URL/api/twitch/eventsub`, run active-subscription backfill, and import the Bits leaderboard baseline.
+
+If OAuth scopes are revoked or EventSub is revoked/unhealthy, the UI enters repair state. Use the admin/setup buttons to re-run health checks, resync EventSub, continue backfill, or reauthenticate the broadcaster. No automatic production deployment is added by this milestone.

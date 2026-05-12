@@ -190,3 +190,11 @@ Use official/current Twitch docs when implementing:
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
+
+## Twitch OAuth, EventSub, and paid reward compliance
+
+Broadcaster setup OAuth must be performed by `TWITCH_BROADCASTER_ID`; mismatched accounts are rejected. Required scopes are `channel:read:subscriptions`, `channel:read:redemptions`, `channel:manage:redemptions`, and `bits:read`. Tokens continue to use `twitch_user_tokens`; access tokens, refresh tokens, webhook secrets, and raw authorization headers must never be logged.
+
+EventSub webhook signatures are validated before processing. Revocations are handled explicitly: authorization-related revocations set `requires_reauth=true`, while delivery-related failures mark EventSub unhealthy and expose repair/resync controls. Twitch has retry/downtime limits and no full historical EventSub replay, so the backfill flow is documented as best effort.
+
+Bits and subscriptions are paid Twitch interactions and therefore only grant fixed transparent Gutscheine (`voucher`). They never grant random eggs or other paid random rewards.

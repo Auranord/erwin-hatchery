@@ -151,3 +151,9 @@ pnpm build
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
+
+## Twitch reward-ingestion setup
+
+A fresh deployment starts in a Twitch setup/repair state until the configured broadcaster completes `/api/setup/twitch/login`. The setup OAuth flow must be completed by `TWITCH_BROADCASTER_ID` and requests `channel:read:subscriptions`, `channel:read:redemptions`, `channel:manage:redemptions`, and `bits:read`. The setup state is persisted in `twitch_integration_state`, so setup/backfill can resume after restarts.
+
+Subscriptions, gift subs, and Bits grant fixed **Gutscheine** (`voucher`) only. Channel Points remain the only random egg source; paid support events never grant random rewards. Twitch does not provide complete historical EventSub replay. The setup backfill imports currently visible subscriptions and Bits leaderboard baselines best-effort only.
