@@ -573,8 +573,6 @@ export const consumableInventorySlots = pgTable(
       .notNull()
       .references(() => consumableTypes.id),
     slotIndex: integer('slot_index'),
-    equipmentSetId: uuid('equipment_set_id').references(() => equipmentSets.id),
-    equipmentSetSlotIndex: integer('equipment_set_slot_index'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

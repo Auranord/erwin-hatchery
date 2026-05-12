@@ -64,6 +64,13 @@
       "when": 1778500007000,
       "tag": "0008_shop_purchase_eligibility",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778500008000,
+      "tag": "0009_remove_consumable_equipment_set_columns",
+      "breakpoints": true
     }
   ]
 }
