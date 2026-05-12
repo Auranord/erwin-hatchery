@@ -1361,6 +1361,7 @@ export function App(): JSX.Element {
     try {
       await setPetFavorite(petId, isFavorite);
       await refreshOwnInventory();
+      setSelectedPayload(null);
       showGameMessage(
         isFavorite
           ? 'Pet als Favorit markiert.'
@@ -1397,6 +1398,7 @@ export function App(): JSX.Element {
       await setPetNickname(renamePetDraft.petId, renamePetDraft.nickname);
       setRenamePetDraft(null);
       await refreshOwnInventory();
+      setSelectedPayload(null);
       showGameMessage('Pet wurde umbenannt.');
     } catch (error) {
       showGameError(error);
@@ -2171,6 +2173,23 @@ export function App(): JSX.Element {
     );
   }
 
+  function showSelectedPayloadStats(): void {
+    if (!selectedPayload) return;
+
+    setStatsPayload(selectedPayload);
+    setSelectedPayload(null);
+  }
+
+  function startSelectedPetRename(selectedPet: PetItem | null): void {
+    if (!selectedPet) return;
+
+    setRenamePetDraft({
+      petId: selectedPet.id,
+      nickname: selectedPet.nickname ?? selectedPet.speciesDisplayName
+    });
+    setSelectedPayload(null);
+  }
+
   function recycleSelectedPayload(): void {
     if (!selectedPayload) return;
     if (selectedPayload.kind === 'pet') {
@@ -2217,7 +2236,7 @@ export function App(): JSX.Element {
         <button
           type="button"
           disabled={!isSelectedHere}
-          onClick={() => setStatsPayload(selectedPayload)}
+          onClick={showSelectedPayloadStats}
           title="Werte anzeigen"
           aria-label="Werte anzeigen"
         >
@@ -2239,14 +2258,7 @@ export function App(): JSX.Element {
             <button
               type="button"
               disabled={!selectedPet}
-              onClick={() => {
-                if (selectedPet) {
-                  setRenamePetDraft({
-                    petId: selectedPet.id,
-                    nickname: selectedPet.nickname ?? selectedPet.speciesDisplayName
-                  });
-                }
-              }}
+              onClick={() => startSelectedPetRename(selectedPet)}
               title="Pet umbenennen"
               aria-label="Pet umbenennen"
             >
