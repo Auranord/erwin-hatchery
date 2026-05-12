@@ -1,6 +1,7 @@
 import { db, pool } from './client.js';
 import { eq, sql } from 'drizzle-orm';
 import {
+  consumableTypes,
   eggLootTableEntries,
   eggTypes,
   equipmentTypes,
@@ -234,6 +235,231 @@ const PET_POOL = [
   { code: 'lichtseraph', displayName: 'Lichtseraph', rarity: 'legendary', weight: 3, element: 'light', classId: 'nullifier' }
 ] as const satisfies readonly SeedPet[];
 
+type StatId = 'hp' | 'atk' | 'def' | 'spd' | 'gain' | 'pow';
+
+type SeedConsumable = {
+  id: string;
+  displayName: string;
+  description: string;
+  increaseStat: StatId;
+  decreaseStat: StatId;
+};
+
+const PET_BASE_STATS = ['hp', 'atk', 'def', 'spd', 'gain', 'pow'] as const satisfies readonly StatId[];
+
+const STAT_TRADEOFF_CONSUMABLES = [
+  {
+    id: 'lebkuchen_herz',
+    displayName: 'Lebkuchen-Herz',
+    description: 'Schenkt extra Ausdauer, macht den Hieb aber sanfter.',
+    increaseStat: 'hp',
+    decreaseStat: 'atk'
+  },
+  {
+    id: 'marshmallow_polster',
+    displayName: 'Marshmallow-Polster',
+    description: 'Füllt die Reserven auf, lässt die Schale aber nachgiebiger werden.',
+    increaseStat: 'hp',
+    decreaseStat: 'def'
+  },
+  {
+    id: 'sahneherz_taler',
+    displayName: 'Sahneherz-Taler',
+    description: 'Gibt mehr Durchhaltevermögen, während die Schritte träger werden.',
+    increaseStat: 'hp',
+    decreaseStat: 'spd'
+  },
+  {
+    id: 'traubenzucker_herz',
+    displayName: 'Traubenzucker-Herz',
+    description: 'Stärkt die Reserven, bringt den inneren Takt aber kurz durcheinander.',
+    increaseStat: 'hp',
+    decreaseStat: 'gain'
+  },
+  {
+    id: 'pfirsich_herzgelee',
+    displayName: 'Pfirsich-Herzgelee',
+    description: 'Macht zäher, dämpft jedoch den besonderen Glanz.',
+    increaseStat: 'hp',
+    decreaseStat: 'pow'
+  },
+  {
+    id: 'knallzucker_spiess',
+    displayName: 'Knallzucker-Spieß',
+    description: 'Zündet kräftige Treffer, kostet aber etwas Durchhaltevermögen.',
+    increaseStat: 'atk',
+    decreaseStat: 'hp'
+  },
+  {
+    id: 'zimtfunken_praline',
+    displayName: 'Zimtfunken-Praline',
+    description: 'Scharfe Süße für mehr Biss, aber mit dünnerer Schale.',
+    increaseStat: 'atk',
+    decreaseStat: 'def'
+  },
+  {
+    id: 'chili_knisterbonbon',
+    displayName: 'Chili-Knisterbonbon',
+    description: 'Macht den nächsten Antritt wuchtiger, aber weniger flink.',
+    increaseStat: 'atk',
+    decreaseStat: 'spd'
+  },
+  {
+    id: 'espresso_krokant',
+    displayName: 'Espresso-Krokant',
+    description: 'Bündelt rohe Kraft, kostet aber etwas Rhythmusgefühl.',
+    increaseStat: 'atk',
+    decreaseStat: 'gain'
+  },
+  {
+    id: 'rauchmandel_toffee',
+    displayName: 'Rauchmandel-Toffee',
+    description: 'Verdichtet den Treffer, lässt besondere Magie matter funkeln.',
+    increaseStat: 'atk',
+    decreaseStat: 'pow'
+  },
+  {
+    id: 'kandis_panzertaler',
+    displayName: 'Kandis-Panzertaler',
+    description: 'Härtet die Außenseite, lässt die Reserven aber knapper werden.',
+    increaseStat: 'def',
+    decreaseStat: 'hp'
+  },
+  {
+    id: 'karamell_schildkeks',
+    displayName: 'Karamell-Schildkeks',
+    description: 'Härtet die Kruste, nimmt dem Schnabel aber etwas Schärfe.',
+    increaseStat: 'def',
+    decreaseStat: 'atk'
+  },
+  {
+    id: 'marzipan_puffer',
+    displayName: 'Marzipan-Puffer',
+    description: 'Legt eine weiche Schutzschicht an, die Schritte schwerer macht.',
+    increaseStat: 'def',
+    decreaseStat: 'spd'
+  },
+  {
+    id: 'honig_wallriegel',
+    displayName: 'Honig-Wallriegel',
+    description: 'Klebt zuverlässig als Schutz, bremst aber den Kampftakt.',
+    increaseStat: 'def',
+    decreaseStat: 'gain'
+  },
+  {
+    id: 'nougat_bastion',
+    displayName: 'Nougat-Bastion',
+    description: 'Stärkt die Deckung, dämpft dafür das innere Glitzern.',
+    increaseStat: 'def',
+    decreaseStat: 'pow'
+  },
+  {
+    id: 'pfefferminz_flitzer',
+    displayName: 'Pfefferminz-Flitzer',
+    description: 'Macht hellwach und schnell, zehrt aber an der Ausdauer.',
+    increaseStat: 'spd',
+    decreaseStat: 'hp'
+  },
+  {
+    id: 'brause_flitzdrop',
+    displayName: 'Brause-Flitzdrop',
+    description: 'Prickelt in den Füßen, doch der Hieb wird leichter.',
+    increaseStat: 'spd',
+    decreaseStat: 'atk'
+  },
+  {
+    id: 'zuckerwind_stange',
+    displayName: 'Zuckerwind-Stange',
+    description: 'Bringt Tempo in die Federn, aber macht die Hülle fragiler.',
+    increaseStat: 'spd',
+    decreaseStat: 'def'
+  },
+  {
+    id: 'limetten_sausekugel',
+    displayName: 'Limetten-Sausekugel',
+    description: 'Zündet schnelle Bewegungen, kostet aber etwas Flow.',
+    increaseStat: 'spd',
+    decreaseStat: 'gain'
+  },
+  {
+    id: 'wolkenwatte_happen',
+    displayName: 'Wolkenwatte-Happen',
+    description: 'Macht federleicht und fix, schwächt jedoch den Zauberfunken.',
+    increaseStat: 'spd',
+    decreaseStat: 'pow'
+  },
+  {
+    id: 'karamell_taktbonbon',
+    displayName: 'Karamell-Taktbonbon',
+    description: 'Hilft, schneller in den Flow zu finden, nimmt aber etwas Reserve.',
+    increaseStat: 'gain',
+    decreaseStat: 'hp'
+  },
+  {
+    id: 'sirup_taktgeber',
+    displayName: 'Sirup-Taktgeber',
+    description: 'Findet schneller in den Kampfrhythmus, mit etwas weniger Wucht.',
+    increaseStat: 'gain',
+    decreaseStat: 'atk'
+  },
+  {
+    id: 'lakritz_kompass',
+    displayName: 'Lakritz-Kompass',
+    description: 'Richtet den inneren Takt aus, lockert aber die Deckung.',
+    increaseStat: 'gain',
+    decreaseStat: 'def'
+  },
+  {
+    id: 'honigwirbel_lolli',
+    displayName: 'Honigwirbel-Lolli',
+    description: 'Lässt Aktionen runder laufen, während die Beine schwerer werden.',
+    increaseStat: 'gain',
+    decreaseStat: 'spd'
+  },
+  {
+    id: 'malzstern_gelee',
+    displayName: 'Malzstern-Gelee',
+    description: 'Sammelt Energie zuverlässiger, aber der Sternenglanz wird milder.',
+    increaseStat: 'gain',
+    decreaseStat: 'pow'
+  },
+  {
+    id: 'mondschein_dragee',
+    displayName: 'Mondschein-Dragée',
+    description: 'Lässt Sonderfunken heller strahlen, macht aber weniger zäh.',
+    increaseStat: 'pow',
+    decreaseStat: 'hp'
+  },
+  {
+    id: 'sternzucker_trueffel',
+    displayName: 'Sternzucker-Trüffel',
+    description: 'Bringt Sonderfunken zum Leuchten, macht normale Treffer sanfter.',
+    increaseStat: 'pow',
+    decreaseStat: 'atk'
+  },
+  {
+    id: 'mondglas_bonbon',
+    displayName: 'Mondglas-Bonbon',
+    description: 'Lädt geheimnisvolle Kräfte auf, lässt die Schale dünner wirken.',
+    increaseStat: 'pow',
+    decreaseStat: 'def'
+  },
+  {
+    id: 'glitzer_makrone',
+    displayName: 'Glitzer-Makrone',
+    description: 'Verstärkt das Funkeln, aber die Bewegung wird gemächlicher.',
+    increaseStat: 'pow',
+    decreaseStat: 'spd'
+  },
+  {
+    id: 'vanille_orakel',
+    displayName: 'Vanille-Orakel',
+    description: 'Öffnet den Blick für besondere Momente, stört jedoch den Takt.',
+    increaseStat: 'pow',
+    decreaseStat: 'gain'
+  }
+] as const satisfies readonly SeedConsumable[];
+
 function statValueForRarity(rarity: RarityId): number {
   const rarityRank = PET_RARITIES.find((entry) => entry.id === rarity)?.rank;
   if (!rarityRank) throw new Error(`Unknown rarity ${rarity}`);
@@ -328,10 +554,40 @@ function validateBetaEggResourceRewards(): void {
   }
 }
 
+function validateStatTradeoffConsumables(): void {
+  const ids = new Set(STAT_TRADEOFF_CONSUMABLES.map((entry) => entry.id));
+  if (ids.size !== STAT_TRADEOFF_CONSUMABLES.length) {
+    throw new Error('Invalid seed data: consumable IDs must be unique');
+  }
+
+  const expectedCombinations = PET_BASE_STATS.length * (PET_BASE_STATS.length - 1);
+  if (STAT_TRADEOFF_CONSUMABLES.length !== expectedCombinations) {
+    throw new Error(
+      `Invalid seed data: expected ${expectedCombinations} stat tradeoff consumables, got ${STAT_TRADEOFF_CONSUMABLES.length}`
+    );
+  }
+
+  const combinations = new Set(
+    STAT_TRADEOFF_CONSUMABLES.map((entry) => `${entry.increaseStat}:${entry.decreaseStat}`)
+  );
+
+  for (const increaseStat of PET_BASE_STATS) {
+    for (const decreaseStat of PET_BASE_STATS) {
+      if (increaseStat === decreaseStat) continue;
+      if (!combinations.has(`${increaseStat}:${decreaseStat}`)) {
+        throw new Error(
+          `Invalid seed data: missing consumable tradeoff +${increaseStat}/-${decreaseStat}`
+        );
+      }
+    }
+  }
+}
+
 async function seed(): Promise<void> {
   validatePetPool();
   validateBetaEggResourceRewards();
   validateGemEquipment();
+  validateStatTradeoffConsumables();
 
   await db.insert(eggTypes).values({
     id: BETA_EGG_TYPE_ID,
@@ -445,6 +701,33 @@ async function seed(): Promise<void> {
     { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
   ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
 
+  await db.insert(consumableTypes).values(
+    STAT_TRADEOFF_CONSUMABLES.map((consumable) => ({
+      id: consumable.id,
+      displayName: consumable.displayName,
+      description: consumable.description,
+      effectType: 'pet_stat_tradeoff',
+      config: {
+        target: 'pet',
+        duration: 'permanent',
+        statModifiers: {
+          [consumable.increaseStat]: 1,
+          [consumable.decreaseStat]: -1
+        }
+      },
+      isActive: true
+    }))
+  ).onConflictDoUpdate({
+    target: consumableTypes.id,
+    set: {
+      displayName: sql`excluded.display_name`,
+      description: sql`excluded.description`,
+      effectType: sql`excluded.effect_type`,
+      config: sql`excluded.config`,
+      isActive: true
+    }
+  });
+
   await db.insert(petSpecies).values(
     PET_POOL.map((pet) => {
       const statValue = statValueForRarity(pet.rarity);
@@ -510,6 +793,7 @@ async function seed(): Promise<void> {
   ]);
 
   console.info('Seed completed for Beta Ei, tiered gem equipment, MVP pet pool, and weighted pet/resource loot table.');
+  console.info('Seed completed for Beta Ei, Beta Gem, sweet stat-tradeoff consumables, MVP pet pool, and weighted pet/resource loot table.');
 }
 
 void seed()

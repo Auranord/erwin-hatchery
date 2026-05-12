@@ -190,6 +190,8 @@ Suggested MVP consumables:
 | Kraftfutter | Small permanent or temporary stat change to a selected pet, if implemented in MVP |
 | Wärmekissen | Reduces remaining incubation time for one selected egg                            |
 
+Seeded consumable content now includes 30 sweets-themed pet stat tradeoffs covering every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW: each sweet grants +1 to one stat and -1 to a different stat. Their German display names hint at the tradeoff through flavor text rather than using the stat names directly.
+
 If time is limited, implement only `Wärmekissen` first and keep the data model ready for more.
 
 Suggested MVP upgrades:
