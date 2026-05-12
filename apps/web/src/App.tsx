@@ -210,6 +210,12 @@ type EquipmentSet = {
   slots: EquipmentSetSlot[];
 };
 type HatItem = { id: string; hatId: string };
+type EquipmentSetUpgrades = {
+  setCount: number;
+  setSlotBonusCount: number;
+  nextSlotUpgradeCostCrackedEggs: number;
+  nextSetCostCrackedEggs: number;
+};
 type PlayerInventory = {
   mysteryEggs: Array<{ eggTypeId: string; amount: number }>;
   crackedEggResources: Array<{ resourceType: string; amount: number }>;
@@ -219,6 +225,7 @@ type PlayerInventory = {
   consumables: InventoryGrid<ConsumableItem>;
   equipment: InventoryGrid<EquipmentItem>;
   equipmentSets: EquipmentSet[];
+  equipmentSetUpgrades: EquipmentSetUpgrades;
   hats: InventoryGrid<HatItem>;
 };
 type SelectionPayload =
@@ -348,6 +355,7 @@ const EGG_RESOURCE_LABELS: Record<string, string> = {
 
 const EGG_RESOURCE_ASSET_KEYS = new Set(['cracked_eggs']);
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
+const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 
 function formatMysteryEggType(eggTypeId: string): string {
   return MYSTERY_EGG_LABELS[eggTypeId] ?? eggTypeId;
@@ -713,6 +721,37 @@ export function App(): JSX.Element {
       if (!response.ok) {
         throw new Error(
           payload?.message ?? 'Inventar-Erweiterung fehlgeschlagen.'
+        );
+      }
+      if (payload?.inventory) setPlayerInventory(payload.inventory);
+      else await refreshOwnInventory();
+    } finally {
+      setUpgradingInventoryKind(null);
+    }
+  }
+
+  async function buyEquipmentSetUpgrade(
+    upgradeKind: 'equipment-set-slots' | 'additional-equipment-set'
+  ): Promise<void> {
+    if (upgradingInventoryKind) return;
+    setUpgradingInventoryKind(upgradeKind);
+    const endpoint =
+      upgradeKind === 'equipment-set-slots'
+        ? '/api/game/equipment-sets/upgrade-slots'
+        : '/api/game/equipment-sets/buy';
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        inventory?: PlayerInventory;
+        message?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ?? 'Ausrüstungsset-Erweiterung fehlgeschlagen.'
         );
       }
       if (payload?.inventory) setPlayerInventory(payload.inventory);
@@ -2060,13 +2099,68 @@ export function App(): JSX.Element {
     );
   }
 
-  function renderEquipmentSetsPanel(sets: EquipmentSet[]): JSX.Element {
+  function renderEquipmentSetsPanel(
+    sets: EquipmentSet[],
+    upgrades: EquipmentSetUpgrades
+  ): JSX.Element {
+    const crackedEggBalance = getCrackedEggBalance();
+    const isSlotUpgradePending = upgradingInventoryKind === 'equipment-set-slots';
+    const isSetBuyPending = upgradingInventoryKind === 'additional-equipment-set';
+
     return (
       <section className="inventory-panel equipment-set-panel">
         <div className="equipment-set-header">
           <div>
             <h3>Ausrüstungssets</h3>
             <p className="inventory-capacity">Ausrüstung im Set verschwindet aus dem normalen Raster.</p>
+          </div>
+        </div>
+        <div className="equipment-set-upgrade-actions">
+          <div className="inventory-upgrade-panel equipment-set-upgrade-panel">
+            <div>
+              <strong>Set-Slots erweitern</strong>
+              <p>
+                +1 Slot für jedes bestehende und zukünftige Set · Du hast {crackedEggBalance} Aufgebrochene Eier.
+                Das nächste Slot-Upgrade kostet danach doppelt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void buyEquipmentSetUpgrade('equipment-set-slots');
+              }}
+              disabled={
+                upgradingInventoryKind !== null ||
+                crackedEggBalance < upgrades.nextSlotUpgradeCostCrackedEggs
+              }
+            >
+              {isSlotUpgradePending
+                ? 'Erweitere …'
+                : `${upgrades.nextSlotUpgradeCostCrackedEggs} Aufgebrochene Eier`}
+            </button>
+          </div>
+          <div className="inventory-upgrade-panel equipment-set-upgrade-panel">
+            <div>
+              <strong>Weiteres Set kaufen</strong>
+              <p>
+                +1 zusätzliches Ausrüstungsset mit {DEFAULT_EQUIPMENT_SET_BASE_SLOTS + upgrades.setSlotBonusCount} Slots · Du hast {crackedEggBalance} Aufgebrochene Eier.
+                Der nächste Set-Kauf kostet danach doppelt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void buyEquipmentSetUpgrade('additional-equipment-set');
+              }}
+              disabled={
+                upgradingInventoryKind !== null ||
+                crackedEggBalance < upgrades.nextSetCostCrackedEggs
+              }
+            >
+              {isSetBuyPending
+                ? 'Kaufe …'
+                : `${upgrades.nextSetCostCrackedEggs} Aufgebrochene Eier`}
+            </button>
           </div>
         </div>
         <div className="equipment-set-list">
@@ -2722,7 +2816,10 @@ export function App(): JSX.Element {
                     'item-panel',
                     undefined
                   )}
-                  {renderEquipmentSetsPanel(playerInventory.equipmentSets)}
+                  {renderEquipmentSetsPanel(
+                    playerInventory.equipmentSets,
+                    playerInventory.equipmentSetUpgrades
+                  )}
                   {renderGrid(
                     'Ausrüstung',
                     playerInventory.equipment,

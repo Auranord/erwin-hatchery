@@ -36,6 +36,8 @@ import {
 } from '../services/streamState.js';
 import {
   DEFAULT_INVENTORY_GRIDS,
+  getAdditionalEquipmentSetCostCrackedEggs,
+  getEquipmentSetSlotUpgradeCostCrackedEggs,
   getInventoryRowUpgradeCostCrackedEggs,
   isSlotInsideGrid,
   type InventoryGridDimensions,
@@ -89,6 +91,7 @@ const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
+const ADDITIONAL_EQUIPMENT_SET_UPGRADE_REF = 'additional_equipment_sets';
 const PET_SCRAP_REWARD_BY_RARITY: Record<string, number> = {
   common: 1,
   uncommon: 3,
@@ -196,6 +199,20 @@ async function ensureEquipmentSetsInTx(
     .onConflictDoNothing({
       target: [equipmentSets.userId, equipmentSets.setIndex]
     });
+}
+
+async function getEquipmentSetBonusSlotCountInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<number> {
+  await ensureEquipmentSetsInTx(tx, userId);
+  const [row] = await tx
+    .select({
+      bonusSlotCount: sql<number>`coalesce(max(${equipmentSets.bonusSlotCount}), 0)`
+    })
+    .from(equipmentSets)
+    .where(eq(equipmentSets.userId, userId));
+  return row?.bonusSlotCount ?? 0;
 }
 
 async function getDimensionsInTx(
@@ -739,6 +756,11 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
   );
   const hatDimensions = dimensionsFromRow('hats', dimensionsByKind.get('hats'));
   const jobsBySlot = new Map(jobRows.map((job) => [job.incubatorSlotId, job]));
+  const equipmentSetBonusSlotCount = equipmentSetRows.reduce(
+    (maxBonus, set) => Math.max(maxBonus, set.bonusSlotCount),
+    0
+  );
+  const additionalEquipmentSetCount = Math.max(0, equipmentSetRows.length - 1);
 
   return {
     mysteryEggs: mysteryEggs.map((row) => ({
@@ -888,6 +910,16 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         }))
       };
     }),
+    equipmentSetUpgrades: {
+      setCount: equipmentSetRows.length,
+      setSlotBonusCount: equipmentSetBonusSlotCount,
+      nextSlotUpgradeCostCrackedEggs: getEquipmentSetSlotUpgradeCostCrackedEggs(
+        equipmentSetBonusSlotCount
+      ),
+      nextSetCostCrackedEggs: getAdditionalEquipmentSetCostCrackedEggs(
+        additionalEquipmentSetCount
+      )
+    },
     hats: {
       dimensions: hatDimensions,
       slots: cellsForGrid(
@@ -1449,6 +1481,176 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .code(400)
         .send({ message: 'Dieses Inventar kann nicht erweitert werden.' });
     }
+    if (result.kind === 'insufficient_resources') {
+      return reply.code(409).send({
+        message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`
+      });
+    }
+
+    const inventory = await loadPlayerInventory(identity.userId);
+    return { inventory };
+  });
+
+  app.post('/api/game/equipment-sets/upgrade-slots', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+      const currentBonusSlotCount = await getEquipmentSetBonusSlotCountInTx(
+        tx,
+        identity.userId
+      );
+      const cost = getEquipmentSetSlotUpgradeCostCrackedEggs(
+        currentBonusSlotCount
+      );
+      const now = new Date();
+
+      const debitedResources = await tx
+        .update(resources)
+        .set({ amount: sql`${resources.amount} - ${cost}`, updatedAt: now })
+        .where(
+          and(
+            eq(resources.userId, identity.userId),
+            eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+            sql`${resources.amount} >= ${cost}`
+          )
+        )
+        .returning({ amount: resources.amount });
+
+      if (debitedResources.length === 0) {
+        return { kind: 'insufficient_resources' as const, cost };
+      }
+
+      const nextBonusSlotCount = currentBonusSlotCount + 1;
+      const updatedSets = await tx
+        .update(equipmentSets)
+        .set({ bonusSlotCount: nextBonusSlotCount, updatedAt: now })
+        .where(eq(equipmentSets.userId, identity.userId))
+        .returning({
+          id: equipmentSets.id,
+          baseSlotCount: equipmentSets.baseSlotCount,
+          bonusSlotCount: equipmentSets.bonusSlotCount
+        });
+
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'equipment_set_slots_upgraded',
+        sourceType: 'player_action',
+        delta: {
+          equipmentSets: updatedSets.map((set) => ({
+            id: set.id,
+            upgradeRef: DEFAULT_EQUIPMENT_SET_UPGRADE_REF,
+            previousSlotCount: set.baseSlotCount + currentBonusSlotCount,
+            newSlotCount: set.baseSlotCount + set.bonusSlotCount,
+            previousBonusSlotCount: currentBonusSlotCount,
+            newBonusSlotCount: set.bonusSlotCount
+          })),
+          resources: [
+            { resourceType: CRACKED_EGGS_RESOURCE_TYPE, amountDelta: -cost }
+          ]
+        }
+      });
+
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind === 'insufficient_resources') {
+      return reply.code(409).send({
+        message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`
+      });
+    }
+
+    const inventory = await loadPlayerInventory(identity.userId);
+    return { inventory };
+  });
+
+  app.post('/api/game/equipment-sets/buy', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+      const currentBonusSlotCount = await getEquipmentSetBonusSlotCountInTx(
+        tx,
+        identity.userId
+      );
+      const existingSets = await tx
+        .select({ setIndex: equipmentSets.setIndex })
+        .from(equipmentSets)
+        .where(eq(equipmentSets.userId, identity.userId));
+      const additionalSetCount = Math.max(0, existingSets.length - 1);
+      const cost = getAdditionalEquipmentSetCostCrackedEggs(additionalSetCount);
+      const now = new Date();
+
+      const debitedResources = await tx
+        .update(resources)
+        .set({ amount: sql`${resources.amount} - ${cost}`, updatedAt: now })
+        .where(
+          and(
+            eq(resources.userId, identity.userId),
+            eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+            sql`${resources.amount} >= ${cost}`
+          )
+        )
+        .returning({ amount: resources.amount });
+
+      if (debitedResources.length === 0) {
+        return { kind: 'insufficient_resources' as const, cost };
+      }
+
+      const nextSetIndex = existingSets.reduce(
+        (maxIndex, set) => Math.max(maxIndex, set.setIndex),
+        -1
+      ) + 1;
+      const [createdSet] = await tx
+        .insert(equipmentSets)
+        .values({
+          userId: identity.userId,
+          setIndex: nextSetIndex,
+          label: `Set ${nextSetIndex + 1}`,
+          baseSlotCount: DEFAULT_EQUIPMENT_SET_BASE_SLOTS,
+          bonusSlotCount: currentBonusSlotCount,
+          selectedForEvent: false,
+          upgradeRef: DEFAULT_EQUIPMENT_SET_UPGRADE_REF,
+          updatedAt: now
+        })
+        .returning({
+          id: equipmentSets.id,
+          setIndex: equipmentSets.setIndex,
+          label: equipmentSets.label,
+          baseSlotCount: equipmentSets.baseSlotCount,
+          bonusSlotCount: equipmentSets.bonusSlotCount
+        });
+
+      if (!createdSet) throw new Error('Failed to create equipment set');
+
+      await tx.insert(economyLedger).values({
+        userId: identity.userId,
+        actorUserId: identity.userId,
+        eventType: 'equipment_set_bought',
+        sourceType: 'player_action',
+        sourceId: createdSet.id,
+        delta: {
+          equipmentSets: [
+            {
+              id: createdSet.id,
+              setIndex: createdSet.setIndex,
+              label: createdSet.label,
+              upgradeRef: ADDITIONAL_EQUIPMENT_SET_UPGRADE_REF,
+              slotCount: createdSet.baseSlotCount + createdSet.bonusSlotCount
+            }
+          ],
+          resources: [
+            { resourceType: CRACKED_EGGS_RESOURCE_TYPE, amountDelta: -cost }
+          ]
+        }
+      });
+
+      return { kind: 'ok' as const };
+    });
+
     if (result.kind === 'insufficient_resources') {
       return reply.code(409).send({
         message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`

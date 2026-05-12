@@ -202,6 +202,8 @@ Suggested MVP upgrades:
 | Incubator Level 3 | Larger incubation speed bonus                  |
 | Incubator Level 4 | Larger incubation speed bonus                  |
 | Inventory row    | Adds one row to a slotted inventory; costs 500 Aufgebrochene Eier for the first row on each inventory and doubles after every upgrade |
+| Equipment set slot | Adds one slot to every current equipment set and all future sets; costs 500 Aufgebrochene Eier for the first slot upgrade and doubles after every upgrade |
+| Additional equipment set | Adds one extra equipment set using the current global set slot count; costs 500 Aufgebrochene Eier for the first additional set and doubles after every set purchase |
 
 ## Bits and subs
 
@@ -318,7 +320,7 @@ Implement this in a simple and transparent way.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space. Scrapping a pet deletes the pet after explicit confirmation, grants `cracked_eggs` from rarity recycle metadata, and writes a ledger row; rarity still never multiplies stats.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Reward-ingestion milestone rules
