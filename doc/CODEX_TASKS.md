@@ -207,7 +207,7 @@ Acceptance:
 - Use `pet_species` for species templates/default stats and species default abilities, and `pets` for owned pet instances with permanent base stats derived from species defaults plus hatch variance, an individual ability copied from the species at hatch, server-authoritative level/experience progression fields, and a favorite flag that future fusion material selection must honor.
 - Do not use rarity as a stat multiplier; `pet_rarities` is for rank, display/economy metadata, combine progression, and recycle value only.
 - Each pet has exactly one class, one element, one individual ability, level 0, 0 experience, favorite false, and a trait list via `pet_trait_assignments` when created. Each trait defines positive or negative modifiers for every base stat. Each pet may equip one cosmetic hat; hats never affect combat stats.
-- Do not implement gems for this pass.
+- Gem equipment seed data exists for three stat-bonus tiers; future work must keep any equipment stat aggregation server-authoritative and ledger relevant grants/mutations.
 - Keep current AP, current HP, attacks made, effective stats, boss class stacks, and boss element stacks on boss-event participant runtime state, not on pets.
 - Future ability rules are documentation-only for now: `pet_abilities.ap_required` is the AP auto-trigger threshold; trigger when current AP and minimum attacks are met; attacks grant 20 base AP; GAIN modifies AP gained; POW scales ability effects.
 - Do not implement boss-event battle logic in code until explicitly requested.

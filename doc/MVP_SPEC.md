@@ -141,7 +141,7 @@ Definitions:
 - Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
 - Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.
 - Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
-- Gems are not equipped directly on pets and final gem combat mechanics remain out of scope. The Beta includes a placeholder equipment item named `Beta Gem` for testing equipment-set inventory placement only; it has no combat effect.
+- Gems are equipment-set items rather than direct pet equipment. The seed data includes themed gem equipment in three tiers with explicit `config.statBonuses`: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP. Final event stat aggregation can consume these config values later; paid random gem rewards are not part of the MVP.
 
 Seeded class roles:
 

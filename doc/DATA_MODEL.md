@@ -395,7 +395,7 @@ Pet invariants:
 - Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
 - A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
-- Final gem combat mechanics are intentionally not part of the pet equipment model in this pass. This Beta adds a placeholder equipment item named `Beta Gem` (`equipment_slot = gem`) only to test server-authoritative equipment-set placement; it has no combat effect and does not define final gem mechanics.
+- Gem equipment is modeled through `equipment_types` with `equipment_slot = gem` and config-only stat bonuses. Seeded gems use three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 for HP. Event stat aggregation may consume these values server-side later; browsers must not be trusted to apply equipment effects.
 - Current AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
 
 Future fields can include level, experience, fusion count, and richer training history.
