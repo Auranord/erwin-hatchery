@@ -153,10 +153,9 @@ async function ensureState(values: Partial<typeof twitchIntegrationState.$inferI
   return row;
 }
 
-export async function getSetupStatus() {
+async function readSetupReadiness() {
   const [state] = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
   const health = await checkEventSubHealth();
-  const backfills = await db.select().from(twitchBackfillRuns).orderBy(desc(twitchBackfillRuns.startedAt)).limit(10);
   const tokenRows = await db
     .select({ scope: twitchUserTokens.scope })
     .from(twitchUserTokens)
@@ -166,15 +165,29 @@ export async function getSetupStatus() {
   const missingScopes = tokenRows[0]
     ? missingRequiredScopes(tokenRows[0].scope)
     : REQUIRED_BROADCASTER_SCOPES.slice();
-  const completed = Boolean(
-    state?.setupCompletedAt &&
-      !state.requiresReauth &&
-      state.eventsubSyncedAt &&
-      state.subscriptionBackfillCompletedAt &&
-      state.bitsBackfillCompletedAt &&
+  const ready = Boolean(
+    tokenRows[0] &&
       missingScopes.length === 0 &&
-      health.enabled
+      !state?.requiresReauth &&
+      health.enabled &&
+      state?.eventsubSyncedAt &&
+      state.subscriptionBackfillCompletedAt &&
+      state.bitsBackfillCompletedAt
   );
+
+  return { state, health, missingScopes, ready };
+}
+
+export async function finalizeSetupIfReady(): Promise<void> {
+  const { state, ready } = await readSetupReadiness();
+  if (!ready || state?.setupCompletedAt) return;
+  await ensureState({ setupCompletedAt: new Date(), lastError: null });
+}
+
+export async function getSetupStatus() {
+  const { state, health, missingScopes, ready } = await readSetupReadiness();
+  const backfills = await db.select().from(twitchBackfillRuns).orderBy(desc(twitchBackfillRuns.startedAt)).limit(10);
+  const completed = Boolean(state?.setupCompletedAt && ready);
   return {
     completed,
     requiresReauth: state?.requiresReauth ?? false,
@@ -221,10 +234,7 @@ export async function completeSetupOAuth(code: string, log: { info: Function; wa
   await ensureState({ broadcasterUserId: twitchUser.id, broadcasterLogin: twitchUser.login, requiredScopes: REQUIRED_BROADCASTER_SCOPES.join(' '), requiresReauth: false, lastError: null });
   await syncChannelPointRedemptionEventSub(log);
   await runAllBackfills(log);
-  const status = await getSetupStatus();
-  if (status.missingScopes.length === 0 && status.eventSub.enabled && status.subscriptionBackfillCompletedAt && status.bitsBackfillCompletedAt) {
-    await ensureState({ setupCompletedAt: new Date(), lastError: null, requiresReauth: false });
-  }
+  await finalizeSetupIfReady();
   return getSetupStatus();
 }
 
@@ -243,6 +253,7 @@ export async function runHealthCheck(log: { info: Function; warn: Function; erro
     await syncChannelPointRedemptionEventSub(log);
     const status = await getSetupStatus();
     await ensureState({ lastHealthCheckAt: new Date(), requiresReauth: status.missingScopes.length > 0, eventsubHealthy: status.eventSub.enabled, lastError: status.eventSub.error });
+    await finalizeSetupIfReady();
     return getSetupStatus();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
@@ -301,7 +312,10 @@ async function createBackfillRun(type: string, source: string) {
 
 export async function runSubscriptionBackfill(): Promise<void> {
   const already = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
-  if (already[0]?.subscriptionBackfillCompletedAt) return;
+  if (already[0]?.subscriptionBackfillCompletedAt) {
+    await finalizeSetupIfReady();
+    return;
+  }
   const run = await createBackfillRun('subscriptions', 'helix/subscriptions');
   try {
     const token = await getBroadcasterToken();
@@ -331,6 +345,7 @@ export async function runSubscriptionBackfill(): Promise<void> {
     const now = new Date();
     await db.update(twitchBackfillRuns).set({ status: 'completed', completedAt: now }).where(eq(twitchBackfillRuns.id, run.id));
     await ensureState({ subscriptionBackfillCompletedAt: now, lastError: null });
+    await finalizeSetupIfReady();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
     await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
@@ -341,7 +356,10 @@ export async function runSubscriptionBackfill(): Promise<void> {
 
 export async function runBitsBackfill(): Promise<void> {
   const already = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
-  if (already[0]?.bitsBackfillCompletedAt) return;
+  if (already[0]?.bitsBackfillCompletedAt) {
+    await finalizeSetupIfReady();
+    return;
+  }
   const run = await createBackfillRun('bits', 'helix/bits/leaderboard');
   try {
     const token = await getBroadcasterToken();
@@ -363,6 +381,7 @@ export async function runBitsBackfill(): Promise<void> {
     const now = new Date();
     await db.update(twitchBackfillRuns).set({ status: 'completed', completedAt: now }).where(eq(twitchBackfillRuns.id, run.id));
     await ensureState({ bitsBackfillCompletedAt: now, lastError: null });
+    await finalizeSetupIfReady();
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
     await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
@@ -374,6 +393,7 @@ export async function runBitsBackfill(): Promise<void> {
 export async function runAllBackfills(log: { info: Function; warn: Function; error: Function }): Promise<void> {
   await runSubscriptionBackfill();
   await runBitsBackfill();
+  await finalizeSetupIfReady();
   log.info('Twitch setup backfills completed');
 }
 
