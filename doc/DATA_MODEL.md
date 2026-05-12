@@ -411,9 +411,11 @@ display_name text
 description text
 effect_type text
 config jsonb -- effect configuration
+resource_price integer -- cracked_eggs price for future shop purchases
+stock integer -- per-shop refresh stock for future shop purchases
 is_active boolean
 
-The seeded stat-tradeoff consumables cover every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW. Each sweet increases one stat by +1 and decreases a different stat by -1. Their `config` uses `{ target: 'pet', duration: 'permanent', statModifiers: { [increased_stat]: 1, [decreased_stat]: -1 } }`; display names and descriptions should hint at the effect without being named directly after stat codes.
+The seeded stat-tradeoff consumables cover every ordered pair among HP, ATK, DEF, SPD, GAIN, and POW. Each sweet increases one stat by +1 and decreases a different stat by -1. Their `config` uses `{ target: 'pet', duration: 'permanent', statModifiers: { [increased_stat]: 1, [decreased_stat]: -1 } }`; display names and descriptions should hint at the effect without being named directly after stat codes. All seeded stat-tradeoff consumables carry future shop metadata of `resource_price = 100` cracked eggs and `stock = 25`.
 
 consumable_inventory_slots:
 id uuid primary key
@@ -430,6 +432,8 @@ display_name text
 description text
 equipment_slot text
 config jsonb
+resource_price integer -- cracked_eggs price for future shop purchases
+stock integer -- per-shop refresh stock for future shop purchases
 is_active boolean
 created_at timestamp
 

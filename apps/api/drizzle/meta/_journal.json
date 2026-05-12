@@ -50,6 +50,13 @@
       "when": 1778500005000,
       "tag": "0006_twitch_reward_ingestion",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778500006000,
+      "tag": "0007_shop_metadata",
+      "breakpoints": true
     }
   ]
 }
