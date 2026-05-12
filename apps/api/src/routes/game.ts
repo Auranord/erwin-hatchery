@@ -393,6 +393,70 @@ async function findFreeEquipmentSlotsInTx(
   return freeSlots;
 }
 
+type CreatedShopInventorySlot = { id: string; slotIndex: number };
+
+class ShopInventoryFullError extends Error {
+  constructor(readonly inventoryKind: 'equipment' | 'consumable') {
+    super(`${inventoryKind}_inventory_full_after_preflight`);
+  }
+}
+
+async function createConsumableShopSlotInTx(
+  tx: DbTransaction,
+  userId: string,
+  consumableTypeId: string,
+  now: Date
+): Promise<CreatedShopInventorySlot | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [createdSlot] = await tx
+      .insert(consumableInventorySlots)
+      .values({
+        userId,
+        consumableTypeId,
+        slotIndex,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [
+          consumableInventorySlots.userId,
+          consumableInventorySlots.slotIndex
+        ]
+      })
+      .returning({ id: consumableInventorySlots.id });
+    if (createdSlot) return { id: createdSlot.id, slotIndex };
+  }
+  return null;
+}
+
+async function createEquipmentShopSlotInTx(
+  tx: DbTransaction,
+  userId: string,
+  equipmentTypeId: string,
+  now: Date
+): Promise<CreatedShopInventorySlot | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [createdSlot] = await tx
+      .insert(equipmentInventorySlots)
+      .values({
+        userId,
+        equipmentTypeId,
+        slotIndex,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [
+          equipmentInventorySlots.userId,
+          equipmentInventorySlots.slotIndex
+        ]
+      })
+      .returning({ id: equipmentInventorySlots.id });
+    if (createdSlot) return { id: createdSlot.id, slotIndex };
+  }
+  return null;
+}
+
 type ShopWeek = {
   key: string;
   startsAt: Date;
@@ -1796,171 +1860,158 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     }
     const { items } = parsedBody.data;
 
-    const result = await db.transaction(async (tx) => {
-      await lockUserInventoryInTx(tx, identity.userId);
-      await ensureInventoryDimensionsInTx(tx, identity.userId);
-      const shop = await buildShopOffersInTx(tx, identity.userId);
-      const requestedCounts = new Map<
-        string,
-        { item: (typeof items)[number]; count: number }
-      >();
-      for (const item of items) {
-        const itemKey = `${item.kind}:${item.typeId}`;
-        const existing = requestedCounts.get(itemKey);
-        requestedCounts.set(itemKey, {
-          item,
-          count: (existing?.count ?? 0) + 1
+    let result: {
+      kind:
+        | 'ok'
+        | 'not_offered'
+        | 'sold_out'
+        | 'insufficient_resources';
+      cost?: number;
+    };
+    try {
+      result = await db.transaction(async (tx) => {
+        await lockUserInventoryInTx(tx, identity.userId);
+        await ensureInventoryDimensionsInTx(tx, identity.userId);
+        const shop = await buildShopOffersInTx(tx, identity.userId);
+        const requestedCounts = new Map<
+          string,
+          { item: (typeof items)[number]; count: number }
+        >();
+        for (const item of items) {
+          const itemKey = `${item.kind}:${item.typeId}`;
+          const existing = requestedCounts.get(itemKey);
+          requestedCounts.set(itemKey, {
+            item,
+            count: (existing?.count ?? 0) + 1
+          });
+        }
+
+        let totalCost = 0;
+        const offerByItemKey = new Map<string, ShopOfferItem>();
+        for (const [itemKey, request] of requestedCounts) {
+          const offer = shop.offers.find(
+            (candidate) =>
+              candidate.kind === request.item.kind &&
+              candidate.typeId === request.item.typeId
+          );
+          if (!offer) return { kind: 'not_offered' as const };
+          if (offer.remainingThisWeek < request.count) {
+            return { kind: 'sold_out' as const };
+          }
+          offerByItemKey.set(itemKey, offer);
+          totalCost += offer.resourcePrice * request.count;
+        }
+
+        const now = new Date();
+        const debitedResources = await tx
+          .update(resources)
+          .set({
+            amount: sql`${resources.amount} - ${totalCost}`,
+            updatedAt: now
+          })
+          .where(
+            and(
+              eq(resources.userId, identity.userId),
+              eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+              sql`${resources.amount} >= ${totalCost}`
+            )
+          )
+          .returning({ amount: resources.amount });
+
+        if (debitedResources.length === 0) {
+          return { kind: 'insufficient_resources' as const, cost: totalCost };
+        }
+
+        for (const item of items) {
+          const offer = offerByItemKey.get(`${item.kind}:${item.typeId}`);
+          if (!offer) {
+            throw new Error('Validated shop offer missing during purchase');
+          }
+
+          if (item.kind === 'equipment') {
+            const createdSlot = await createEquipmentShopSlotInTx(
+              tx,
+              identity.userId,
+              item.typeId,
+              now
+            );
+            if (!createdSlot) throw new ShopInventoryFullError('equipment');
+            await tx.insert(economyLedger).values({
+              userId: identity.userId,
+              actorUserId: identity.userId,
+              eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+              sourceType: 'player_action',
+              sourceId: createdSlot.id,
+              delta: {
+                shopWeekKey: shop.weekKey,
+                itemKind: item.kind,
+                itemTypeId: item.typeId,
+                equipmentInventorySlots: [
+                  {
+                    id: createdSlot.id,
+                    equipmentTypeId: item.typeId,
+                    slotIndex: createdSlot.slotIndex,
+                    change: 1
+                  }
+                ],
+                resources: [
+                  {
+                    resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                    amountDelta: -offer.resourcePrice
+                  }
+                ]
+              }
+            });
+          } else {
+            const createdSlot = await createConsumableShopSlotInTx(
+              tx,
+              identity.userId,
+              item.typeId,
+              now
+            );
+            if (!createdSlot) throw new ShopInventoryFullError('consumable');
+            await tx.insert(economyLedger).values({
+              userId: identity.userId,
+              actorUserId: identity.userId,
+              eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+              sourceType: 'player_action',
+              sourceId: createdSlot.id,
+              delta: {
+                shopWeekKey: shop.weekKey,
+                itemKind: item.kind,
+                itemTypeId: item.typeId,
+                consumableInventorySlots: [
+                  {
+                    id: createdSlot.id,
+                    consumableTypeId: item.typeId,
+                    slotIndex: createdSlot.slotIndex,
+                    change: 1
+                  }
+                ],
+                resources: [
+                  {
+                    resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                    amountDelta: -offer.resourcePrice
+                  }
+                ]
+              }
+            });
+          }
+        }
+
+        return { kind: 'ok' as const };
+      });
+    } catch (error) {
+      if (error instanceof ShopInventoryFullError) {
+        return reply.code(409).send({
+          message:
+            error.inventoryKind === 'equipment'
+              ? 'Dein Ausrüstungsinventar hat nicht genug freie Slots.'
+              : 'Dein Verbrauchbaren-Inventar hat nicht genug freie Slots.'
         });
       }
-
-      let totalCost = 0;
-      let equipmentCount = 0;
-      let consumableCount = 0;
-      const offerByItemKey = new Map<string, ShopOfferItem>();
-      for (const [itemKey, request] of requestedCounts) {
-        const offer = shop.offers.find(
-          (candidate) =>
-            candidate.kind === request.item.kind &&
-            candidate.typeId === request.item.typeId
-        );
-        if (!offer) return { kind: 'not_offered' as const };
-        if (offer.remainingThisWeek < request.count) {
-          return { kind: 'sold_out' as const };
-        }
-        offerByItemKey.set(itemKey, offer);
-        totalCost += offer.resourcePrice * request.count;
-        if (request.item.kind === 'equipment') equipmentCount += request.count;
-        else consumableCount += request.count;
-      }
-
-      const equipmentSlots = await findFreeEquipmentSlotsInTx(
-        tx,
-        identity.userId,
-        equipmentCount
-      );
-      if (equipmentSlots.length < equipmentCount) {
-        return { kind: 'inventory_full' as const, inventoryKind: 'equipment' as const };
-      }
-      const consumableSlots = await findFreeConsumableSlotsInTx(
-        tx,
-        identity.userId,
-        consumableCount
-      );
-      if (consumableSlots.length < consumableCount) {
-        return { kind: 'inventory_full' as const, inventoryKind: 'consumable' as const };
-      }
-
-      const now = new Date();
-      const debitedResources = await tx
-        .update(resources)
-        .set({
-          amount: sql`${resources.amount} - ${totalCost}`,
-          updatedAt: now
-        })
-        .where(
-          and(
-            eq(resources.userId, identity.userId),
-            eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
-            sql`${resources.amount} >= ${totalCost}`
-          )
-        )
-        .returning({ amount: resources.amount });
-
-      if (debitedResources.length === 0) {
-        return { kind: 'insufficient_resources' as const, cost: totalCost };
-      }
-
-      const equipmentSlotQueue = [...equipmentSlots];
-      const consumableSlotQueue = [...consumableSlots];
-      for (const item of items) {
-        const offer = offerByItemKey.get(`${item.kind}:${item.typeId}`);
-        if (!offer) throw new Error('Validated shop offer missing during purchase');
-
-        if (item.kind === 'equipment') {
-          const slotIndex = equipmentSlotQueue.shift();
-          if (slotIndex === undefined) {
-            return { kind: 'inventory_full' as const, inventoryKind: item.kind };
-          }
-          const [createdSlot] = await tx
-            .insert(equipmentInventorySlots)
-            .values({
-              userId: identity.userId,
-              equipmentTypeId: item.typeId,
-              slotIndex,
-              updatedAt: now
-            })
-            .returning({ id: equipmentInventorySlots.id });
-          await tx.insert(economyLedger).values({
-            userId: identity.userId,
-            actorUserId: identity.userId,
-            eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
-            sourceType: 'player_action',
-            sourceId: createdSlot?.id ?? null,
-            delta: {
-              shopWeekKey: shop.weekKey,
-              itemKind: item.kind,
-              itemTypeId: item.typeId,
-              equipmentInventorySlots: [
-                {
-                  id: createdSlot?.id ?? null,
-                  equipmentTypeId: item.typeId,
-                  slotIndex,
-                  change: 1
-                }
-              ],
-              resources: [
-                {
-                  resourceType: CRACKED_EGGS_RESOURCE_TYPE,
-                  amountDelta: -offer.resourcePrice
-                }
-              ]
-            }
-          });
-        } else {
-          const slotIndex = consumableSlotQueue.shift();
-          if (slotIndex === undefined) {
-            return { kind: 'inventory_full' as const, inventoryKind: item.kind };
-          }
-          const [createdSlot] = await tx
-            .insert(consumableInventorySlots)
-            .values({
-              userId: identity.userId,
-              consumableTypeId: item.typeId,
-              slotIndex,
-              updatedAt: now
-            })
-            .returning({ id: consumableInventorySlots.id });
-          await tx.insert(economyLedger).values({
-            userId: identity.userId,
-            actorUserId: identity.userId,
-            eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
-            sourceType: 'player_action',
-            sourceId: createdSlot?.id ?? null,
-            delta: {
-              shopWeekKey: shop.weekKey,
-              itemKind: item.kind,
-              itemTypeId: item.typeId,
-              consumableInventorySlots: [
-                {
-                  id: createdSlot?.id ?? null,
-                  consumableTypeId: item.typeId,
-                  slotIndex,
-                  change: 1
-                }
-              ],
-              resources: [
-                {
-                  resourceType: CRACKED_EGGS_RESOURCE_TYPE,
-                  amountDelta: -offer.resourcePrice
-                }
-              ]
-            }
-          });
-        }
-      }
-
-      return { kind: 'ok' as const };
-    });
+      throw error;
+    }
 
     if (result.kind === 'not_offered') {
       return reply
@@ -1970,14 +2021,6 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (result.kind === 'sold_out') {
       return reply.code(409).send({
         message: 'Der Wochenbestand für mindestens ein Angebot ist aufgebraucht.'
-      });
-    }
-    if (result.kind === 'inventory_full') {
-      return reply.code(409).send({
-        message:
-          result.inventoryKind === 'equipment'
-            ? 'Dein Ausrüstungsinventar hat nicht genug freie Slots.'
-            : 'Dein Verbrauchbaren-Inventar hat nicht genug freie Slots.'
       });
     }
     if (result.kind === 'insufficient_resources') {
