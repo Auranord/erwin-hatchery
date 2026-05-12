@@ -453,7 +453,8 @@ export function App(): JSX.Element {
   const [playerInventory, setPlayerInventory] =
     useState<PlayerInventory | null>(null);
   const [shopOffers, setShopOffers] = useState<ShopOffers | null>(null);
-  const [buyingShopItemKey, setBuyingShopItemKey] = useState<string | null>(null);
+  const [queuedShopItems, setQueuedShopItems] = useState<ShopOfferItem[]>([]);
+  const [isBuyingShopQueue, setIsBuyingShopQueue] = useState(false);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
     useState<EventSubSubscriptionStatus | null>(null);
@@ -543,6 +544,7 @@ export function App(): JSX.Element {
     if (!response.ok) return;
     const payload = (await response.json()) as { shop: ShopOffers };
     setShopOffers(payload.shop);
+    setQueuedShopItems([]);
   }
 
   async function loadLeaderboard(): Promise<void> {
@@ -580,6 +582,7 @@ export function App(): JSX.Element {
     if (isAdminRoute || setupStatus?.completed === false || !me?.authenticated) {
       setPlayerInventory(null);
       setShopOffers(null);
+      setQueuedShopItems([]);
       return;
     }
 
@@ -737,16 +740,59 @@ export function App(): JSX.Element {
     );
   }
 
-  async function buyShopOffer(offer: ShopOfferItem): Promise<void> {
-    const itemKey = `${offer.kind}:${offer.typeId}`;
-    if (buyingShopItemKey) return;
-    setBuyingShopItemKey(itemKey);
+  function getShopItemKey(offer: Pick<ShopOfferItem, 'kind' | 'typeId'>): string {
+    return `${offer.kind}:${offer.typeId}`;
+  }
+
+  function getQueuedShopCount(offer: ShopOfferItem): number {
+    const itemKey = getShopItemKey(offer);
+    return queuedShopItems.filter((item) => getShopItemKey(item) === itemKey)
+      .length;
+  }
+
+  function getShopQueueTotal(): number {
+    return queuedShopItems.reduce((total, item) => total + item.resourcePrice, 0);
+  }
+
+  function queueShopOffer(offer: ShopOfferItem): void {
+    if (isBuyingShopQueue) return;
+    const queuedCount = getQueuedShopCount(offer);
+    if (offer.remainingThisWeek - queuedCount <= 0) {
+      setGameMessage('Der Wochenbestand dieses Angebots ist bereits eingeplant.');
+      return;
+    }
+    setQueuedShopItems((items) => [...items, offer]);
+  }
+
+  function removeQueuedShopOffer(offer: ShopOfferItem): void {
+    const itemKey = getShopItemKey(offer);
+    setQueuedShopItems((items) => {
+      const removeIndex = items.findIndex((item) => getShopItemKey(item) === itemKey);
+      if (removeIndex < 0) return items;
+      return items.filter((_, index) => index !== removeIndex);
+    });
+  }
+
+  async function buyQueuedShopItems(): Promise<void> {
+    if (isBuyingShopQueue || queuedShopItems.length === 0) return;
+    const totalPrice = getShopQueueTotal();
+    const confirmed = window.confirm(
+      `${queuedShopItems.length} Shop-Item(s) für insgesamt ${totalPrice} Aufgebrochene Eier kaufen?`
+    );
+    if (!confirmed) return;
+
+    setIsBuyingShopQueue(true);
     try {
-      const response = await fetch('/api/game/shop/buy', {
+      const response = await fetch('/api/game/shop/buy-batch', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: offer.kind, typeId: offer.typeId })
+        body: JSON.stringify({
+          items: queuedShopItems.map((item) => ({
+            kind: item.kind,
+            typeId: item.typeId
+          }))
+        })
       });
       const payload = (await response.json().catch(() => null)) as {
         inventory?: PlayerInventory;
@@ -760,11 +806,12 @@ export function App(): JSX.Element {
       else await refreshOwnInventory();
       if (payload?.shop) setShopOffers(payload.shop);
       else await loadShop();
-      setGameMessage(`${offer.displayName} gekauft.`);
+      setQueuedShopItems([]);
+      setGameMessage(`${queuedShopItems.length} Shop-Item(s) gekauft.`);
     } catch (error) {
       showGameError(error);
     } finally {
-      setBuyingShopItemKey(null);
+      setIsBuyingShopQueue(false);
     }
   }
 
@@ -2075,6 +2122,7 @@ export function App(): JSX.Element {
 
   function renderShopPanel(shop: ShopOffers | null): JSX.Element {
     const crackedEggBalance = getCrackedEggBalance();
+    const queueTotal = getShopQueueTotal();
     const weekEndsAt = shop
       ? new Date(shop.weekEndsAt).toLocaleDateString('de-DE', {
           weekday: 'short',
@@ -2082,15 +2130,21 @@ export function App(): JSX.Element {
           month: '2-digit'
         })
       : '—';
+    const groupedOffers: Array<{
+      kind: ShopOfferKind;
+      title: string;
+      folder: SlotAssetFolder;
+    }> = [
+      { kind: 'consumable', title: 'Verbrauchbares', folder: 'consumables' },
+      { kind: 'equipment', title: 'Ausrüstung', folder: 'equipment' }
+    ];
 
     return (
       <section className="inventory-panel shop-panel">
         <div className="inventory-panel-header">
           <div>
             <h3>Shop</h3>
-            <p className="inventory-capacity">
-              Wöchentliche Angebote · Wechsel am {weekEndsAt} · Du hast {crackedEggBalance} Aufgebrochene Eier
-            </p>
+            <p className="inventory-capacity">Wechsel am {weekEndsAt}</p>
           </div>
           <button type="button" onClick={() => void loadShop()}>
             Aktualisieren
@@ -2101,53 +2155,98 @@ export function App(): JSX.Element {
         ) : shop.offers.length === 0 ? (
           <p>Diese Woche gibt es keine kaufbaren Angebote.</p>
         ) : (
-          <div className="shop-offer-list">
-            {shop.offers.map((offer) => {
-              const itemKey = `${offer.kind}:${offer.typeId}`;
-              const isPending = buyingShopItemKey === itemKey;
-              const isSoldOut = offer.remainingThisWeek <= 0;
-              const isTooExpensive = crackedEggBalance < offer.resourcePrice;
-              const assetFolder: SlotAssetFolder =
-                offer.kind === 'equipment' ? 'equipment' : 'consumables';
-              return (
-                <article key={itemKey} className="shop-offer-card">
-                  {renderSlotAsset({
-                    folder: assetFolder,
-                    assetKey: offer.typeId,
-                    label: offer.displayName,
-                    size: 56,
-                    className: 'shop-offer-asset'
-                  })}
-                  <div className="shop-offer-body">
-                    <div className="shop-offer-title-row">
-                      <strong>{offer.displayName}</strong>
-                      <span>{offer.kind === 'equipment' ? 'Gem' : 'Verbrauchbar'}</span>
+          <>
+            <div className="shop-offer-rows">
+              {groupedOffers.map((group) => {
+                const offers = shop.offers.filter((offer) => offer.kind === group.kind);
+                return (
+                  <div key={group.kind} className="shop-offer-row-block">
+                    <h4>{group.title}</h4>
+                    <div className="shop-offer-row">
+                      {offers.length === 0 ? (
+                        <p className="shop-empty-row">Keine Angebote.</p>
+                      ) : (
+                        offers.map((offer) => {
+                          const itemKey = getShopItemKey(offer);
+                          const queuedCount = getQueuedShopCount(offer);
+                          const remainingAfterQueue = offer.remainingThisWeek - queuedCount;
+                          const isSoldOut = offer.remainingThisWeek <= 0;
+                          const isQueuedOut = remainingAfterQueue <= 0;
+                          const isTooExpensive = crackedEggBalance < queueTotal + offer.resourcePrice;
+                          return (
+                            <button
+                              key={itemKey}
+                              type="button"
+                              className={`shop-offer-card ${queuedCount > 0 ? 'queued' : ''}`}
+                              onClick={() => queueShopOffer(offer)}
+                              disabled={isBuyingShopQueue || isSoldOut || isQueuedOut || isTooExpensive}
+                              title={
+                                isSoldOut || isQueuedOut
+                                  ? 'Wochenbestand aufgebraucht'
+                                  : isTooExpensive
+                                    ? 'Nicht genug Aufgebrochene Eier für die Auswahl'
+                                    : 'Zur Kaufliste hinzufügen'
+                              }
+                            >
+                              {queuedCount > 0 ? (
+                                <span className="shop-queue-badge">×{queuedCount}</span>
+                              ) : null}
+                              {renderSlotAsset({
+                                folder: group.folder,
+                                assetKey: offer.typeId,
+                                label: offer.displayName,
+                                size: 56,
+                                className: 'shop-offer-asset'
+                              })}
+                              <strong>{offer.displayName}</strong>
+                              <small>Bestand: {Math.max(0, remainingAfterQueue)}/{offer.stock}</small>
+                              <span>{offer.resourcePrice} Eier</span>
+                            </button>
+                          );
+                        })
+                      )}
                     </div>
-                    <p>{offer.description}</p>
-                    <small>
-                      Wochenbestand: {offer.remainingThisWeek}/{offer.stock} übrig
-                    </small>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void buyShopOffer(offer)}
-                    disabled={
-                      buyingShopItemKey !== null || isSoldOut || isTooExpensive
-                    }
-                    title={
-                      isSoldOut
-                        ? 'Wochenbestand aufgebraucht'
-                        : isTooExpensive
-                          ? 'Nicht genug Aufgebrochene Eier'
-                          : 'Kaufen'
-                    }
-                  >
-                    {isPending ? 'Kaufe …' : `${offer.resourcePrice} Eier`}
-                  </button>
-                </article>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+            <div className="shop-queue-panel">
+              <div>
+                <strong>Kaufliste</strong>
+                <p>
+                  {queuedShopItems.length > 0
+                    ? `${queuedShopItems.length} Item(s) · ${queueTotal} Aufgebrochene Eier`
+                    : 'Tippe Angebote an, um sie vorzumerken.'}
+                </p>
+              </div>
+              {queuedShopItems.length > 0 ? (
+                <div className="shop-queue-list">
+                  {queuedShopItems.map((item, index) => (
+                    <button
+                      key={`${getShopItemKey(item)}:${index}`}
+                      type="button"
+                      onClick={() => removeQueuedShopOffer(item)}
+                      disabled={isBuyingShopQueue}
+                      title="Aus Kaufliste entfernen"
+                    >
+                      {item.displayName} − {item.resourcePrice}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => void buyQueuedShopItems()}
+                disabled={
+                  isBuyingShopQueue ||
+                  queuedShopItems.length === 0 ||
+                  queueTotal > crackedEggBalance
+                }
+              >
+                {isBuyingShopQueue ? 'Kaufe …' : `Kaufliste kaufen (${queueTotal})`}
+              </button>
+            </div>
+          </>
         )}
       </section>
     );
@@ -2829,7 +2928,6 @@ export function App(): JSX.Element {
                 </div>
                 <div className="inventory-stack">
                   {renderIncubatorInventory(playerInventory.incubators)}
-                  {renderShopPanel(shopOffers)}
                   {renderGrid(
                     'Unausgebrütete Eier',
                     playerInventory.unhatchedEggs,
@@ -3012,6 +3110,7 @@ export function App(): JSX.Element {
                     'item-panel',
                     undefined
                   )}
+                  {renderShopPanel(shopOffers)}
                 </div>
               </>
             ) : (

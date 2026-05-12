@@ -86,6 +86,10 @@ const buyShopItemSchema = z.object({
   typeId: z.string().min(1).max(128)
 });
 
+const buyShopItemsSchema = z.object({
+  items: z.array(buyShopItemSchema).min(1).max(50)
+});
+
 type OverlayAlertEvent = {
   id: string;
   type: 'pet_hatched';
@@ -338,6 +342,117 @@ async function findFreeEquipmentSlotInTx(
   );
   for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
     if (!occupied.has(slotIndex)) return slotIndex;
+  }
+  return null;
+}
+
+
+async function findFreeConsumableSlotsInTx(
+  tx: DbTransaction,
+  userId: string,
+  count: number
+): Promise<number[]> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
+  const occupiedRows = await tx
+    .select({ slotIndex: consumableInventorySlots.slotIndex })
+    .from(consumableInventorySlots)
+    .where(eq(consumableInventorySlots.userId, userId));
+  const occupied = new Set(
+    occupiedRows
+      .map((row) => row.slotIndex)
+      .filter((slotIndex): slotIndex is number => slotIndex !== null)
+  );
+  const freeSlots: number[] = [];
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    if (!occupied.has(slotIndex)) freeSlots.push(slotIndex);
+    if (freeSlots.length >= count) return freeSlots;
+  }
+  return freeSlots;
+}
+
+async function findFreeEquipmentSlotsInTx(
+  tx: DbTransaction,
+  userId: string,
+  count: number
+): Promise<number[]> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
+  const occupiedRows = await tx
+    .select({ slotIndex: equipmentInventorySlots.slotIndex })
+    .from(equipmentInventorySlots)
+    .where(eq(equipmentInventorySlots.userId, userId));
+  const occupied = new Set(
+    occupiedRows
+      .map((row) => row.slotIndex)
+      .filter((slotIndex): slotIndex is number => slotIndex !== null)
+  );
+  const freeSlots: number[] = [];
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    if (!occupied.has(slotIndex)) freeSlots.push(slotIndex);
+    if (freeSlots.length >= count) return freeSlots;
+  }
+  return freeSlots;
+}
+
+type CreatedShopInventorySlot = { id: string; slotIndex: number };
+
+class ShopInventoryFullError extends Error {
+  constructor(readonly inventoryKind: 'equipment' | 'consumable') {
+    super(`${inventoryKind}_inventory_full_after_preflight`);
+  }
+}
+
+async function createConsumableShopSlotInTx(
+  tx: DbTransaction,
+  userId: string,
+  consumableTypeId: string,
+  now: Date
+): Promise<CreatedShopInventorySlot | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'consumables');
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [createdSlot] = await tx
+      .insert(consumableInventorySlots)
+      .values({
+        userId,
+        consumableTypeId,
+        slotIndex,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [
+          consumableInventorySlots.userId,
+          consumableInventorySlots.slotIndex
+        ]
+      })
+      .returning({ id: consumableInventorySlots.id });
+    if (createdSlot) return { id: createdSlot.id, slotIndex };
+  }
+  return null;
+}
+
+async function createEquipmentShopSlotInTx(
+  tx: DbTransaction,
+  userId: string,
+  equipmentTypeId: string,
+  now: Date
+): Promise<CreatedShopInventorySlot | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'equipment');
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    const [createdSlot] = await tx
+      .insert(equipmentInventorySlots)
+      .values({
+        userId,
+        equipmentTypeId,
+        slotIndex,
+        updatedAt: now
+      })
+      .onConflictDoNothing({
+        target: [
+          equipmentInventorySlots.userId,
+          equipmentInventorySlots.slotIndex
+        ]
+      })
+      .returning({ id: equipmentInventorySlots.id });
+    if (createdSlot) return { id: createdSlot.id, slotIndex };
   }
   return null;
 }
@@ -1720,6 +1835,192 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           result.inventoryKind === 'equipment'
             ? 'Dein Ausrüstungsinventar ist voll.'
             : 'Dein Verbrauchbaren-Inventar ist voll.'
+      });
+    }
+    if (result.kind === 'insufficient_resources') {
+      return reply.code(409).send({
+        message: `Nicht genug Aufgebrochene Eier. Benötigt: ${result.cost}.`
+      });
+    }
+
+    const [inventory, shop] = await Promise.all([
+      loadPlayerInventory(identity.userId),
+      loadShopOffers(identity.userId)
+    ]);
+    return { inventory, shop };
+  });
+
+  app.post('/api/game/shop/buy-batch', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const parsedBody = buyShopItemsSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      return reply.code(400).send({ message: 'Ungültiger Shop-Kauf.' });
+    }
+    const { items } = parsedBody.data;
+
+    let result: {
+      kind:
+        | 'ok'
+        | 'not_offered'
+        | 'sold_out'
+        | 'insufficient_resources';
+      cost?: number;
+    };
+    try {
+      result = await db.transaction(async (tx) => {
+        await lockUserInventoryInTx(tx, identity.userId);
+        await ensureInventoryDimensionsInTx(tx, identity.userId);
+        const shop = await buildShopOffersInTx(tx, identity.userId);
+        const requestedCounts = new Map<
+          string,
+          { item: (typeof items)[number]; count: number }
+        >();
+        for (const item of items) {
+          const itemKey = `${item.kind}:${item.typeId}`;
+          const existing = requestedCounts.get(itemKey);
+          requestedCounts.set(itemKey, {
+            item,
+            count: (existing?.count ?? 0) + 1
+          });
+        }
+
+        let totalCost = 0;
+        const offerByItemKey = new Map<string, ShopOfferItem>();
+        for (const [itemKey, request] of requestedCounts) {
+          const offer = shop.offers.find(
+            (candidate) =>
+              candidate.kind === request.item.kind &&
+              candidate.typeId === request.item.typeId
+          );
+          if (!offer) return { kind: 'not_offered' as const };
+          if (offer.remainingThisWeek < request.count) {
+            return { kind: 'sold_out' as const };
+          }
+          offerByItemKey.set(itemKey, offer);
+          totalCost += offer.resourcePrice * request.count;
+        }
+
+        const now = new Date();
+        const debitedResources = await tx
+          .update(resources)
+          .set({
+            amount: sql`${resources.amount} - ${totalCost}`,
+            updatedAt: now
+          })
+          .where(
+            and(
+              eq(resources.userId, identity.userId),
+              eq(resources.resourceType, CRACKED_EGGS_RESOURCE_TYPE),
+              sql`${resources.amount} >= ${totalCost}`
+            )
+          )
+          .returning({ amount: resources.amount });
+
+        if (debitedResources.length === 0) {
+          return { kind: 'insufficient_resources' as const, cost: totalCost };
+        }
+
+        for (const item of items) {
+          const offer = offerByItemKey.get(`${item.kind}:${item.typeId}`);
+          if (!offer) {
+            throw new Error('Validated shop offer missing during purchase');
+          }
+
+          if (item.kind === 'equipment') {
+            const createdSlot = await createEquipmentShopSlotInTx(
+              tx,
+              identity.userId,
+              item.typeId,
+              now
+            );
+            if (!createdSlot) throw new ShopInventoryFullError('equipment');
+            await tx.insert(economyLedger).values({
+              userId: identity.userId,
+              actorUserId: identity.userId,
+              eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+              sourceType: 'player_action',
+              sourceId: createdSlot.id,
+              delta: {
+                shopWeekKey: shop.weekKey,
+                itemKind: item.kind,
+                itemTypeId: item.typeId,
+                equipmentInventorySlots: [
+                  {
+                    id: createdSlot.id,
+                    equipmentTypeId: item.typeId,
+                    slotIndex: createdSlot.slotIndex,
+                    change: 1
+                  }
+                ],
+                resources: [
+                  {
+                    resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                    amountDelta: -offer.resourcePrice
+                  }
+                ]
+              }
+            });
+          } else {
+            const createdSlot = await createConsumableShopSlotInTx(
+              tx,
+              identity.userId,
+              item.typeId,
+              now
+            );
+            if (!createdSlot) throw new ShopInventoryFullError('consumable');
+            await tx.insert(economyLedger).values({
+              userId: identity.userId,
+              actorUserId: identity.userId,
+              eventType: SHOP_PURCHASE_LEDGER_EVENT_TYPE,
+              sourceType: 'player_action',
+              sourceId: createdSlot.id,
+              delta: {
+                shopWeekKey: shop.weekKey,
+                itemKind: item.kind,
+                itemTypeId: item.typeId,
+                consumableInventorySlots: [
+                  {
+                    id: createdSlot.id,
+                    consumableTypeId: item.typeId,
+                    slotIndex: createdSlot.slotIndex,
+                    change: 1
+                  }
+                ],
+                resources: [
+                  {
+                    resourceType: CRACKED_EGGS_RESOURCE_TYPE,
+                    amountDelta: -offer.resourcePrice
+                  }
+                ]
+              }
+            });
+          }
+        }
+
+        return { kind: 'ok' as const };
+      });
+    } catch (error) {
+      if (error instanceof ShopInventoryFullError) {
+        return reply.code(409).send({
+          message:
+            error.inventoryKind === 'equipment'
+              ? 'Dein Ausrüstungsinventar hat nicht genug freie Slots.'
+              : 'Dein Verbrauchbaren-Inventar hat nicht genug freie Slots.'
+        });
+      }
+      throw error;
+    }
+
+    if (result.kind === 'not_offered') {
+      return reply
+        .code(404)
+        .send({ message: 'Mindestens ein Angebot ist diese Woche nicht im Shop.' });
+    }
+    if (result.kind === 'sold_out') {
+      return reply.code(409).send({
+        message: 'Der Wochenbestand für mindestens ein Angebot ist aufgebraucht.'
       });
     }
     if (result.kind === 'insufficient_resources') {
