@@ -328,3 +328,10 @@ Implement this in a simple and transparent way.
 First-run setup blocks Twitch-dependent game/admin features until broadcaster OAuth, required-scope verification, EventSub sync, active-subscription backfill, and Bits leaderboard backfill have completed. Normal subscription events grant `+1 voucher` to the subscriber. Resubscription message events also grant `+1 voucher`; this MVP intentionally treats each monthly resub message as a fixed transparent Gutschein grant. Gift-sub events grant `+1 voucher` per gifted subscription to a non-anonymous gifter and `+1 voucher` to each identifiable recipient. Bits events grant Gutscheine only when counted Bits cross `TWITCH_BITS_PER_VOUCHER` thresholds; anonymous Bits are audited but do not grant user vouchers.
 
 All reward ingestion is server-authoritative, idempotent by Twitch EventSub message IDs or stable backfill keys, and every resource mutation writes `resources` plus an immutable `economy_ledger` row in the same transaction. Paid random rewards remain out of scope and prohibited.
+
+
+## Weekly player shop
+
+The player UI includes a mobile-first `Shop` box that lists deterministic weekly offers for purchasable gem equipment and consumables. Only active records with `is_shop_purchasable = true`, a positive `resource_price`, and positive `stock` can appear. The weekly selection is server-side and deterministic from the UTC Monday week key plus item kind/type ID, so every process computes the same offer set for a given week without storing generated shop rows. `SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT` and `SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT` configure how many equipment gems and consumables appear each week; both default to 5.
+
+Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy at most the item type's `stock` amount per weekly offer. The server enforces this by counting non-reverted `shop_item_purchased` economy ledger rows for the player, week key, item kind, and item type before inserting the new inventory slot and debit ledger entry in one transaction.

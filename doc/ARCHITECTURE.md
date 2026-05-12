@@ -266,3 +266,10 @@ Seeded pet assets use `pet_species.asset_key`. Egg, equipment, hat, and future c
 The API exposes `/api/setup/status`, `/api/setup/twitch/login`, `/api/setup/twitch/callback`, `/api/setup/run-backfill`, `/api/setup/resync-eventsub`, and `/api/setup/health-check`. Setup persists broadcaster identity, required scopes, EventSub sync time, backfill completion times, health timestamps, repair flags, and last error in `twitch_integration_state`. EventSub subscription status is stored per event type in `twitch_eventsub_subscriptions` instead of relying on process memory alone.
 
 EventSub sync covers channel point redemptions, subscribe, subscription message, subscription end, subscription gift, and Bits cheer events. Startup/admin health checks refresh the broadcaster token, verify scopes through stored token metadata, verify required EventSub rows, and compare the persisted callback URL to `PUBLIC_APP_URL`'s `/api/twitch/eventsub`. Revocation webhook messages move the integration into repair state; authorization revocations require broadcaster reauth, while delivery problems keep EventSub unhealthy for safe resync.
+
+
+## Weekly player shop
+
+The player UI includes a mobile-first `Shop` box that lists deterministic weekly offers for purchasable gem equipment and consumables. Only active records with `is_shop_purchasable = true`, a positive `resource_price`, and positive `stock` can appear. The weekly selection is server-side and deterministic from the UTC Monday week key plus item kind/type ID, so every process computes the same offer set for a given week without storing generated shop rows. `SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT` and `SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT` configure how many equipment gems and consumables appear each week; both default to 5.
+
+Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy at most the item type's `stock` amount per weekly offer. The server enforces this by counting non-reverted `shop_item_purchased` economy ledger rows for the player, week key, item kind, and item type before inserting the new inventory slot and debit ledger entry in one transaction.

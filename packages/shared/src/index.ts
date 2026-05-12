@@ -184,6 +184,30 @@ export type IncubatorInventory = {
   incubators: IncubatorSlotItem[];
 };
 
+
+export type ShopOfferKind = 'equipment' | 'consumable';
+
+export type ShopOfferItem = {
+  kind: ShopOfferKind;
+  typeId: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+  purchasedThisWeek: number;
+  remainingThisWeek: number;
+};
+
+export type ShopOffersPayload = {
+  weekKey: string;
+  weekStartsAt: string;
+  weekEndsAt: string;
+  currencyResourceType: string;
+  equipmentOfferCount: number;
+  consumableOfferCount: number;
+  offers: ShopOfferItem[];
+};
+
 export type EquipmentSetUpgradesPayload = {
   setCount: number;
   setSlotBonusCount: number;

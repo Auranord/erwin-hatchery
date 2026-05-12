@@ -228,6 +228,27 @@ type PlayerInventory = {
   equipmentSetUpgrades: EquipmentSetUpgrades;
   hats: InventoryGrid<HatItem>;
 };
+type ShopOfferKind = 'equipment' | 'consumable';
+type ShopOfferItem = {
+  kind: ShopOfferKind;
+  typeId: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+  purchasedThisWeek: number;
+  remainingThisWeek: number;
+};
+type ShopOffers = {
+  weekKey: string;
+  weekStartsAt: string;
+  weekEndsAt: string;
+  currencyResourceType: string;
+  equipmentOfferCount: number;
+  consumableOfferCount: number;
+  offers: ShopOfferItem[];
+};
+
 type SelectionPayload =
   | { kind: 'incubator'; id: string }
   | { kind: 'egg'; id: string }
@@ -431,6 +452,8 @@ export function App(): JSX.Element {
     useState<AdminHealthIssue | null>(null);
   const [playerInventory, setPlayerInventory] =
     useState<PlayerInventory | null>(null);
+  const [shopOffers, setShopOffers] = useState<ShopOffers | null>(null);
+  const [buyingShopItemKey, setBuyingShopItemKey] = useState<string | null>(null);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
     useState<EventSubSubscriptionStatus | null>(null);
@@ -515,6 +538,13 @@ export function App(): JSX.Element {
     }
   }
 
+  async function loadShop(): Promise<void> {
+    const response = await fetch('/api/game/shop', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { shop: ShopOffers };
+    setShopOffers(payload.shop);
+  }
+
   async function loadLeaderboard(): Promise<void> {
     const response = await fetch('/api/game/leaderboard', {
       credentials: 'include'
@@ -549,8 +579,11 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (isAdminRoute || setupStatus?.completed === false || !me?.authenticated) {
       setPlayerInventory(null);
+      setShopOffers(null);
       return;
     }
+
+    void loadShop();
 
     const source = new EventSource('/api/game/inventory/stream', {
       withCredentials: true
@@ -702,6 +735,37 @@ export function App(): JSX.Element {
         (resource) => resource.resourceType === CRACKED_EGGS_RESOURCE_TYPE
       )?.amount ?? 0
     );
+  }
+
+  async function buyShopOffer(offer: ShopOfferItem): Promise<void> {
+    const itemKey = `${offer.kind}:${offer.typeId}`;
+    if (buyingShopItemKey) return;
+    setBuyingShopItemKey(itemKey);
+    try {
+      const response = await fetch('/api/game/shop/buy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: offer.kind, typeId: offer.typeId })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        inventory?: PlayerInventory;
+        shop?: ShopOffers;
+        message?: string;
+      } | null;
+      if (!response.ok) {
+        throw new Error(payload?.message ?? 'Shop-Kauf fehlgeschlagen.');
+      }
+      if (payload?.inventory) setPlayerInventory(payload.inventory);
+      else await refreshOwnInventory();
+      if (payload?.shop) setShopOffers(payload.shop);
+      else await loadShop();
+      setGameMessage(`${offer.displayName} gekauft.`);
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setBuyingShopItemKey(null);
+    }
   }
 
   async function upgradeInventoryRow(inventoryKind: string): Promise<void> {
@@ -2008,6 +2072,86 @@ export function App(): JSX.Element {
     );
   }
 
+  function renderShopPanel(shop: ShopOffers | null): JSX.Element {
+    const crackedEggBalance = getCrackedEggBalance();
+    const weekEndsAt = shop
+      ? new Date(shop.weekEndsAt).toLocaleDateString('de-DE', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit'
+        })
+      : '—';
+
+    return (
+      <section className="inventory-panel shop-panel">
+        <div className="inventory-panel-header">
+          <div>
+            <h3>Shop</h3>
+            <p className="inventory-capacity">
+              Wöchentliche Angebote · Wechsel am {weekEndsAt} · Du hast {crackedEggBalance} Aufgebrochene Eier
+            </p>
+          </div>
+          <button type="button" onClick={() => void loadShop()}>
+            Aktualisieren
+          </button>
+        </div>
+        {!shop ? (
+          <p>Shop wird geladen…</p>
+        ) : shop.offers.length === 0 ? (
+          <p>Diese Woche gibt es keine kaufbaren Angebote.</p>
+        ) : (
+          <div className="shop-offer-list">
+            {shop.offers.map((offer) => {
+              const itemKey = `${offer.kind}:${offer.typeId}`;
+              const isPending = buyingShopItemKey === itemKey;
+              const isSoldOut = offer.remainingThisWeek <= 0;
+              const isTooExpensive = crackedEggBalance < offer.resourcePrice;
+              const assetFolder: SlotAssetFolder =
+                offer.kind === 'equipment' ? 'equipment' : 'consumables';
+              return (
+                <article key={itemKey} className="shop-offer-card">
+                  {renderSlotAsset({
+                    folder: assetFolder,
+                    assetKey: offer.typeId,
+                    label: offer.displayName,
+                    size: 56,
+                    className: 'shop-offer-asset'
+                  })}
+                  <div className="shop-offer-body">
+                    <div className="shop-offer-title-row">
+                      <strong>{offer.displayName}</strong>
+                      <span>{offer.kind === 'equipment' ? 'Gem' : 'Verbrauchbar'}</span>
+                    </div>
+                    <p>{offer.description}</p>
+                    <small>
+                      Wochenbestand: {offer.remainingThisWeek}/{offer.stock} übrig
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void buyShopOffer(offer)}
+                    disabled={
+                      buyingShopItemKey !== null || isSoldOut || isTooExpensive
+                    }
+                    title={
+                      isSoldOut
+                        ? 'Wochenbestand aufgebraucht'
+                        : isTooExpensive
+                          ? 'Nicht genug Aufgebrochene Eier'
+                          : 'Kaufen'
+                    }
+                  >
+                    {isPending ? 'Kaufe …' : `${offer.resourcePrice} Eier`}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   function renderGrid<T extends { id: string }>(
     title: string,
     grid: InventoryGrid<T>,
@@ -2684,6 +2828,7 @@ export function App(): JSX.Element {
                 </div>
                 <div className="inventory-stack">
                   {renderIncubatorInventory(playerInventory.incubators)}
+                  {renderShopPanel(shopOffers)}
                   {renderGrid(
                     'Unausgebrütete Eier',
                     playerInventory.unhatchedEggs,
