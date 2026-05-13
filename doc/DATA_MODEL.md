@@ -220,7 +220,7 @@ Incubator behavior:
 - Ensure one default standard incubator exists for every player at slot index 0.
 - Two incubator queue slots are enabled at launch. Additional queue slots are future upgrades and must not be enabled until explicitly granted.
 - Subscriptions and admin actions do not grant incubators in the MVP.
-- Queueing incubation writes an immutable ledger row. The first queued egg starts automatically when the stream is live and no other egg is running.
+- Queueing incubation writes an immutable ledger row. The first queued egg starts automatically when the stream is live and no other egg is running. Completed-but-unclaimed jobs do not count as running, so they do not block the next queued egg from starting.
 
 ### incubation_jobs
 
@@ -240,7 +240,7 @@ last_progressed_at timestamp nullable -- last live-progress sync point for runni
 progress_snapshot jsonb not null -- stream state/modifiers from latest sync if needed
 ```
 
-Do not tick every second in the database. Store accumulated progress plus the last live-progress timestamp, and only add progress for elapsed time while the stream is live.
+Do not tick every second in the database. Store accumulated progress plus the last live-progress timestamp, and only add progress for elapsed time while the stream is live. Queue sync changes a capped running job to `completed` before pet redemption so another queued job can run while the completed result waits for collection.
 
 ### pet_rarities
 
@@ -641,7 +641,7 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - Event-Pet selection is represented by the `pets.selected_for_event` flag. The UI exposes it as a fixed drop target above the pet grid, but the selected pet remains in the pet grid and therefore continues to consume its normal pet inventory slot.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
-- Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
+- Queue sync marks a fully progressed running job as `completed` before pet redemption and then can auto-start the next queued job. Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queue jobs are not blocked by the unclaimed result.
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.

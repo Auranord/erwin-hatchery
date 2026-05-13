@@ -121,7 +121,8 @@ Acceptance:
 - Support viewer count multiplier field/config.
 - Add manual/admin stream state override if live Twitch polling is not ready.
 - Finish hatch action creates pet instance with stat variance.
-- Ledger entries for incubation start and pet hatch.
+- Fully progressed jobs are marked completed before redemption so the next queued incubation can start while the result waits to be claimed.
+- Ledger entries for incubation start, queue auto-start, completed-waiting-claim, and pet hatch.
 
 Acceptance:
 
@@ -226,7 +227,7 @@ Acceptance:
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - The Event-Pet selector sits directly above the pet inventory as a fixed drop target with pet stat labels; it marks a pet for events without moving it out of the pet inventory. A trashcan-style fixed slot scraps a pet into Aufgebrochene Eier after confirmation.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
-- Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
+- Queue sync marks a fully progressed running job as completed before pet redemption and can then auto-start the next queued job. Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queue jobs are not blocked by the unclaimed result.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
 - Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.

@@ -117,8 +117,9 @@ pnpm build
 - The player UI shows two standard incubator queue slots at launch.
 - Dropping an egg into an empty incubator queue slot removes it from the unhatched egg inventory and creates a queued incubation job.
 - If the stream is live and no other egg is running, the backend automatically starts the first queued egg.
+- When a running egg reaches its required progress, the backend marks that incubation as completed and waiting to be claimed before pet redemption, so the next queued egg can begin immediately while the finished pet remains available to collect.
 - Countdown progress is server-authoritative and accumulates only while Twitch stream state is live. When the stream is offline, queued/running eggs stay in place but do not gain progress.
-- The UI refreshes the inventory stream regularly so queued/running state and live-progress countdowns stay close to backend state.
+- The UI refreshes the inventory stream regularly so queued/running/completed state and live-progress countdowns stay close to backend state.
 
 ## EventSub webhook processing (Milestone 3)
 

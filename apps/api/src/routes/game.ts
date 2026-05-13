@@ -718,64 +718,112 @@ async function syncIncubationQueueInTx(
     .limit(1);
 
   if (runningJob) {
-    if (!streamState.isLive) {
-      if (runningJob.lastProgressedAt !== null) {
+    const alreadyComplete =
+      runningJob.progressSecondsAccumulated >= runningJob.requiredProgressSeconds;
+    let shouldComplete = alreadyComplete;
+    let nextProgress = runningJob.progressSecondsAccumulated;
+    let progressSnapshot: Record<string, unknown> = {
+      mode: 'live_stream_progress',
+      streamState,
+      lastSyncedAt: now.toISOString(),
+      completionDetected: alreadyComplete
+    };
+
+    if (!shouldComplete) {
+      if (!streamState.isLive) {
+        if (runningJob.lastProgressedAt !== null) {
+          await tx
+            .update(incubationJobs)
+            .set({
+              lastProgressedAt: null,
+              progressSnapshot: {
+                mode: 'live_stream_progress',
+                streamState,
+                lastSyncedAt: now.toISOString(),
+                progressPaused: true
+              }
+            })
+            .where(eq(incubationJobs.id, runningJob.id));
+        }
+        return streamState;
+      }
+
+      const lastProgressedAt = runningJob.lastProgressedAt ?? now;
+      const elapsedSeconds = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(lastProgressedAt).getTime()) / 1000)
+      );
+      const streamMultiplier = computeIncubationMultiplier({
+        isLive: streamState.isLive,
+        viewerCount: streamState.viewerCount
+      });
+      const incubatorMultiplier =
+        Math.max(1, runningJob.speedMultiplierBasisPoints) / 10000;
+      const progressDelta = Math.max(
+        0,
+        Math.floor(elapsedSeconds * streamMultiplier * incubatorMultiplier)
+      );
+      nextProgress = Math.min(
+        runningJob.requiredProgressSeconds,
+        runningJob.progressSecondsAccumulated + progressDelta
+      );
+      shouldComplete = nextProgress >= runningJob.requiredProgressSeconds;
+      progressSnapshot = {
+        mode: 'live_stream_progress',
+        streamState,
+        lastSyncedAt: now.toISOString(),
+        multiplierApplied: streamMultiplier,
+        incubatorMultiplierApplied: incubatorMultiplier,
+        incubatorMetadata: {
+          speedMultiplierBasisPoints: runningJob.speedMultiplierBasisPoints,
+          specialBonusBasisPoints: runningJob.specialBonusBasisPoints,
+          fuelBehavior: runningJob.fuelBehavior,
+          specialEffectConfig: runningJob.specialEffectConfig
+        }
+      };
+
+      if (!shouldComplete) {
         await tx
           .update(incubationJobs)
           .set({
-            lastProgressedAt: null,
-            progressSnapshot: {
-              mode: 'live_stream_progress',
-              streamState,
-              lastSyncedAt: now.toISOString(),
-              progressPaused: true
-            }
+            progressSecondsAccumulated: nextProgress,
+            lastProgressedAt: now,
+            progressSnapshot
           })
           .where(eq(incubationJobs.id, runningJob.id));
+        return streamState;
       }
-      return streamState;
     }
 
-    const lastProgressedAt = runningJob.lastProgressedAt ?? now;
-    const elapsedSeconds = Math.max(
-      0,
-      Math.floor((now.getTime() - new Date(lastProgressedAt).getTime()) / 1000)
-    );
-    const streamMultiplier = computeIncubationMultiplier({
-      isLive: streamState.isLive,
-      viewerCount: streamState.viewerCount
-    });
-    const incubatorMultiplier =
-      Math.max(1, runningJob.speedMultiplierBasisPoints) / 10000;
-    const progressDelta = Math.max(
-      0,
-      Math.floor(elapsedSeconds * streamMultiplier * incubatorMultiplier)
-    );
-    const nextProgress = Math.min(
-      runningJob.requiredProgressSeconds,
-      runningJob.progressSecondsAccumulated + progressDelta
-    );
     await tx
       .update(incubationJobs)
       .set({
-        progressSecondsAccumulated: nextProgress,
-        lastProgressedAt: now,
+        state: 'completed',
+        completedAt: now,
+        progressSecondsAccumulated: runningJob.requiredProgressSeconds,
+        lastProgressedAt: null,
         progressSnapshot: {
-          mode: 'live_stream_progress',
-          streamState,
-          lastSyncedAt: now.toISOString(),
-          multiplierApplied: streamMultiplier,
-          incubatorMultiplierApplied: incubatorMultiplier,
-          incubatorMetadata: {
-            speedMultiplierBasisPoints: runningJob.speedMultiplierBasisPoints,
-            specialBonusBasisPoints: runningJob.specialBonusBasisPoints,
-            fuelBehavior: runningJob.fuelBehavior,
-            specialEffectConfig: runningJob.specialEffectConfig
-          }
+          ...progressSnapshot,
+          completedAutomatically: true
         }
       })
       .where(eq(incubationJobs.id, runningJob.id));
-    return streamState;
+    await tx.insert(economyLedger).values({
+      userId,
+      actorUserId: null,
+      eventType: 'incubation_completed_waiting_claim',
+      sourceType: 'system',
+      sourceId: runningJob.id,
+      delta: {
+        incubationJobs: [
+          {
+            id: runningJob.id,
+            state: 'completed',
+            progressSecondsAccumulated: runningJob.requiredProgressSeconds
+          }
+        ]
+      }
+    });
   }
 
   if (!streamState.isLive) return streamState;
@@ -1010,7 +1058,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       .where(
         and(
           eq(incubationJobs.ownerUserId, userId),
-          inArray(incubationJobs.state, ['queued', 'running'])
+          inArray(incubationJobs.state, ['queued', 'running', 'completed'])
         )
       )
   ]);
@@ -2967,7 +3015,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .select({
           id: incubationJobs.id,
           incubatorSlotId: incubationJobs.incubatorSlotId,
-          startedAt: incubationJobs.startedAt,
+          completedAt: incubationJobs.completedAt,
           requiredProgressSeconds: incubationJobs.requiredProgressSeconds,
           progressSecondsAccumulated: incubationJobs.progressSecondsAccumulated
         })
@@ -2976,7 +3024,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(incubationJobs.ownerUserId, identity.userId),
             eq(incubationJobs.unhatchedEggId, egg.id),
-            eq(incubationJobs.state, 'running')
+            inArray(incubationJobs.state, ['running', 'completed'])
           )
         )
         .limit(1);
@@ -3010,7 +3058,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(petSpecies.id, egg.hiddenPetSpeciesId))
         .limit(1);
       if (!petSpeciesRow) return { kind: 'pet_species_missing' as const };
-      const completedAt = new Date();
+      const claimedAt = new Date();
+      const completedAt = job.completedAt ?? claimedAt;
 
       const [newPet] = await tx
         .insert(pets)
@@ -3030,7 +3079,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           hatchVariance: { hp: 0, atk: 0, def: 0, spd: 0, gain: 0, pow: 0 },
           sourceUnhatchedEggId: egg.id,
           slotIndex: freePetSlot,
-          createdAt: completedAt
+          createdAt: claimedAt
         })
         .returning({ id: pets.id });
       if (!newPet) {
@@ -3048,7 +3097,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const nextSlotAvailability = true;
       await tx
         .update(incubatorSlots)
-        .set({ isAvailable: nextSlotAvailability, updatedAt: completedAt })
+        .set({ isAvailable: nextSlotAvailability, updatedAt: claimedAt })
         .where(eq(incubatorSlots.id, job.incubatorSlotId));
       await tx.insert(economyLedger).values({
         userId: identity.userId,
