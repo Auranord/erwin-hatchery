@@ -262,7 +262,10 @@ type InventoryGrid<T> = {
   dimensions: GridDimensions;
   slots: Array<GridCell<T>>;
 };
-type IncubatorInventory = { incubators: IncubatorItem[] };
+type IncubatorInventory = {
+  dimensions: GridDimensions;
+  incubators: IncubatorItem[];
+};
 type IncubatorItem = {
   id: string;
   slotSource: string;
@@ -421,6 +424,12 @@ type InventoryDiscardTarget = {
 };
 type ShopErrorDialog = { title: string; message: string };
 type ShopPurchaseDialog = { itemCount: number; totalPrice: number };
+type InventoryUpgradeDialog = {
+  inventoryKind: string;
+  title: string;
+  newSlotCount: number;
+  cost: number;
+};
 type ToastTone = 'default' | 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 type ToastMessage = { id: number; text: string; tone: ToastTone };
 type MysteryEggIdentifyResponse =
@@ -641,6 +650,10 @@ function formatRemainingDuration(totalSeconds: number): string {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
+function formatUpgradeSlotCount(slotCount: number): string {
+  return slotCount === 1 ? '1 neuer Slot' : `${slotCount} neue Slots`;
+}
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -684,6 +697,8 @@ export function App(): JSX.Element {
     useState<ShopErrorDialog | null>(null);
   const [pendingShopPurchase, setPendingShopPurchase] =
     useState<ShopPurchaseDialog | null>(null);
+  const [pendingInventoryUpgrade, setPendingInventoryUpgrade] =
+    useState<InventoryUpgradeDialog | null>(null);
   const [upgradingInventoryKind, setUpgradingInventoryKind] = useState<
     string | null
   >(null);
@@ -1061,6 +1076,16 @@ export function App(): JSX.Element {
     }
   }
 
+  function requestInventoryRowUpgrade(
+    inventoryKind: string,
+    title: string,
+    newSlotCount: number,
+    cost: number
+  ): void {
+    if (upgradingInventoryKind) return;
+    setPendingInventoryUpgrade({ inventoryKind, title, newSlotCount, cost });
+  }
+
   async function upgradeInventoryRow(inventoryKind: string): Promise<void> {
     if (upgradingInventoryKind) return;
     setUpgradingInventoryKind(inventoryKind);
@@ -1082,6 +1107,7 @@ export function App(): JSX.Element {
       }
       if (payload?.inventory) setPlayerInventory(payload.inventory);
       else await refreshOwnInventory();
+      setPendingInventoryUpgrade(null);
     } finally {
       setUpgradingInventoryKind(null);
     }
@@ -2713,30 +2739,31 @@ export function App(): JSX.Element {
           ))}
         </div>
         {grid.dimensions.nextRowUpgradeCostCrackedEggs !== null ? (
-          <div className="inventory-upgrade-panel">
-            <div>
-              <strong>Inventar erweitern</strong>
-              <p>
-                +1 Reihe ({grid.dimensions.columns} neue Slots) · Du hast {getCrackedEggBalance()} Aufgebrochene Eier.
-                Das nächste Upgrade kostet danach doppelt.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void upgradeInventoryRow(grid.dimensions.kind);
-              }}
-              disabled={
-                upgradingInventoryKind !== null ||
-                getCrackedEggBalance() <
-                  grid.dimensions.nextRowUpgradeCostCrackedEggs
-              }
-            >
+          <button
+            type="button"
+            className="inventory-upgrade-panel inventory-upgrade-button"
+            onClick={() =>
+              requestInventoryRowUpgrade(
+                grid.dimensions.kind,
+                'Inventar erweitern',
+                grid.dimensions.columns,
+                grid.dimensions.nextRowUpgradeCostCrackedEggs ?? 0
+              )
+            }
+            disabled={
+              upgradingInventoryKind !== null ||
+              getCrackedEggBalance() <
+                grid.dimensions.nextRowUpgradeCostCrackedEggs
+            }
+          >
+            <strong>Inventar erweitern</strong>
+            <span>+1 Reihe ({formatUpgradeSlotCount(grid.dimensions.columns)})</span>
+            <span>
               {upgradingInventoryKind === grid.dimensions.kind
                 ? 'Erweitere …'
                 : `${grid.dimensions.nextRowUpgradeCostCrackedEggs} Aufgebrochene Eier`}
-            </button>
-          </div>
+            </span>
+          </button>
         ) : null}
       </section>
     );
@@ -2934,6 +2961,7 @@ export function App(): JSX.Element {
     inventory: IncubatorInventory
   ): JSX.Element {
     const incubators = inventory.incubators;
+    const upgradeCost = inventory.dimensions.nextRowUpgradeCostCrackedEggs;
 
     return (
       <section className="inventory-panel incubator-panel">
@@ -3032,6 +3060,32 @@ export function App(): JSX.Element {
         ) : (
           <p>Keine Inkubatoren verfügbar.</p>
         )}
+        {upgradeCost !== null ? (
+          <button
+            type="button"
+            className="inventory-upgrade-panel inventory-upgrade-button"
+            onClick={() =>
+              requestInventoryRowUpgrade(
+                inventory.dimensions.kind,
+                'Inkubatoren erweitern',
+                inventory.dimensions.columns,
+                upgradeCost
+              )
+            }
+            disabled={
+              upgradingInventoryKind !== null ||
+              getCrackedEggBalance() < upgradeCost
+            }
+          >
+            <strong>Inventar erweitern</strong>
+            <span>+1 Reihe ({formatUpgradeSlotCount(inventory.dimensions.columns)})</span>
+            <span>
+              {upgradingInventoryKind === inventory.dimensions.kind
+                ? 'Erweitere …'
+                : `${upgradeCost} Aufgebrochene Eier`}
+            </span>
+          </button>
+        ) : null}
       </section>
     );
   }
@@ -3201,6 +3255,37 @@ export function App(): JSX.Element {
                     ]}
                     onCancel={() => setPendingShopPurchase(null)}
                     cancelDisabled={isBuyingShopQueue}
+                  />
+                ) : null}
+                {pendingInventoryUpgrade ? (
+                  <PlayerDialog
+                    id="inventory-upgrade-confirm"
+                    title={`${pendingInventoryUpgrade.title}?`}
+                    role="alertdialog"
+                    variant="info"
+                    description={`+1 Reihe (${formatUpgradeSlotCount(pendingInventoryUpgrade.newSlotCount)}) für ${pendingInventoryUpgrade.cost} Aufgebrochene Eier kaufen?`}
+                    actions={[
+                      {
+                        label:
+                          upgradingInventoryKind === pendingInventoryUpgrade.inventoryKind
+                            ? 'Erweitere …'
+                            : 'Ja, erweitern',
+                        onClick: () =>
+                          void upgradeInventoryRow(
+                            pendingInventoryUpgrade.inventoryKind
+                          ),
+                        disabled: upgradingInventoryKind !== null,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingInventoryUpgrade(null),
+                        disabled: upgradingInventoryKind !== null,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingInventoryUpgrade(null)}
+                    cancelDisabled={upgradingInventoryKind !== null}
                   />
                 ) : null}
                 {statsPayload ? (

@@ -114,7 +114,7 @@ pnpm build
 
 ## Incubation queue behavior
 
-- The player UI shows two standard incubator queue slots at launch.
+- The player UI shows one default incubator queue slot at launch; players can buy additional queue slots one at a time with Aufgebrochene Eier.
 - Dropping an egg into an empty incubator queue slot removes it from the unhatched egg inventory and creates a queued incubation job.
 - If the stream is live and no other egg is running, the backend automatically starts the first queued egg.
 - When a running egg reaches its required progress, the backend marks that incubation as completed and waiting to be claimed before pet redemption, so the next queued egg can begin immediately while the finished pet remains available to collect.

@@ -179,10 +179,10 @@ Use official/current Twitch docs when implementing:
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, consumables, equipment, and hats. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
-- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
-- Incubators are shown directly above the unhatched egg grid as fixed drop targets without empty placeholder slots. Starting incubation requires the chosen unhatched egg and the chosen incubator.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, hats, and incubator queue slots. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion, including incubator queue rows.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
+- Incubators are shown directly above the unhatched egg grid as fixed drop targets backed by a row-upgradeable queue. Starting incubation requires the chosen unhatched egg and an available queue slot.
 - Event-Pet selection uses a fixed drop target above the pet inventory. Selection only marks an owned pet as selected for events and must not create an extra pet inventory slot or remove the pet from capacity checks.
 - Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a queued or running incubation job, and writes a ledger row.
 - Queue sync records a ledgered completion when a running job reaches its required progress, leaving the result claimable while allowing the next queued job to start.
