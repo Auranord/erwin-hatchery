@@ -1242,16 +1242,21 @@ ul {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  width: min(100%, 46rem);
   height: 3.35rem;
-  margin: 0;
+  min-height: 3.35rem;
+  max-height: 3.35rem;
+  margin: 0.85rem -1rem env(safe-area-inset-bottom);
   padding: 0.38rem 0.75rem;
   overflow-x: auto;
   overflow-y: hidden;
-  transform: translateX(-50%);
+  scrollbar-width: none;
   background: rgba(23, 20, 32, 0.96);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 -0.75rem 1.5rem rgba(0, 0, 0, 0.2);
+}
+
+.player-page-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .player-page-tabs button {
