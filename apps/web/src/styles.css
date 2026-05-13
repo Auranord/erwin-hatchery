@@ -1241,15 +1241,21 @@ ul {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  height: calc(3.35rem + env(safe-area-inset-bottom));
-  min-height: calc(3.35rem + env(safe-area-inset-bottom));
-  margin: 0.85rem -1rem 0;
-  padding: 0.38rem 0.75rem calc(0.38rem + env(safe-area-inset-bottom));
+  height: 3.35rem;
+  min-height: 3.35rem;
+  max-height: 3.35rem;
+  margin: 0.85rem -1rem env(safe-area-inset-bottom);
+  padding: 0.38rem 0.75rem;
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-width: none;
   background: rgba(23, 20, 32, 0.96);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 -0.75rem 1.5rem rgba(0, 0, 0, 0.2);
+}
+
+.player-page-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .player-page-tabs button {
