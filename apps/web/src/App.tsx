@@ -2989,15 +2989,20 @@ export function App(): JSX.Element {
                         <span className="slot-progress">
                           {active.state === 'queued'
                             ? 'Warteschlange'
-                            : formatRemainingDuration(secondsRemaining ?? 0)}
+                            : active.state === 'completed'
+                              ? 'Bereit zum Abholen'
+                              : formatRemainingDuration(secondsRemaining ?? 0)}
                         </span>
                         <span>
                           {active.state === 'queued'
                             ? 'Startet automatisch, sobald der Stream live ist und kein Ei brütet'
-                            : 'Zählt nur während Live-Stream'}
+                            : active.state === 'completed'
+                              ? 'Die nächste Warteschlange kann schon weiterbrüten'
+                              : 'Zählt nur während Live-Stream'}
                         </span>
-                        {active.state === 'running' &&
-                        (secondsRemaining ?? 1) <= 0 ? (
+                        {(active.state === 'completed' ||
+                          (active.state === 'running' &&
+                            (secondsRemaining ?? 1) <= 0)) ? (
                           <button
                             type="button"
                             onClick={(event) => {
