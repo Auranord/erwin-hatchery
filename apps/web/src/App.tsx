@@ -729,6 +729,8 @@ export function App(): JSX.Element {
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
+  const [activePlayerPageIndex, setActivePlayerPageIndex] = useState(0);
+  const swipeStartXRef = useRef<number | null>(null);
   const toastIdRef = useRef(0);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -3245,611 +3247,790 @@ export function App(): JSX.Element {
     );
   }
 
+  function renderResourceSummary(inventory: PlayerInventory): JSX.Element {
+    return (
+      <div className="resource-summary">
+        <h3>Gezählte Vorräte</h3>
+        <div className="resource-summary-grid">
+          <section
+            className="resource-column"
+            aria-labelledby="inventory-eggs-title"
+          >
+            <h4 id="inventory-eggs-title">Eier</h4>
+            {inventory.mysteryEggs.filter((entry) => entry.amount > 0).length > 0 ? (
+              inventory.mysteryEggs
+                .filter((entry) => entry.amount > 0)
+                .map((entry) => (
+                  <p key={entry.eggTypeId} className="resource-row">
+                    {renderSlotAsset({
+                      folder: 'eggs',
+                      assetKey: getEggAssetKey(entry.eggTypeId),
+                      label: formatMysteryEggType(entry.eggTypeId),
+                      size: 28
+                    })}
+                    <span>
+                      <strong>{formatMysteryEggType(entry.eggTypeId)}:</strong>{' '}
+                      {entry.amount}
+                    </span>{' '}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void identifyMysteryEgg(entry.eggTypeId)
+                          .then(async (result) => {
+                            showMysteryEggResult(entry.eggTypeId, result);
+                            await refreshOwnInventory();
+                          })
+                          .catch(showGameError)
+                      }
+                    >
+                      Typ bestimmen
+                    </button>
+                  </p>
+                ))
+            ) : (
+              <p className="resource-empty">Keine Eier.</p>
+            )}
+          </section>
+          <section
+            className="resource-column"
+            aria-labelledby="inventory-resources-title"
+          >
+            <h4 id="inventory-resources-title">Ressourcen</h4>
+            {inventory.crackedEggResources.filter((entry) => entry.amount > 0).length > 0 ? (
+              inventory.crackedEggResources
+                .filter((entry) => entry.amount > 0)
+                .map((entry) => {
+                  const resourceAssetKey = getEggResourceAssetKey(entry.resourceType);
+
+                  return (
+                    <p key={entry.resourceType} className="resource-row">
+                      {resourceAssetKey
+                        ? renderSlotAsset({
+                            folder: 'resources',
+                            assetKey: resourceAssetKey,
+                            label: formatEggResourceType(entry.resourceType),
+                            size: 28
+                          })
+                        : null}
+                      <span>
+                        <strong>{formatEggResourceType(entry.resourceType)}:</strong>{' '}
+                        {entry.amount}
+                      </span>
+                    </p>
+                  );
+                })
+            ) : (
+              <p className="resource-empty">Keine Ressourcen.</p>
+            )}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  function renderUnhatchedEggGrid(inventory: PlayerInventory): JSX.Element {
+    return renderGrid(
+      'Unausgebrütete Eier',
+      inventory.unhatchedEggs,
+      'egg',
+      (egg) => (
+        <div className="slot-content slot-content-with-asset">
+          {renderSlotAsset({
+            folder: 'eggs',
+            assetKey: getEggAssetKey(egg.eggTypeId),
+            label: formatMysteryEggType(egg.eggTypeId),
+            size: 56
+          })}
+          <div className="slot-text">
+            <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
+            <span>Bereit</span>
+          </div>
+        </div>
+      ),
+      'egg-panel',
+      undefined
+    );
+  }
+
+  function renderEventBox(inventory: PlayerInventory): JSX.Element {
+    const selectedEventPet = inventory.pets.slots.find(
+      (slot) => slot.item?.selectedForEvent
+    )?.item ?? null;
+    const selectedEventSet = inventory.equipmentSets.find(
+      (set) => set.selectedForEvent
+    );
+
+    return (
+      <section className="inventory-panel pet-panel">
+        <h3>Event box</h3>
+        <p className="inventory-capacity">
+          Pet antippen und dann den Event-Slot oder Ziel-Slot wählen.
+        </p>
+        {renderEventPetSelectionSlot(selectedEventPet)}
+        <div className="event-set-summary">
+          <span>Event-Set</span>
+          <strong>{selectedEventSet?.label ?? 'Kein Set ausgewählt'}</strong>
+          <small>
+            {selectedEventSet
+              ? `${selectedEventSet.slots.filter((slot) => slot.item).length}/${selectedEventSet.slotCount} Slots belegt`
+              : 'Optional für Beta-Battles'}
+          </small>
+        </div>
+      </section>
+    );
+  }
+
+  function renderPetInventoryGrid(inventory: PlayerInventory): JSX.Element {
+    return renderGrid(
+      'Pet-Inventar',
+      inventory.pets,
+      'pet',
+      (pet) => (
+        <div
+          className="pet-slot-card"
+          title={`${pet.speciesDisplayName} · ${pet.rarityLabelDe} · ${pet.classLabelDe} · ${pet.elementLabelDe}`}
+        >
+          <div className="pet-slot-main">
+            <div className="pet-slot-picture">
+              {renderSlotAsset({
+                folder: 'pets',
+                assetKey: getPetAssetKey(pet.speciesId),
+                label: pet.speciesDisplayName,
+                size: 56,
+                className: 'pet-slot-asset'
+              })}
+            </div>
+            <div
+              className="pet-slot-emblems"
+              aria-label={`${pet.rarityLabelDe}, Level ${pet.level}, ${pet.classLabelDe}, ${pet.elementLabelDe}`}
+            >
+              <span
+                className={`pet-emblem pet-emblem-favorite ${pet.isFavorite ? 'is-visible' : ''}`}
+                aria-label={pet.isFavorite ? 'Favorit' : 'Kein Favorit'}
+                title={pet.isFavorite ? 'Favorit' : 'Kein Favorit'}
+              >
+                {pet.isFavorite ? renderEmblemAsset('favorite', 'Favorit') : null}
+              </span>
+              <span
+                className="pet-emblem pet-emblem-level"
+                aria-label={`Level ${pet.level}`}
+                title={`Level ${pet.level}`}
+              >
+                {pet.level}
+              </span>
+              <span
+                className="pet-emblem pet-emblem-class"
+                aria-label={pet.classLabelDe}
+                title={pet.classLabelDe}
+              >
+                {renderEmblemAsset(`classes/${pet.classId}`, pet.classLabelDe)}
+              </span>
+              <span
+                className="pet-emblem pet-emblem-element"
+                aria-label={pet.elementLabelDe}
+                title={pet.elementLabelDe}
+              >
+                {renderEmblemAsset(`elements/${pet.elementId}`, pet.elementLabelDe)}
+              </span>
+            </div>
+          </div>
+          <div className="pet-slot-name">
+            <strong>{pet.nickname ?? pet.speciesDisplayName}</strong>
+          </div>
+        </div>
+      ),
+      'pet-grid-panel',
+      (pet) =>
+        `${pet.selectedForEvent ? 'selected-event-pet' : ''} ${getPetRarityClassName(pet.rarityId)}`.trim()
+    );
+  }
+
+  function renderConsumableGrid(inventory: PlayerInventory): JSX.Element {
+    return renderGrid(
+      'Verbrauchbares',
+      inventory.consumables,
+      'consumable',
+      (item) => (
+        <div className="slot-content slot-content-with-asset">
+          {renderSlotAsset({
+            folder: 'consumables',
+            assetKey: item.consumableTypeId,
+            label: item.consumableTypeId,
+            size: 28
+          })}
+          <div className="slot-text">
+            <strong>{item.consumableTypeId}</strong>
+            <span className="stack-badge">Einzeln</span>
+          </div>
+        </div>
+      ),
+      'item-panel',
+      undefined
+    );
+  }
+
+  function renderEquipmentGrid(inventory: PlayerInventory): JSX.Element {
+    return renderGrid(
+      'Ausrüstung',
+      inventory.equipment,
+      'equipment',
+      (equipment) => (
+        <div className="slot-content slot-content-with-asset">
+          {renderSlotAsset({
+            folder: 'equipment',
+            assetKey: equipment.equipmentTypeId,
+            label: equipment.equipmentTypeId,
+            size: 28
+          })}
+          <div className="slot-text">
+            <strong>{equipment.equipmentTypeId}</strong>
+            <span>Einzeln</span>
+          </div>
+        </div>
+      ),
+      'item-panel',
+      undefined
+    );
+  }
+
+  function renderHatGrid(inventory: PlayerInventory): JSX.Element {
+    return renderGrid(
+      'Hüte',
+      inventory.hats,
+      'hat',
+      (hat) => (
+        <div className="slot-content slot-content-with-asset">
+          {renderSlotAsset({
+            folder: 'hats',
+            assetKey: hat.hatId,
+            label: hat.hatId,
+            size: 28
+          })}
+          <div className="slot-text">
+            <strong>{hat.hatId}</strong>
+            <span>Einzeln</span>
+          </div>
+        </div>
+      ),
+      'item-panel',
+      undefined
+    );
+  }
+
+  function handlePlayerPageSwipeStart(clientX: number): void {
+    swipeStartXRef.current = clientX;
+  }
+
+  function handlePlayerPageSwipeEnd(clientX: number, pageCount: number): void {
+    const startX = swipeStartXRef.current;
+    swipeStartXRef.current = null;
+    if (startX === null) return;
+
+    const distance = clientX - startX;
+    if (Math.abs(distance) < 48) return;
+
+    setActivePlayerPageIndex((currentIndex) => {
+      if (distance < 0) return Math.min(pageCount - 1, currentIndex + 1);
+      return Math.max(0, currentIndex - 1);
+    });
+  }
+
+
   if (setupStatus && !setupStatus.completed && !isAlertOverlayRoute && !isBattleOverlayRoute) {
     return renderSetupScreen();
   }
 
-  return (
-    <main className="container">
-      <header className="hero">
-        <p className="badge">Öffentliche Vorschau · MVP</p>
-        <h1>Erwin Hatchery</h1>
-      </header>
-      <section className="card">
-        <h2>Login</h2>
-        {me?.authenticated ? (
-          <>
-            <p>
-              Angemeldet als{' '}
-              <strong>{me.user.displayName ?? me.user.login}</strong>
-            </p>
-            {me.user.avatarUrl ? (
-              <img
-                src={me.user.avatarUrl}
-                alt="Profilbild"
-                width={72}
-                height={72}
-              />
-            ) : null}
-            <p>Rolle: {me.isAdmin ? 'Admin' : 'Spieler'}</p>
-            {showAdminNav ? (
-              <p>
-                <a href="/admin">Zum Adminbereich</a>
-              </p>
-            ) : null}
-            <button onClick={() => void logout()}>Logout</button>
-          </>
-        ) : (
-          <>
-            <p>Bitte melde dich mit Twitch an.</p>
-            <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>
-          </>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Globales Leaderboard</h2>
-        <p>Top 10 Spieler nach Event-Punkten.</p>
-        {leaderboardEntries.length > 0 ? (
-          <ol>
-            {leaderboardEntries.map((entry) => (
-              <li key={entry.userId}>
-                <strong>
-                  {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}
-                </strong>{' '}
-                · {entry.score} Punkte
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p>Noch keine Event-Punkte vorhanden.</p>
-        )}
-      </section>
-
-      <section className="card">
-        <h2>Spielbereich</h2>
-        {me?.authenticated ? (
-          <>
-            {playerInventory ? (
+  const playerPages: Array<{ id: string; label: string; content: JSX.Element }> = [
+    {
+      id: 'main',
+      label: 'Start',
+      content: (
+        <div className="player-page-content">
+          <header className="hero">
+            <p className="badge">Öffentliche Vorschau · MVP</p>
+            <h1>Erwin Hatchery</h1>
+          </header>
+          <section className="card">
+            <h2>Login</h2>
+            {me?.authenticated ? (
               <>
-                {pendingPetScrap ? (
-                  <PlayerDialog
-                    id="pet-scrap-confirm"
-                    title={`${pendingPetScrap.label} wirklich verwerten?`}
-                    role="alertdialog"
-                    description={
-                      <>
-                        Dieses Pet wird dauerhaft gelöscht und du erhältst
-                        Aufgebrochene Eier abhängig von der Seltenheit (
-                        {pendingPetScrap.rarity}).
-                      </>
-                    }
-                    actions={[
-                      {
-                        label: isPetScrapSubmitting
-                          ? 'Wird verwertet …'
-                          : 'Ja, verwerten',
-                        onClick: () => void confirmPetScrap(),
-                        disabled: isPetScrapSubmitting,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingPetScrap(null),
-                        disabled: isPetScrapSubmitting,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingPetScrap(null)}
-                    cancelDisabled={isPetScrapSubmitting}
+                <p>
+                  Angemeldet als{' '}
+                  <strong>{me.user.displayName ?? me.user.login}</strong>
+                </p>
+                {me.user.avatarUrl ? (
+                  <img
+                    src={me.user.avatarUrl}
+                    alt="Profilbild"
+                    width={72}
+                    height={72}
                   />
                 ) : null}
-                {pendingInventoryDiscard ? (
-                  <PlayerDialog
-                    id="inventory-discard-confirm"
-                    title={`${pendingInventoryDiscard.label} wirklich verwerfen?`}
-                    role="alertdialog"
-                    description="Der Gegenstand wird dauerhaft gelöscht. Du erhältst dafür keine Ressourcen oder andere Belohnungen."
-                    actions={[
-                      {
-                        label: isInventoryDiscardSubmitting
-                          ? 'Wird verworfen …'
-                          : 'Ja, verwerfen',
-                        onClick: () => void confirmInventoryDiscard(),
-                        disabled: isInventoryDiscardSubmitting,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingInventoryDiscard(null),
-                        disabled: isInventoryDiscardSubmitting,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingInventoryDiscard(null)}
-                    cancelDisabled={isInventoryDiscardSubmitting}
-                  />
+                <p>Rolle: {me.isAdmin ? 'Admin' : 'Spieler'}</p>
+                {showAdminNav ? (
+                  <p>
+                    <a href="/admin">Zum Adminbereich</a>
+                  </p>
                 ) : null}
-                {pendingShopError ? (
-                  <PlayerDialog
-                    id="shop-error-dialog"
-                    title={pendingShopError.title}
-                    role="alertdialog"
-                    variant="info"
-                    description={pendingShopError.message}
-                    actions={[
-                      {
-                        label: 'Verstanden',
-                        onClick: () => setPendingShopError(null),
-                        variant: 'primary'
-                      }
-                    ]}
-                    onCancel={() => setPendingShopError(null)}
-                  />
-                ) : null}
-                {pendingShopPurchase ? (
-                  <PlayerDialog
-                    id="shop-purchase-confirm"
-                    title="Kaufliste kaufen?"
-                    role="alertdialog"
-                    variant="info"
-                    description={`${pendingShopPurchase.itemCount} Shop-Item(s) für insgesamt ${pendingShopPurchase.totalPrice} Aufgebrochene Eier kaufen?`}
-                    actions={[
-                      {
-                        label: isBuyingShopQueue ? 'Kaufe …' : 'Ja, kaufen',
-                        onClick: () => void buyQueuedShopItems(),
-                        disabled: isBuyingShopQueue,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingShopPurchase(null),
-                        disabled: isBuyingShopQueue,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingShopPurchase(null)}
-                    cancelDisabled={isBuyingShopQueue}
-                  />
-                ) : null}
-                {pendingSubscriberShopPurchase ? (
-                  <PlayerDialog
-                    id="subscriber-shop-purchase-confirm"
-                    title={`${pendingSubscriberShopPurchase.offer.displayName} kaufen?`}
-                    role="alertdialog"
-                    variant="info"
-                    description={`${pendingSubscriberShopPurchase.offer.resourcePrice} Gutschein(e) ausgeben und das Pet-Hut-Paar kaufen?`}
-                    actions={[
-                      {
-                        label: isBuyingSubscriberShopOffer ? 'Kaufe …' : 'Ja, kaufen',
-                        onClick: () =>
-                          void buySubscriberShopOffer(pendingSubscriberShopPurchase.offer),
-                        disabled: isBuyingSubscriberShopOffer,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingSubscriberShopPurchase(null),
-                        disabled: isBuyingSubscriberShopOffer,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingSubscriberShopPurchase(null)}
-                    cancelDisabled={isBuyingSubscriberShopOffer}
-                  />
-                ) : null}
-                {pendingEquipmentSetUpgrade ? (
-                  <PlayerDialog
-                    id="equipment-set-upgrade-confirm"
-                    title={`${pendingEquipmentSetUpgrade.title}?`}
-                    role="alertdialog"
-                    variant="info"
-                    description={`${pendingEquipmentSetUpgrade.description} Für ${pendingEquipmentSetUpgrade.cost} Aufgebrochene Eier kaufen?`}
-                    actions={[
-                      {
-                        label:
-                          upgradingInventoryKind === pendingEquipmentSetUpgrade.upgradeKind
-                            ? pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
-                              ? 'Kaufe …'
-                              : 'Erweitere …'
-                            : pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
-                              ? 'Ja, kaufen'
-                              : 'Ja, erweitern',
-                        onClick: () =>
-                          void buyEquipmentSetUpgrade(
-                            pendingEquipmentSetUpgrade.upgradeKind
-                          ),
-                        disabled: upgradingInventoryKind !== null,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingEquipmentSetUpgrade(null),
-                        disabled: upgradingInventoryKind !== null,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingEquipmentSetUpgrade(null)}
-                    cancelDisabled={upgradingInventoryKind !== null}
-                  />
-                ) : null}
-                {pendingInventoryUpgrade ? (
-                  <PlayerDialog
-                    id="inventory-upgrade-confirm"
-                    title={`${pendingInventoryUpgrade.title}?`}
-                    role="alertdialog"
-                    variant="info"
-                    description={`+1 Reihe (${formatUpgradeSlotCount(pendingInventoryUpgrade.newSlotCount)}) für ${pendingInventoryUpgrade.cost} Aufgebrochene Eier kaufen?`}
-                    actions={[
-                      {
-                        label:
-                          upgradingInventoryKind === pendingInventoryUpgrade.inventoryKind
-                            ? 'Erweitere …'
-                            : 'Ja, erweitern',
-                        onClick: () =>
-                          void upgradeInventoryRow(
-                            pendingInventoryUpgrade.inventoryKind
-                          ),
-                        disabled: upgradingInventoryKind !== null,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setPendingInventoryUpgrade(null),
-                        disabled: upgradingInventoryKind !== null,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setPendingInventoryUpgrade(null)}
-                    cancelDisabled={upgradingInventoryKind !== null}
-                  />
-                ) : null}
-                {statsPayload ? (
-                  <PlayerDialog
-                    id="inventory-stats"
-                    title={`Werte: ${getInventoryItemLabel(statsPayload)}`}
-                    className="stats-modal"
-                    actions={[
-                      {
-                        label: 'Schließen',
-                        onClick: () => setStatsPayload(null),
-                        variant: 'primary'
-                      }
-                    ]}
-                    onCancel={() => setStatsPayload(null)}
-                  >
-                    {renderStatsRows(statsPayload)}
-                  </PlayerDialog>
-                ) : null}
-                {renamePetDraft ? (
-                  <PlayerDialog
-                    id="pet-rename"
-                    title="Pet umbenennen"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void confirmPetRename();
-                    }}
-                    actions={[
-                      {
-                        label: isPetRenameSubmitting
-                          ? 'Wird gespeichert …'
-                          : 'Speichern',
-                        type: 'submit',
-                        disabled: isPetRenameSubmitting,
-                        variant: 'primary'
-                      },
-                      {
-                        label: 'Abbrechen',
-                        onClick: () => setRenamePetDraft(null),
-                        disabled: isPetRenameSubmitting,
-                        variant: 'secondary'
-                      }
-                    ]}
-                    onCancel={() => setRenamePetDraft(null)}
-                    cancelDisabled={isPetRenameSubmitting}
-                  >
-                    <label className="rename-field">
-                      Neuer Spitzname
-                      <input
-                        value={renamePetDraft.nickname}
-                        maxLength={32}
-                        onChange={(event) =>
-                          setRenamePetDraft({
-                            ...renamePetDraft,
-                            nickname: event.target.value
-                          })
-                        }
-                      />
-                    </label>
-                  </PlayerDialog>
-                ) : null}
-                <div className="resource-summary">
-                  <h3>Gezählte Vorräte</h3>
-                  <div className="resource-summary-grid">
-                    <section
-                      className="resource-column"
-                      aria-labelledby="inventory-eggs-title"
-                    >
-                      <h4 id="inventory-eggs-title">Eier</h4>
-                      {playerInventory.mysteryEggs.filter(
-                        (entry) => entry.amount > 0
-                      ).length > 0 ? (
-                        playerInventory.mysteryEggs
-                          .filter((entry) => entry.amount > 0)
-                          .map((entry) => (
-                            <p key={entry.eggTypeId} className="resource-row">
-                              {renderSlotAsset({
-                                folder: 'eggs',
-                                assetKey: getEggAssetKey(entry.eggTypeId),
-                                label: formatMysteryEggType(entry.eggTypeId),
-                                size: 28
-                              })}
-                              <span>
-                                <strong>
-                                  {formatMysteryEggType(entry.eggTypeId)}:
-                                </strong>{' '}
-                                {entry.amount}
-                              </span>{' '}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void identifyMysteryEgg(entry.eggTypeId)
-                                    .then(async (result) => {
-                                      showMysteryEggResult(entry.eggTypeId, result);
-                                      await refreshOwnInventory();
-                                    })
-                                    .catch(showGameError)
-                                }
-                              >
-                                Typ bestimmen
-                              </button>
-                            </p>
-                          ))
-                      ) : (
-                        <p className="resource-empty">Keine Eier.</p>
-                      )}
-                    </section>
-                    <section
-                      className="resource-column"
-                      aria-labelledby="inventory-resources-title"
-                    >
-                      <h4 id="inventory-resources-title">Ressourcen</h4>
-                      {playerInventory.crackedEggResources.filter(
-                        (entry) => entry.amount > 0
-                      ).length > 0 ? (
-                        playerInventory.crackedEggResources
-                          .filter((entry) => entry.amount > 0)
-                          .map((entry) => {
-                            const resourceAssetKey = getEggResourceAssetKey(
-                              entry.resourceType
-                            );
-
-                            return (
-                              <p
-                                key={entry.resourceType}
-                                className="resource-row"
-                              >
-                                {resourceAssetKey
-                                  ? renderSlotAsset({
-                                      folder: 'resources',
-                                      assetKey: resourceAssetKey,
-                                      label: formatEggResourceType(
-                                        entry.resourceType
-                                      ),
-                                      size: 28
-                                    })
-                                  : null}
-                                <span>
-                                  <strong>
-                                    {formatEggResourceType(entry.resourceType)}:
-                                  </strong>{' '}
-                                  {entry.amount}
-                                </span>
-                              </p>
-                            );
-                          })
-                      ) : (
-                        <p className="resource-empty">Keine Ressourcen.</p>
-                      )}
-                    </section>
-                  </div>
-                </div>
-                <div className="inventory-stack">
-                  {renderIncubatorInventory(playerInventory.incubators)}
-                  {renderGrid(
-                    'Unausgebrütete Eier',
-                    playerInventory.unhatchedEggs,
-                    'egg',
-                    (egg) => (
-                      <div
-                        className="slot-content slot-content-with-asset"
-                      >
-                        {renderSlotAsset({
-                          folder: 'eggs',
-                          assetKey: getEggAssetKey(egg.eggTypeId),
-                          label: formatMysteryEggType(egg.eggTypeId),
-                          size: 56
-                        })}
-                        <div className="slot-text">
-                          <strong>{formatMysteryEggType(egg.eggTypeId)}</strong>
-                          <span>Bereit</span>
-                        </div>
-                      </div>
-                    ),
-                    'egg-panel',
-                    undefined
-                  )}
-                  <section className="inventory-panel pet-panel">
-                    <h3>Pets</h3>
-                    <p className="inventory-capacity">
-                      Pet antippen und dann den Event-Slot oder Ziel-Slot wählen.
-                    </p>
-                    {renderEventPetSelectionSlot(selectedEventPet)}
-                    <div className="event-set-summary">
-                      <span>Event-Set</span>
-                      <strong>{selectedEventSet?.label ?? 'Kein Set ausgewählt'}</strong>
-                      <small>{selectedEventSet ? `${selectedEventSet.slots.filter((slot) => slot.item).length}/${selectedEventSet.slotCount} Slots belegt` : 'Optional für Beta-Battles'}</small>
-                    </div>
-                  </section>
-                  {renderGrid(
-                    'Pet-Inventar',
-                    playerInventory.pets,
-                    'pet',
-                    (pet) => (
-                      <div
-                        className="pet-slot-card"
-                        title={`${pet.speciesDisplayName} · ${pet.rarityLabelDe} · ${pet.classLabelDe} · ${pet.elementLabelDe}`}
-                      >
-                        <div className="pet-slot-main">
-                          <div className="pet-slot-picture">
-                            {renderSlotAsset({
-                              folder: 'pets',
-                              assetKey: getPetAssetKey(pet.speciesId),
-                              label: pet.speciesDisplayName,
-                              size: 56,
-                              className: 'pet-slot-asset'
-                            })}
-                          </div>
-                          <div
-                            className="pet-slot-emblems"
-                            aria-label={`${pet.rarityLabelDe}, Level ${pet.level}, ${pet.classLabelDe}, ${pet.elementLabelDe}`}
-                          >
-                            <span
-                              className={`pet-emblem pet-emblem-favorite ${pet.isFavorite ? 'is-visible' : ''}`}
-                              aria-label={
-                                pet.isFavorite ? 'Favorit' : 'Kein Favorit'
-                              }
-                              title={
-                                pet.isFavorite ? 'Favorit' : 'Kein Favorit'
-                              }
-                            >
-                              {pet.isFavorite
-                                ? renderEmblemAsset('favorite', 'Favorit')
-                                : null}
-                            </span>
-                            <span
-                              className="pet-emblem pet-emblem-level"
-                              aria-label={`Level ${pet.level}`}
-                              title={`Level ${pet.level}`}
-                            >
-                              {pet.level}
-                            </span>
-                            <span
-                              className="pet-emblem pet-emblem-class"
-                              aria-label={pet.classLabelDe}
-                              title={pet.classLabelDe}
-                            >
-                              {renderEmblemAsset(
-                                `classes/${pet.classId}`,
-                                pet.classLabelDe
-                              )}
-                            </span>
-                            <span
-                              className="pet-emblem pet-emblem-element"
-                              aria-label={pet.elementLabelDe}
-                              title={pet.elementLabelDe}
-                            >
-                              {renderEmblemAsset(
-                                `elements/${pet.elementId}`,
-                                pet.elementLabelDe
-                              )}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="pet-slot-name">
-                          <strong>{pet.nickname ?? pet.speciesDisplayName}</strong>
-                        </div>
-                      </div>
-                    ),
-                    'pet-grid-panel',
-                    (pet) =>
-                      `${pet.selectedForEvent ? 'selected-event-pet' : ''} ${getPetRarityClassName(pet.rarityId)}`.trim()
-                  )}
-                  {renderGrid(
-                    'Verbrauchbares',
-                    playerInventory.consumables,
-                    'consumable',
-                    (item) => (
-                      <div
-                        className="slot-content slot-content-with-asset"
-                      >
-                        {renderSlotAsset({
-                          folder: 'consumables',
-                          assetKey: item.consumableTypeId,
-                          label: item.consumableTypeId,
-                          size: 28
-                        })}
-                        <div className="slot-text">
-                          <strong>{item.consumableTypeId}</strong>
-                          <span className="stack-badge">Einzeln</span>
-                        </div>
-                      </div>
-                    ),
-                    'item-panel',
-                    undefined
-                  )}
-                  {renderEquipmentSetsPanel(
-                    playerInventory.equipmentSets,
-                    playerInventory.equipmentSetUpgrades
-                  )}
-                  {renderGrid(
-                    'Ausrüstung',
-                    playerInventory.equipment,
-                    'equipment',
-                    (equipment) => (
-                      <div
-                        className="slot-content slot-content-with-asset"
-                      >
-                        {renderSlotAsset({
-                          folder: 'equipment',
-                          assetKey: equipment.equipmentTypeId,
-                          label: equipment.equipmentTypeId,
-                          size: 28
-                        })}
-                        <div className="slot-text">
-                          <strong>{equipment.equipmentTypeId}</strong>
-                          <span>Einzeln</span>
-                        </div>
-                      </div>
-                    ),
-                    'item-panel',
-                    undefined
-                  )}
-                  {renderGrid(
-                    'Hüte',
-                    playerInventory.hats,
-                    'hat',
-                    (hat) => (
-                      <div
-                        className="slot-content slot-content-with-asset"
-                      >
-                        {renderSlotAsset({
-                          folder: 'hats',
-                          assetKey: hat.hatId,
-                          label: hat.hatId,
-                          size: 28
-                        })}
-                        <div className="slot-text">
-                          <strong>{hat.hatId}</strong>
-                          <span>Einzeln</span>
-                        </div>
-                      </div>
-                    ),
-                    'item-panel',
-                    undefined
-                  )}
-                  {renderShopPanel(shopOffers)}
-                  {renderSubscriberShopPanel(subscriberShopOffers)}
-                </div>
+                <button onClick={() => void logout()}>Logout</button>
               </>
             ) : (
-              <p>Inventar wird geladen…</p>
+              <>
+                <p>Bitte melde dich mit Twitch an.</p>
+                <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>
+              </>
             )}
-          </>
-        ) : (
-          <p>Nach dem Login siehst du hier deinen Spielbereich.</p>
-        )}
+          </section>
+
+          <section className="card">
+            <h2>Globales Leaderboard</h2>
+            <p>Top 10 Spieler nach Event-Punkten.</p>
+            {leaderboardEntries.length > 0 ? (
+              <ol>
+                {leaderboardEntries.map((entry) => (
+                  <li key={entry.userId}>
+                    <strong>
+                      {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}
+                    </strong>{' '}
+                    · {entry.score} Punkte
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p>Noch keine Event-Punkte vorhanden.</p>
+            )}
+          </section>
+        </div>
+      )
+    }
+  ];
+
+  if (me?.authenticated) {
+    if (playerInventory) {
+      playerPages.push(
+        {
+          id: 'incubator',
+          label: 'Inkubator',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderResourceSummary(playerInventory)}
+              {renderIncubatorInventory(playerInventory.incubators)}
+              {renderUnhatchedEggGrid(playerInventory)}
+            </div>
+          )
+        },
+        {
+          id: 'pets',
+          label: 'Pets',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderEventBox(playerInventory)}
+              {renderPetInventoryGrid(playerInventory)}
+            </div>
+          )
+        },
+        {
+          id: 'consumables',
+          label: 'Items',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderConsumableGrid(playerInventory)}
+              {renderPetInventoryGrid(playerInventory)}
+            </div>
+          )
+        },
+        {
+          id: 'equipment',
+          label: 'Ausrüstung',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderEquipmentSetsPanel(
+                playerInventory.equipmentSets,
+                playerInventory.equipmentSetUpgrades
+              )}
+              {renderEquipmentGrid(playerInventory)}
+            </div>
+          )
+        },
+        {
+          id: 'profile',
+          label: 'Profil',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderHatGrid(playerInventory)}
+            </div>
+          )
+        },
+        {
+          id: 'shop',
+          label: 'Shop',
+          content: (
+            <div className="player-page-content inventory-stack">
+              {renderShopPanel(shopOffers)}
+              {renderSubscriberShopPanel(subscriberShopOffers)}
+            </div>
+          )
+        }
+      );
+    } else {
+      playerPages.push({
+        id: 'loading',
+        label: 'Spiel',
+        content: (
+          <section className="card player-page-content">
+            <h2>Spielbereich</h2>
+            <p>Inventar wird geladen…</p>
+          </section>
+        )
+      });
+    }
+  }
+
+  const currentPlayerPageIndex = Math.min(
+    activePlayerPageIndex,
+    playerPages.length - 1
+  );
+  const goToPlayerPage = (pageIndex: number): void => {
+    setActivePlayerPageIndex(
+      Math.min(Math.max(pageIndex, 0), playerPages.length - 1)
+    );
+  };
+
+  return (
+    <main className="container player-page-container">
+      {me?.authenticated && playerInventory ? (
+        <>
+{pendingPetScrap ? (
+  <PlayerDialog
+    id="pet-scrap-confirm"
+    title={`${pendingPetScrap.label} wirklich verwerten?`}
+    role="alertdialog"
+    description={
+      <>
+        Dieses Pet wird dauerhaft gelöscht und du erhältst
+        Aufgebrochene Eier abhängig von der Seltenheit (
+        {pendingPetScrap.rarity}).
+      </>
+    }
+    actions={[
+      {
+        label: isPetScrapSubmitting
+          ? 'Wird verwertet …'
+          : 'Ja, verwerten',
+        onClick: () => void confirmPetScrap(),
+        disabled: isPetScrapSubmitting,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingPetScrap(null),
+        disabled: isPetScrapSubmitting,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingPetScrap(null)}
+    cancelDisabled={isPetScrapSubmitting}
+  />
+) : null}
+{pendingInventoryDiscard ? (
+  <PlayerDialog
+    id="inventory-discard-confirm"
+    title={`${pendingInventoryDiscard.label} wirklich verwerfen?`}
+    role="alertdialog"
+    description="Der Gegenstand wird dauerhaft gelöscht. Du erhältst dafür keine Ressourcen oder andere Belohnungen."
+    actions={[
+      {
+        label: isInventoryDiscardSubmitting
+          ? 'Wird verworfen …'
+          : 'Ja, verwerfen',
+        onClick: () => void confirmInventoryDiscard(),
+        disabled: isInventoryDiscardSubmitting,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingInventoryDiscard(null),
+        disabled: isInventoryDiscardSubmitting,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingInventoryDiscard(null)}
+    cancelDisabled={isInventoryDiscardSubmitting}
+  />
+) : null}
+{pendingShopError ? (
+  <PlayerDialog
+    id="shop-error-dialog"
+    title={pendingShopError.title}
+    role="alertdialog"
+    variant="info"
+    description={pendingShopError.message}
+    actions={[
+      {
+        label: 'Verstanden',
+        onClick: () => setPendingShopError(null),
+        variant: 'primary'
+      }
+    ]}
+    onCancel={() => setPendingShopError(null)}
+  />
+) : null}
+{pendingShopPurchase ? (
+  <PlayerDialog
+    id="shop-purchase-confirm"
+    title="Kaufliste kaufen?"
+    role="alertdialog"
+    variant="info"
+    description={`${pendingShopPurchase.itemCount} Shop-Item(s) für insgesamt ${pendingShopPurchase.totalPrice} Aufgebrochene Eier kaufen?`}
+    actions={[
+      {
+        label: isBuyingShopQueue ? 'Kaufe …' : 'Ja, kaufen',
+        onClick: () => void buyQueuedShopItems(),
+        disabled: isBuyingShopQueue,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingShopPurchase(null),
+        disabled: isBuyingShopQueue,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingShopPurchase(null)}
+    cancelDisabled={isBuyingShopQueue}
+  />
+) : null}
+{pendingSubscriberShopPurchase ? (
+  <PlayerDialog
+    id="subscriber-shop-purchase-confirm"
+    title={`${pendingSubscriberShopPurchase.offer.displayName} kaufen?`}
+    role="alertdialog"
+    variant="info"
+    description={`${pendingSubscriberShopPurchase.offer.resourcePrice} Gutschein(e) ausgeben und das Pet-Hut-Paar kaufen?`}
+    actions={[
+      {
+        label: isBuyingSubscriberShopOffer ? 'Kaufe …' : 'Ja, kaufen',
+        onClick: () =>
+          void buySubscriberShopOffer(pendingSubscriberShopPurchase.offer),
+        disabled: isBuyingSubscriberShopOffer,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingSubscriberShopPurchase(null),
+        disabled: isBuyingSubscriberShopOffer,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingSubscriberShopPurchase(null)}
+    cancelDisabled={isBuyingSubscriberShopOffer}
+  />
+) : null}
+{pendingEquipmentSetUpgrade ? (
+  <PlayerDialog
+    id="equipment-set-upgrade-confirm"
+    title={`${pendingEquipmentSetUpgrade.title}?`}
+    role="alertdialog"
+    variant="info"
+    description={`${pendingEquipmentSetUpgrade.description} Für ${pendingEquipmentSetUpgrade.cost} Aufgebrochene Eier kaufen?`}
+    actions={[
+      {
+        label:
+          upgradingInventoryKind === pendingEquipmentSetUpgrade.upgradeKind
+            ? pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
+              ? 'Kaufe …'
+              : 'Erweitere …'
+            : pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
+              ? 'Ja, kaufen'
+              : 'Ja, erweitern',
+        onClick: () =>
+          void buyEquipmentSetUpgrade(
+            pendingEquipmentSetUpgrade.upgradeKind
+          ),
+        disabled: upgradingInventoryKind !== null,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingEquipmentSetUpgrade(null),
+        disabled: upgradingInventoryKind !== null,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingEquipmentSetUpgrade(null)}
+    cancelDisabled={upgradingInventoryKind !== null}
+  />
+) : null}
+{pendingInventoryUpgrade ? (
+  <PlayerDialog
+    id="inventory-upgrade-confirm"
+    title={`${pendingInventoryUpgrade.title}?`}
+    role="alertdialog"
+    variant="info"
+    description={`+1 Reihe (${formatUpgradeSlotCount(pendingInventoryUpgrade.newSlotCount)}) für ${pendingInventoryUpgrade.cost} Aufgebrochene Eier kaufen?`}
+    actions={[
+      {
+        label:
+          upgradingInventoryKind === pendingInventoryUpgrade.inventoryKind
+            ? 'Erweitere …'
+            : 'Ja, erweitern',
+        onClick: () =>
+          void upgradeInventoryRow(
+            pendingInventoryUpgrade.inventoryKind
+          ),
+        disabled: upgradingInventoryKind !== null,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setPendingInventoryUpgrade(null),
+        disabled: upgradingInventoryKind !== null,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setPendingInventoryUpgrade(null)}
+    cancelDisabled={upgradingInventoryKind !== null}
+  />
+) : null}
+{statsPayload ? (
+  <PlayerDialog
+    id="inventory-stats"
+    title={`Werte: ${getInventoryItemLabel(statsPayload)}`}
+    className="stats-modal"
+    actions={[
+      {
+        label: 'Schließen',
+        onClick: () => setStatsPayload(null),
+        variant: 'primary'
+      }
+    ]}
+    onCancel={() => setStatsPayload(null)}
+  >
+    {renderStatsRows(statsPayload)}
+  </PlayerDialog>
+) : null}
+{renamePetDraft ? (
+  <PlayerDialog
+    id="pet-rename"
+    title="Pet umbenennen"
+    onSubmit={(event) => {
+      event.preventDefault();
+      void confirmPetRename();
+    }}
+    actions={[
+      {
+        label: isPetRenameSubmitting
+          ? 'Wird gespeichert …'
+          : 'Speichern',
+        type: 'submit',
+        disabled: isPetRenameSubmitting,
+        variant: 'primary'
+      },
+      {
+        label: 'Abbrechen',
+        onClick: () => setRenamePetDraft(null),
+        disabled: isPetRenameSubmitting,
+        variant: 'secondary'
+      }
+    ]}
+    onCancel={() => setRenamePetDraft(null)}
+    cancelDisabled={isPetRenameSubmitting}
+  >
+    <label className="rename-field">
+      Neuer Spitzname
+      <input
+        value={renamePetDraft.nickname}
+        maxLength={32}
+        onChange={(event) =>
+          setRenamePetDraft({
+            ...renamePetDraft,
+            nickname: event.target.value
+          })
+        }
+      />
+    </label>
+  </PlayerDialog>
+) : null}
+        </>
+      ) : null}
+      <section
+        className="player-page-shell"
+        aria-label="Spielbereiche"
+        onTouchStart={(event) =>
+          handlePlayerPageSwipeStart(event.changedTouches[0]?.clientX ?? 0)
+        }
+        onTouchEnd={(event) =>
+          handlePlayerPageSwipeEnd(
+            event.changedTouches[0]?.clientX ?? 0,
+            playerPages.length
+          )
+        }
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            goToPlayerPage(currentPlayerPageIndex - 1);
+          }
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            goToPlayerPage(currentPlayerPageIndex + 1);
+          }
+        }}
+        tabIndex={0}
+      >
+        <button
+          type="button"
+          className="player-page-arrow player-page-arrow--previous"
+          onClick={() => goToPlayerPage(currentPlayerPageIndex - 1)}
+          disabled={currentPlayerPageIndex === 0}
+          aria-label="Vorherige Seite"
+        >
+          ‹
+        </button>
+        <div className="player-page-viewport">
+          <div
+            className="player-page-track"
+            style={{ transform: `translateX(-${currentPlayerPageIndex * 100}%)` }}
+          >
+            {playerPages.map((page, index) => (
+              <article
+                key={page.id}
+                className="player-page"
+                aria-hidden={index !== currentPlayerPageIndex}
+                aria-label={page.label}
+              >
+                {page.content}
+              </article>
+            ))}
+          </div>
+        </div>
+        <button
+          type="button"
+          className="player-page-arrow player-page-arrow--next"
+          onClick={() => goToPlayerPage(currentPlayerPageIndex + 1)}
+          disabled={currentPlayerPageIndex === playerPages.length - 1}
+          aria-label="Nächste Seite"
+        >
+          ›
+        </button>
       </section>
+      <nav className="player-page-tabs" aria-label="Spielbereich wechseln">
+        {playerPages.map((page, index) => (
+          <button
+            key={page.id}
+            type="button"
+            className={index === currentPlayerPageIndex ? 'active' : undefined}
+            onClick={() => goToPlayerPage(index)}
+            aria-current={index === currentPlayerPageIndex ? 'page' : undefined}
+          >
+            {page.label}
+          </button>
+        ))}
+      </nav>
+      {!me?.authenticated ? (
+        <section className="card player-login-hint">
+          <p>Nach dem Login kannst du per Wischgeste zwischen Inkubator, Pets, Verbrauchbarem, Ausrüstung, Profil und Shop wechseln.</p>
+        </section>
+      ) : null}
       {toastMessage ? (
         <div className="toast-viewport" aria-live="polite" aria-atomic="true">
           <p

@@ -1149,3 +1149,139 @@ ul {
   right: 0.25rem;
   filter: drop-shadow(0 0.15rem 0.2rem rgba(0, 0, 0, 0.45));
 }
+
+.player-page-container {
+  max-width: 46rem;
+  overflow-x: clip;
+}
+
+.player-page-shell {
+  position: relative;
+  outline: none;
+}
+
+.player-page-viewport {
+  overflow: hidden;
+  border-radius: 1rem;
+  touch-action: pan-y;
+}
+
+.player-page-track {
+  display: flex;
+  align-items: flex-start;
+  transition: transform 260ms ease;
+  will-change: transform;
+}
+
+.player-page {
+  flex: 0 0 100%;
+  min-width: 0;
+  padding-bottom: 0.25rem;
+}
+
+.player-page[aria-hidden='true'] {
+  pointer-events: none;
+}
+
+.player-page-content {
+  display: grid;
+  gap: 1rem;
+}
+
+.player-page-content > .card,
+.player-page-content > .hero,
+.player-page-content > .resource-summary,
+.player-page-content > .inventory-panel {
+  margin-top: 0;
+}
+
+.player-page-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  display: none;
+  width: 2.75rem;
+  height: 4.5rem;
+  transform: translateY(-50%);
+  border: 1px solid rgba(226, 232, 240, 0.24);
+  border-radius: 999px;
+  background: rgba(38, 32, 58, 0.92);
+  color: #f8f4ff;
+  font-size: 2.35rem;
+  line-height: 1;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.player-page-arrow:not(:disabled):hover,
+.player-page-arrow:not(:disabled):focus-visible {
+  border-color: rgba(250, 204, 21, 0.72);
+  color: #fde68a;
+}
+
+.player-page-arrow:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+}
+
+.player-page-arrow--previous {
+  left: -3.25rem;
+}
+
+.player-page-arrow--next {
+  right: -3.25rem;
+}
+
+.player-page-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(5.75rem, 1fr);
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding: 0.7rem 0 calc(0.7rem + env(safe-area-inset-bottom));
+  overflow-x: auto;
+  background: linear-gradient(
+    180deg,
+    rgba(23, 20, 32, 0),
+    rgba(23, 20, 32, 0.92) 24%,
+    #171420
+  );
+}
+
+.player-page-tabs button {
+  min-height: 2.35rem;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(38, 32, 58, 0.92);
+  color: #d8d3e8;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.player-page-tabs button.active,
+.player-page-tabs button:focus-visible {
+  border-color: rgba(250, 204, 21, 0.82);
+  background: #4d3b81;
+  color: #ffffff;
+}
+
+.player-login-hint {
+  color: #cbd5e1;
+}
+
+@media (min-width: 56rem) {
+  .player-page-arrow {
+    display: grid;
+    place-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-page-track {
+    transition: none;
+  }
+}
