@@ -623,7 +623,7 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 
 - `admin_action_logs` stores immutable admin mutations.
 - Fields: `actor_user_id`, `target_user_id`, `action_type`, idempotency `request_id`, `payload`, `created_at`.
-- Role changes are the only economy-adjacent admin mutation in milestone 3.
+- Role changes and debug mystery-egg grants are the economy-adjacent admin mutations in milestone 3. Debug grants increment `mystery_egg_inventory`, write `admin_test_mystery_egg_grant` economy ledger rows per affected player, and write idempotent `admin_action_logs` rows keyed by `request_id`. Single-player debug grants and each per-player row from bulk all-player grants are reversible through the ledger revert flow; bulk grants are also logged as one admin action.
 
 ## Milestone 3 data flow
 

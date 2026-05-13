@@ -206,6 +206,13 @@ type TwitchCustomReward = {
   cost: number;
 };
 
+type AdminEggType = {
+  id: string;
+  displayName: string;
+  isActive: boolean;
+  isMysteryEggType: boolean;
+};
+
 type EventSubSubscriptionStatus = {
   enabled: boolean;
   status:
@@ -654,6 +661,8 @@ function formatUpgradeSlotCount(slotCount: number): string {
   return slotCount === 1 ? '1 neuer Slot' : `${slotCount} neue Slots`;
 }
 
+const DEBUG_EGG_GRANT_AMOUNTS = [1, 5, 10] as const;
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -678,6 +687,9 @@ export function App(): JSX.Element {
   const [twitchCustomRewards, setTwitchCustomRewards] = useState<
     TwitchCustomReward[]
   >([]);
+  const [adminEggTypes, setAdminEggTypes] = useState<AdminEggType[]>([]);
+  const [selectedAdminEggTypeId, setSelectedAdminEggTypeId] =
+    useState('beta_egg');
   const [leaderboardEntries, setLeaderboardEntries] = useState<
     LeaderboardEntry[]
   >([]);
@@ -796,6 +808,7 @@ export function App(): JSX.Element {
       void loadSetupStatus();
       void loadUsers(query);
       void loadAdminHealth();
+      void loadAdminEggTypes();
       void loadEventSubFeed();
       void loadEventSubSubscriptionStatus();
     }
@@ -1417,7 +1430,8 @@ export function App(): JSX.Element {
 
   async function grantTestEgg(
     userId: string,
-    eggTypeId: 'beta_egg'
+    eggTypeId: string,
+    amount: 1 | 5 | 10
   ): Promise<void> {
     const response = await fetch(
       `/api/admin/users/${userId}/grant-test-mystery-egg`,
@@ -1428,7 +1442,7 @@ export function App(): JSX.Element {
         body: JSON.stringify({
           requestId: crypto.randomUUID(),
           eggTypeId,
-          amount: 1
+          amount
         })
       }
     );
@@ -1437,11 +1451,45 @@ export function App(): JSX.Element {
         message?: string;
       } | null;
       throw new Error(
-        payload?.message ?? 'Test-Mystery-Ei konnte nicht vergeben werden.'
+        payload?.message ?? 'Test-Mystery-Eier konnten nicht vergeben werden.'
       );
     }
     await loadInventory(userId);
     await loadLedger(userId);
+  }
+
+  async function grantTestEggsToAll(
+    eggTypeId: string,
+    amount: 1 | 5 | 10
+  ): Promise<void> {
+    const response = await fetch('/api/admin/grant-test-mystery-eggs/all', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: crypto.randomUUID(),
+        eggTypeId,
+        amount
+      })
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string;
+      targetUserCount?: number;
+    } | null;
+    if (!response.ok) {
+      throw new Error(
+        payload?.message ?? 'Test-Mystery-Eier konnten nicht an alle vergeben werden.'
+      );
+    }
+    window.alert(
+      `${amount} Test-Ei(er) an ${payload?.targetUserCount ?? 0} Spieler vergeben.`
+    );
+    if (selectedUserId) {
+      await loadInventory(selectedUserId);
+      await loadLedger(selectedUserId);
+    } else {
+      await loadLedger();
+    }
   }
 
   async function loadInventory(userId: string): Promise<void> {
@@ -1472,6 +1520,25 @@ export function App(): JSX.Element {
     if (!response.ok) return;
     const payload = (await response.json()) as EventSubSubscriptionStatus;
     setEventSubSubscriptionStatus(payload);
+  }
+
+  async function loadAdminEggTypes(): Promise<void> {
+    const response = await fetch('/api/admin/egg-types/active', {
+      credentials: 'include'
+    });
+    if (!response.ok) return;
+    const payload = (await response.json()) as {
+      activeEggTypes: AdminEggType[];
+    };
+    setAdminEggTypes(payload.activeEggTypes);
+    if (
+      payload.activeEggTypes.length > 0 &&
+      !payload.activeEggTypes.some(
+        (eggType) => eggType.id === selectedAdminEggTypeId
+      )
+    ) {
+      setSelectedAdminEggTypeId(payload.activeEggTypes[0]!.id);
+    }
   }
 
   async function loadTwitchCustomRewards(): Promise<void> {
@@ -2018,6 +2085,40 @@ export function App(): JSX.Element {
         </section>
 
         <section className="card">
+          <h2>Debug: Eier an alle Spieler</h2>
+          <p>Vergibt Test-Eier serverseitig an alle nicht gelöschten Spieler und schreibt Ledger-Einträge.</p>
+          <label>
+            Ei-Typ:{' '}
+            <select
+              value={selectedAdminEggTypeId}
+              onChange={(event) => setSelectedAdminEggTypeId(event.target.value)}
+            >
+              {adminEggTypes.map((eggType) => (
+                <option key={eggType.id} value={eggType.id}>
+                  {eggType.displayName} ({eggType.id})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div>
+            {DEBUG_EGG_GRANT_AMOUNTS.map((amount) => (
+              <button
+                key={`all:${amount}`}
+                disabled={adminEggTypes.length === 0}
+                onClick={() =>
+                  void grantTestEggsToAll(selectedAdminEggTypeId, amount)
+                }
+              >
+                +{amount} Ei{amount === 1 ? '' : 'er'} an alle
+              </button>
+            ))}
+          </div>
+          {adminEggTypes.length === 0 ? (
+            <p>Keine aktiven Ei-Typen geladen.</p>
+          ) : null}
+        </section>
+
+        <section className="card">
           <h2>Nutzerdetail</h2>
           {selected ? (
             <>
@@ -2068,13 +2169,38 @@ export function App(): JSX.Element {
                 <p>Nur Owner dürfen Rollen ändern.</p>
               )}
               <div>
-                <button
-                  onClick={() =>
-                    void grantTestEgg(selected.id, 'beta_egg')
-                  }
-                >
-                  Beta-Test-Ei
-                </button>
+                <label>
+                  Debug-Ei-Typ:{' '}
+                  <select
+                    value={selectedAdminEggTypeId}
+                    onChange={(event) =>
+                      setSelectedAdminEggTypeId(event.target.value)
+                    }
+                  >
+                    {adminEggTypes.map((eggType) => (
+                      <option key={eggType.id} value={eggType.id}>
+                        {eggType.displayName} ({eggType.id})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  {DEBUG_EGG_GRANT_AMOUNTS.map((amount) => (
+                    <button
+                      key={`selected:${amount}`}
+                      disabled={adminEggTypes.length === 0}
+                      onClick={() =>
+                        void grantTestEgg(
+                          selected.id,
+                          selectedAdminEggTypeId,
+                          amount
+                        )
+                      }
+                    >
+                      +{amount} Ei{amount === 1 ? '' : 'er'} an Spieler
+                    </button>
+                  ))}
+                </div>
                 <button onClick={() => void loadInventory(selected.id)}>
                   Inventar laden
                 </button>
