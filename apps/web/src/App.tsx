@@ -3158,24 +3158,24 @@ export function App(): JSX.Element {
                 >
                   <div className="slot-content">
                     <strong>
-                      {formatIncubatorSource(incubator.slotSource)}
+                      {formatIncubatorSource(incubator.slotSource)} #
+                      {(incubator.slotIndex ?? 0) + 1}
                     </strong>
-                    <span>Queue-Slot {(incubator.slotIndex ?? 0) + 1}</span>
                     {active ? (
                       <>
                         <span className="slot-progress">
                           {active.state === 'queued'
-                            ? 'Warteschlange'
+                            ? 'Wartet'
                             : active.state === 'completed'
-                              ? 'Bereit zum Abholen'
+                              ? 'Bereit'
                               : formatRemainingDuration(secondsRemaining ?? 0)}
                         </span>
-                        <span>
+                        <span className="incubator-slot-note">
                           {active.state === 'queued'
-                            ? 'Startet automatisch, sobald der Stream live ist und kein Ei brütet'
+                            ? 'Bis Stream live ist'
                             : active.state === 'completed'
-                              ? 'Die nächste Warteschlange kann schon weiterbrüten'
-                              : 'Zählt nur während Live-Stream'}
+                              ? 'Abholbereit'
+                              : 'Nur Live-Zeit'}
                         </span>
                         {(active.state === 'completed' ||
                           (active.state === 'running' &&
@@ -3197,9 +3197,9 @@ export function App(): JSX.Element {
                         ) : null}
                       </>
                     ) : canStartEgg ? (
-                      <span>Frei · Ei auswählen, dann hier antippen</span>
+                      <span className="incubator-slot-note">Frei · Ei wählen</span>
                     ) : (
-                      <span>Inaktiv</span>
+                      <span className="incubator-slot-note">Gesperrt</span>
                     )}
                   </div>
                 </div>
