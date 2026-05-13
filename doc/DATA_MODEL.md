@@ -369,7 +369,7 @@ experience integer not null default 0 -- future progression/fusion input; server
 level integer not null default 0 -- future progression/fusion output; server-authoritative
 training_adjustments jsonb not null default '{}' -- future additive/permanent training changes
 equipped_hat_id text nullable references hats(id)
-source_unhatched_egg_id uuid references unhatched_eggs(id)
+source_unhatched_egg_id uuid nullable references unhatched_eggs(id) -- null for server-authoritative shop-created pets
 is_favorite boolean not null default false -- future fusion material protection; favorite pets cannot be selected as fusion materials
 selected_for_event boolean not null default false
 is_scrapped boolean not null default false
@@ -475,6 +475,24 @@ config jsonb -- cosmetic display/positioning metadata only; no stat effects
 is_shop_purchasable boolean -- eligible to appear as a future shop purchase
 is_active boolean
 created_at timestamp
+
+
+shop_offer_selections:
+id uuid primary key
+shop_id text -- basic or subscriber
+period_key text -- weekly UTC Monday key for basic shop; monthly UTC YYYY-MM key for subscriber shop
+item_kind text -- equipment, consumable, or pet_hat_pair
+type_id text -- equipment/consumable type ID or pet species ID
+paired_type_id text nullable -- hat ID for subscriber pet_hat_pair offers
+display_name text -- snapshotted offer label so current shop periods do not change after catalog edits
+description text
+resource_price integer -- cracked_eggs for basic shop, voucher for subscriber shop
+stock integer -- per-player stock for the period
+display_order integer
+created_at timestamp
+unique(shop_id, period_key, display_order)
+
+`shop_offer_selections` persists the generated offer identities and pricing for both player shops. A period's rows are created only once, when first requested, and are reused afterward so adding new eligible pets, hats, consumables, or equipment does not alter the already-active basic weekly shop or subscriber monthly shop.
 
 hat_inventory_slots:
 id uuid primary key

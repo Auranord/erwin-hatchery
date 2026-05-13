@@ -1072,3 +1072,37 @@ ul {
     grid-column: 1 / -1;
   }
 }
+
+.subscriber-shop-panel {
+  border-color: rgba(168, 85, 247, 0.35);
+  background: linear-gradient(180deg, rgba(88, 28, 135, 0.28), rgba(255, 255, 255, 0.04));
+}
+
+.subscriber-shop-row {
+  grid-auto-columns: minmax(9.5rem, 1fr);
+}
+
+.subscriber-shop-card {
+  border-color: rgba(168, 85, 247, 0.28);
+}
+
+.subscriber-shop-card:hover:not(:disabled),
+.subscriber-shop-card:focus-visible {
+  border-color: rgba(216, 180, 254, 0.75);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.18);
+}
+
+.subscriber-shop-assets {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.subscriber-shop-hat-asset {
+  position: absolute;
+  top: 0;
+  right: 0.25rem;
+  filter: drop-shadow(0 0.15rem 0.2rem rgba(0, 0, 0, 0.45));
+}

@@ -71,12 +71,12 @@ Channel Point redemptions can be received before the viewer logs in. The backend
 
 ## Implementation status snapshot
 
-Last reevaluated: **2026-05-11**.
+Last reevaluated: **2026-05-13**.
 
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment/hat grids, queue/incubate/finish hatch actions, pet event selection, and public leaderboard view
+- React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment/hat grids, queue/incubate/finish hatch actions, pet event selection, persisted weekly shop offers, monthly Gutschein subscriber-shop pet-hat offers, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + a consolidated Drizzle base schema migration and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route

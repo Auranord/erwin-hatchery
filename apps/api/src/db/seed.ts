@@ -16,6 +16,7 @@ import {
 const BETA_EGG_TYPE_ID = 'beta_egg';
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_ABILITY_ID = 'beta_instinct';
+const SUBSCRIBER_SHOP_PET_IDS = new Set(['glutfink', 'bachente', 'windlerche', 'kieseltaube', 'funkenmeise']);
 const CONSUMABLE_RESOURCE_PRICE = 100;
 const CONSUMABLE_STOCK = 25;
 const CONSUMABLE_IS_SHOP_PURCHASABLE = true;
@@ -770,8 +771,8 @@ async function seed(): Promise<void> {
   });
 
   await db.insert(hats).values([
-    { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isActive: true }
-  ]).onConflictDoUpdate({ target: hats.id, set: { isActive: true } });
+    { id: 'tiny_crown', labelDe: 'Winzige Krone', description: 'Kosmetischer Hut ohne Stat-Effekt.', isShopPurchasable: true, isActive: true }
+  ]).onConflictDoUpdate({ target: hats.id, set: { labelDe: sql`excluded.label_de`, description: sql`excluded.description`, isShopPurchasable: sql`excluded.is_shop_purchasable`, isActive: true } });
 
   await db.insert(consumableTypes).values(
     STAT_TRADEOFF_CONSUMABLES.map((consumable) => ({
@@ -825,6 +826,7 @@ async function seed(): Promise<void> {
         elementId: pet.element,
         defaultAbilityId: DEFAULT_ABILITY_ID,
         assetKey: `pet_${pet.code}`,
+        isShopPurchasable: SUBSCRIBER_SHOP_PET_IDS.has(pet.code),
         isActive: true
       };
     })
@@ -845,6 +847,7 @@ async function seed(): Promise<void> {
       elementId: sql`excluded.element_id`,
       defaultAbilityId: sql`excluded.default_ability_id`,
       assetKey: sql`excluded.asset_key`,
+      isShopPurchasable: sql`excluded.is_shop_purchasable`,
       isActive: true
     }
   });

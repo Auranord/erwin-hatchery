@@ -382,6 +382,27 @@ type ShopOffers = {
   consumableOfferCount: number;
   offers: ShopOfferItem[];
 };
+type SubscriberShopOfferItem = {
+  kind: 'pet_hat_pair';
+  petSpeciesId: string;
+  petDisplayName: string;
+  hatId: string;
+  hatLabelDe: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+  purchasedThisMonth: number;
+  remainingThisMonth: number;
+};
+type SubscriberShopOffers = {
+  monthKey: string;
+  monthStartsAt: string;
+  monthEndsAt: string;
+  currencyResourceType: string;
+  offerCount: number;
+  offers: SubscriberShopOfferItem[];
+};
 
 type SelectionPayload =
   | { kind: 'incubator'; id: string }
@@ -541,6 +562,7 @@ const EGG_RESOURCE_LABELS: Record<string, string> = {
 
 const EGG_RESOURCE_ASSET_KEYS = new Set(['cracked_eggs']);
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
+const VOUCHER_RESOURCE_TYPE = 'voucher';
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 
 function formatMysteryEggType(eggTypeId: string): string {
@@ -632,6 +654,8 @@ export function App(): JSX.Element {
   const [playerInventory, setPlayerInventory] =
     useState<PlayerInventory | null>(null);
   const [shopOffers, setShopOffers] = useState<ShopOffers | null>(null);
+  const [subscriberShopOffers, setSubscriberShopOffers] = useState<SubscriberShopOffers | null>(null);
+  const [isBuyingSubscriberShopOffer, setIsBuyingSubscriberShopOffer] = useState(false);
   const [queuedShopItems, setQueuedShopItems] = useState<ShopOfferItem[]>([]);
   const [isBuyingShopQueue, setIsBuyingShopQueue] = useState(false);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
@@ -730,6 +754,13 @@ export function App(): JSX.Element {
     setQueuedShopItems([]);
   }
 
+  async function loadSubscriberShop(): Promise<void> {
+    const response = await fetch('/api/game/subscriber-shop', { credentials: 'include' });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { shop: SubscriberShopOffers };
+    setSubscriberShopOffers(payload.shop);
+  }
+
   async function loadLeaderboard(): Promise<void> {
     const response = await fetch('/api/game/leaderboard', {
       credentials: 'include'
@@ -765,11 +796,13 @@ export function App(): JSX.Element {
     if (isAdminRoute || setupStatus?.completed === false || !me?.authenticated) {
       setPlayerInventory(null);
       setShopOffers(null);
+      setSubscriberShopOffers(null);
       setQueuedShopItems([]);
       return;
     }
 
     void loadShop();
+    void loadSubscriberShop();
 
     const source = new EventSource('/api/game/inventory/stream', {
       withCredentials: true
@@ -912,9 +945,17 @@ export function App(): JSX.Element {
   }
 
   function getCrackedEggBalance(): number {
+    return getResourceBalance(CRACKED_EGGS_RESOURCE_TYPE);
+  }
+
+  function getVoucherBalance(): number {
+    return getResourceBalance(VOUCHER_RESOURCE_TYPE);
+  }
+
+  function getResourceBalance(resourceType: string): number {
     return (
       playerInventory?.crackedEggResources.find(
-        (resource) => resource.resourceType === CRACKED_EGGS_RESOURCE_TYPE
+        (resource) => resource.resourceType === resourceType
       )?.amount ?? 0
     );
   }
@@ -1136,6 +1177,45 @@ export function App(): JSX.Element {
       .map((cell) => cell.item)
       .find((item): item is HatItem => item?.id === payload.id);
     return hat?.hatId ?? 'diesen Hut';
+  }
+
+  async function buySubscriberShopOffer(offer: SubscriberShopOfferItem): Promise<void> {
+    if (isBuyingSubscriberShopOffer) return;
+    if (offer.remainingThisMonth <= 0) {
+      showShopError('Der Monatsbestand dieses Angebots ist bereits aufgebraucht.');
+      return;
+    }
+    if (getVoucherBalance() < offer.resourcePrice) {
+      showShopError('Du hast nicht genug Gutscheine für dieses Angebot.');
+      return;
+    }
+
+    setIsBuyingSubscriberShopOffer(true);
+    try {
+      const response = await fetch('/api/game/subscriber-shop/buy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ petSpeciesId: offer.petSpeciesId, hatId: offer.hatId })
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        inventory?: PlayerInventory;
+        shop?: ShopOffers;
+        subscriberShop?: SubscriberShopOffers;
+        message?: string;
+      } | null;
+      if (!response.ok) throw new Error(payload?.message ?? 'Subscriber-Shop-Kauf fehlgeschlagen.');
+      if (payload?.inventory) setPlayerInventory(payload.inventory);
+      else await refreshOwnInventory();
+      if (payload?.shop) setShopOffers(payload.shop);
+      if (payload?.subscriberShop) setSubscriberShopOffers(payload.subscriberShop);
+      else await loadSubscriberShop();
+      showGameMessage(`${offer.displayName} gekauft.`);
+    } catch (error) {
+      showShopError(error instanceof Error ? error.message : 'Subscriber-Shop-Kauf fehlgeschlagen.');
+    } finally {
+      setIsBuyingSubscriberShopOffer(false);
+    }
   }
 
   function showGameMessage(text: string, tone: ToastTone = 'default'): void {
@@ -2508,6 +2588,69 @@ export function App(): JSX.Element {
     );
   }
 
+  function renderSubscriberShopPanel(shop: SubscriberShopOffers | null): JSX.Element {
+    const voucherBalance = getVoucherBalance();
+    const monthEndsAt = shop
+      ? new Date(shop.monthEndsAt).toLocaleDateString('de-DE', {
+          weekday: 'short',
+          day: '2-digit',
+          month: '2-digit'
+        })
+      : '—';
+
+    return (
+      <section className="inventory-panel shop-panel subscriber-shop-panel">
+        <div className="inventory-panel-header">
+          <div>
+            <h3>Subscriber-Shop</h3>
+            <p className="inventory-capacity">
+              Wechsel am {monthEndsAt} · Du hast {voucherBalance} Gutschein(e)
+            </p>
+          </div>
+          <button type="button" onClick={() => void loadSubscriberShop()}>
+            Aktualisieren
+          </button>
+        </div>
+        {!shop ? (
+          <p>Subscriber-Shop wird geladen…</p>
+        ) : shop.offers.length === 0 ? (
+          <p>Dieser Monat hat keine kaufbaren Pet-Hut-Paare.</p>
+        ) : (
+          <div className="shop-offer-row subscriber-shop-row">
+            {shop.offers.map((offer) => {
+              const isSoldOut = offer.remainingThisMonth <= 0;
+              const isTooExpensive = voucherBalance < offer.resourcePrice;
+              return (
+                <button
+                  key={`${offer.petSpeciesId}:${offer.hatId}`}
+                  type="button"
+                  className="shop-offer-card subscriber-shop-card"
+                  onClick={() => void buySubscriberShopOffer(offer)}
+                  disabled={isBuyingSubscriberShopOffer}
+                  title={
+                    isSoldOut
+                      ? 'Monatsbestand aufgebraucht'
+                      : isTooExpensive
+                        ? 'Nicht genug Gutscheine'
+                        : 'Pet-Hut-Paar kaufen'
+                  }
+                >
+                  <span className="subscriber-shop-assets" aria-hidden="true">
+                    {renderSlotAsset({ folder: 'pets', assetKey: getPetAssetKey(offer.petSpeciesId), label: offer.petDisplayName, size: 56, className: 'shop-offer-asset' })}
+                    {renderSlotAsset({ folder: 'hats', assetKey: offer.hatId, label: offer.hatLabelDe, size: 28, className: 'subscriber-shop-hat-asset' })}
+                  </span>
+                  <strong>{offer.displayName}</strong>
+                  <small>Bestand: {offer.remainingThisMonth}/{offer.stock}</small>
+                  <span>{offer.resourcePrice} Gutschein</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   function renderGrid<T extends { id: string }>(
     title: string,
     grid: InventoryGrid<T>,
@@ -3390,6 +3533,7 @@ export function App(): JSX.Element {
                     undefined
                   )}
                   {renderShopPanel(shopOffers)}
+                  {renderSubscriberShopPanel(subscriberShopOffers)}
                 </div>
               </>
             ) : (

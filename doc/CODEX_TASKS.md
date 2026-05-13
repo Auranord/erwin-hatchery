@@ -2,7 +2,7 @@
 
 ## Progress status
 
-Last reevaluated: **2026-05-11**.
+Last reevaluated: **2026-05-13**.
 
 - ✅ Milestone 0 completed (repo skeleton and workspace baseline).
 - ✅ Milestone 1 completed (Fastify server, config validation, PostgreSQL, Drizzle migrations/seeds, health route, container baseline).
@@ -13,15 +13,19 @@ Last reevaluated: **2026-05-11**.
 - 🟨 Milestone 6 partially completed (admin route protection, role mutation, user search/detail, admin logs, ledger view, test mystery egg grants + ledger revert are implemented; freeze/reset/delete progress and full role lifecycle controls are still pending).
 - ✅ Milestone 7 completed (admin battle event start with random winners, 3/2/1 leaderboard award, participant/result persistence, pet deselection, and dedicated battle revert action are implemented).
 - ✅ Milestone 8 completed (secret-protected overlay routes `/overlay/alerts` + `/overlay/battle`, SSE streams, hatch alert display, battle winner/top-3 display, leaderboard snapshot, and OBS-safe layout are implemented).
-- 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, gift-sub ingestion, and fixed Gutschein grants are implemented; Bits ingestion/effects remain pending).
+- 🟨 Milestone 9 partially completed (subscription EventSub auto-sync/ingestion, subscriber status cache, gift-sub ingestion, fixed Gutschein grants, and Gutschein subscriber shop spending are implemented; Bits ingestion/effects remain pending).
 - 🟨 Milestone 10 partially completed (production Docker image, GHCR branch tagging, TrueNAS example with Postgres/init/health checks, production env validation, secure production cookies, and frontend fallback routing are implemented; rate limiting, explicit CORS middleware, and backup scripts/restore notes remain pending).
 
 Reevaluation notes for 2026-05-11:
 
 - No milestone changed completion category after comparing the task list with the current API/web code and deployment docs.
 - Milestone 6 remains partial because admin user search/detail, role mutation, admin logs, ledger view, test mystery egg grant, and test grant revert exist, but freeze/reset/delete progress controls are not implemented.
-- Milestone 9 remains partial because subscription and gift-sub EventSub paths now grant fixed Gutschein resources, while Bits/cheer EventSub subscription, ingestion, and fixed-effect application are still absent.
+- Milestone 9 remains partial because subscription and gift-sub EventSub paths now grant fixed Gutschein resources and the subscriber shop can spend them on fixed pet-hat pairs, while Bits/cheer EventSub subscription, ingestion, and fixed-effect application are still absent.
 - Milestone 10 remains partial because the production image, GHCR workflow, TrueNAS example, health checks, production cookie behavior, and SPA fallback exist, while Fastify-level rate limiting, explicit CORS origin enforcement, and executable backup/restore automation are still missing.
+
+
+- ✅ Added persisted `shop_offer_selections` rows for basic weekly shop and monthly subscriber-shop periods so active offers do not change when new catalog entries are added mid-period.
+- ✅ Added a player UI Subscriber-Shop box with monthly pet-hat pairs, 1 Gutschein price, stock 1, and server-authoritative ledgered purchases.
 
 ## Milestone 0 - Repo skeleton
 

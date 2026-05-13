@@ -208,6 +208,29 @@ export type ShopOffersPayload = {
   offers: ShopOfferItem[];
 };
 
+export type SubscriberShopOfferItem = {
+  kind: 'pet_hat_pair';
+  petSpeciesId: string;
+  petDisplayName: string;
+  hatId: string;
+  hatLabelDe: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+  purchasedThisMonth: number;
+  remainingThisMonth: number;
+};
+
+export type SubscriberShopOffersPayload = {
+  monthKey: string;
+  monthStartsAt: string;
+  monthEndsAt: string;
+  currencyResourceType: string;
+  offerCount: number;
+  offers: SubscriberShopOfferItem[];
+};
+
 export type EquipmentSetUpgradesPayload = {
   setCount: number;
   setSlotBonusCount: number;
