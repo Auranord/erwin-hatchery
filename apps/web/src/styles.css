@@ -368,14 +368,16 @@ ul {
 }
 
 .incubator-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.45rem;
 }
 
 .incubator-drop-target {
-  aspect-ratio: auto;
-  min-height: 7.5rem;
+  flex: 0 0 clamp(5.25rem, 22vw, 6rem);
+  aspect-ratio: 1 / 1;
+  min-height: 0;
 }
 
 .inventory-slot {
