@@ -1153,7 +1153,7 @@ ul {
 .player-page-container {
   max-width: 46rem;
   overflow: visible;
-  padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(4.85rem + env(safe-area-inset-bottom));
 }
 
 .player-page-shell {
@@ -1234,8 +1234,9 @@ ul {
 }
 
 .player-page-tabs {
-  position: sticky;
-  bottom: 0;
+  position: fixed;
+  bottom: env(safe-area-inset-bottom);
+  left: 50%;
   z-index: 4;
   display: flex;
   align-items: center;
