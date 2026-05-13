@@ -431,6 +431,13 @@ type InventoryDiscardTarget = {
 };
 type ShopErrorDialog = { title: string; message: string };
 type ShopPurchaseDialog = { itemCount: number; totalPrice: number };
+type SubscriberShopPurchaseDialog = { offer: SubscriberShopOfferItem };
+type EquipmentSetUpgradeDialog = {
+  upgradeKind: 'equipment-set-slots' | 'additional-equipment-set';
+  title: string;
+  description: string;
+  cost: number;
+};
 type InventoryUpgradeDialog = {
   inventoryKind: string;
   title: string;
@@ -709,6 +716,10 @@ export function App(): JSX.Element {
     useState<ShopErrorDialog | null>(null);
   const [pendingShopPurchase, setPendingShopPurchase] =
     useState<ShopPurchaseDialog | null>(null);
+  const [pendingSubscriberShopPurchase, setPendingSubscriberShopPurchase] =
+    useState<SubscriberShopPurchaseDialog | null>(null);
+  const [pendingEquipmentSetUpgrade, setPendingEquipmentSetUpgrade] =
+    useState<EquipmentSetUpgradeDialog | null>(null);
   const [pendingInventoryUpgrade, setPendingInventoryUpgrade] =
     useState<InventoryUpgradeDialog | null>(null);
   const [upgradingInventoryKind, setUpgradingInventoryKind] = useState<
@@ -1126,6 +1137,16 @@ export function App(): JSX.Element {
     }
   }
 
+  function requestEquipmentSetUpgrade(
+    upgradeKind: 'equipment-set-slots' | 'additional-equipment-set',
+    title: string,
+    description: string,
+    cost: number
+  ): void {
+    if (upgradingInventoryKind) return;
+    setPendingEquipmentSetUpgrade({ upgradeKind, title, description, cost });
+  }
+
   async function buyEquipmentSetUpgrade(
     upgradeKind: 'equipment-set-slots' | 'additional-equipment-set'
   ): Promise<void> {
@@ -1153,6 +1174,7 @@ export function App(): JSX.Element {
       }
       if (payload?.inventory) setPlayerInventory(payload.inventory);
       else await refreshOwnInventory();
+      setPendingEquipmentSetUpgrade(null);
     } finally {
       setUpgradingInventoryKind(null);
     }
@@ -1218,7 +1240,7 @@ export function App(): JSX.Element {
     return hat?.hatId ?? 'diesen Hut';
   }
 
-  async function buySubscriberShopOffer(offer: SubscriberShopOfferItem): Promise<void> {
+  function requestSubscriberShopPurchase(offer: SubscriberShopOfferItem): void {
     if (isBuyingSubscriberShopOffer) return;
     if (offer.remainingThisMonth <= 0) {
       showShopError('Der Monatsbestand dieses Angebots ist bereits aufgebraucht.');
@@ -1228,6 +1250,11 @@ export function App(): JSX.Element {
       showShopError('Du hast nicht genug Gutscheine für dieses Angebot.');
       return;
     }
+    setPendingSubscriberShopPurchase({ offer });
+  }
+
+  async function buySubscriberShopOffer(offer: SubscriberShopOfferItem): Promise<void> {
+    if (isBuyingSubscriberShopOffer) return;
 
     setIsBuyingSubscriberShopOffer(true);
     try {
@@ -1249,6 +1276,7 @@ export function App(): JSX.Element {
       if (payload?.shop) setShopOffers(payload.shop);
       if (payload?.subscriberShop) setSubscriberShopOffers(payload.subscriberShop);
       else await loadSubscriberShop();
+      setPendingSubscriberShopPurchase(null);
       showGameMessage(`${offer.displayName} gekauft.`);
     } catch (error) {
       showShopError(error instanceof Error ? error.message : 'Subscriber-Shop-Kauf fehlgeschlagen.');
@@ -2634,9 +2662,6 @@ export function App(): JSX.Element {
             <h3>Shop</h3>
             <p className="inventory-capacity">Wechsel am {weekEndsAt}</p>
           </div>
-          <button type="button" onClick={() => void loadShop()}>
-            Aktualisieren
-          </button>
         </div>
         {!shop ? (
           <p>Shop wird geladen…</p>
@@ -2759,9 +2784,6 @@ export function App(): JSX.Element {
               Wechsel am {monthEndsAt} · Du hast {voucherBalance} Gutschein(e)
             </p>
           </div>
-          <button type="button" onClick={() => void loadSubscriberShop()}>
-            Aktualisieren
-          </button>
         </div>
         {!shop ? (
           <p>Subscriber-Shop wird geladen…</p>
@@ -2777,7 +2799,7 @@ export function App(): JSX.Element {
                   key={`${offer.petSpeciesId}:${offer.hatId}`}
                   type="button"
                   className="shop-offer-card subscriber-shop-card"
-                  onClick={() => void buySubscriberShopOffer(offer)}
+                  onClick={() => requestSubscriberShopPurchase(offer)}
                   disabled={isBuyingSubscriberShopOffer}
                   title={
                     isSoldOut
@@ -2912,29 +2934,30 @@ export function App(): JSX.Element {
           </div>
         </div>
         <div className="equipment-set-upgrade-actions">
-          <div className="inventory-upgrade-panel equipment-set-upgrade-panel">
-            <div>
-              <strong>Set-Slots erweitern</strong>
-              <p>
-                +1 Slot für jedes bestehende und zukünftige Set · Du hast {crackedEggBalance} Aufgebrochene Eier.
-                Das nächste Slot-Upgrade kostet danach doppelt.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void buyEquipmentSetUpgrade('equipment-set-slots');
-              }}
-              disabled={
-                upgradingInventoryKind !== null ||
-                crackedEggBalance < upgrades.nextSlotUpgradeCostCrackedEggs
-              }
-            >
+          <button
+            type="button"
+            className="inventory-upgrade-panel inventory-upgrade-button equipment-set-upgrade-button"
+            onClick={() =>
+              requestEquipmentSetUpgrade(
+                'equipment-set-slots',
+                'Set-Slots erweitern',
+                '+1 Slot für jedes bestehende und zukünftige Set. Das nächste Slot-Upgrade kostet danach doppelt.',
+                upgrades.nextSlotUpgradeCostCrackedEggs
+              )
+            }
+            disabled={
+              upgradingInventoryKind !== null ||
+              crackedEggBalance < upgrades.nextSlotUpgradeCostCrackedEggs
+            }
+          >
+            <strong>Set-Slots erweitern</strong>
+            <span>+1 Slot für jedes Set · Du hast {crackedEggBalance} Aufgebrochene Eier</span>
+            <span>
               {isSlotUpgradePending
                 ? 'Erweitere …'
                 : `${upgrades.nextSlotUpgradeCostCrackedEggs} Aufgebrochene Eier`}
-            </button>
-          </div>
+            </span>
+          </button>
           <div className="inventory-upgrade-panel equipment-set-upgrade-panel">
             <div>
               <strong>Weiteres Set kaufen</strong>
@@ -3381,6 +3404,63 @@ export function App(): JSX.Element {
                     ]}
                     onCancel={() => setPendingShopPurchase(null)}
                     cancelDisabled={isBuyingShopQueue}
+                  />
+                ) : null}
+                {pendingSubscriberShopPurchase ? (
+                  <PlayerDialog
+                    id="subscriber-shop-purchase-confirm"
+                    title={`${pendingSubscriberShopPurchase.offer.displayName} kaufen?`}
+                    role="alertdialog"
+                    variant="info"
+                    description={`${pendingSubscriberShopPurchase.offer.resourcePrice} Gutschein(e) ausgeben und das Pet-Hut-Paar kaufen?`}
+                    actions={[
+                      {
+                        label: isBuyingSubscriberShopOffer ? 'Kaufe …' : 'Ja, kaufen',
+                        onClick: () =>
+                          void buySubscriberShopOffer(pendingSubscriberShopPurchase.offer),
+                        disabled: isBuyingSubscriberShopOffer,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingSubscriberShopPurchase(null),
+                        disabled: isBuyingSubscriberShopOffer,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingSubscriberShopPurchase(null)}
+                    cancelDisabled={isBuyingSubscriberShopOffer}
+                  />
+                ) : null}
+                {pendingEquipmentSetUpgrade ? (
+                  <PlayerDialog
+                    id="equipment-set-upgrade-confirm"
+                    title={`${pendingEquipmentSetUpgrade.title}?`}
+                    role="alertdialog"
+                    variant="info"
+                    description={`${pendingEquipmentSetUpgrade.description} Für ${pendingEquipmentSetUpgrade.cost} Aufgebrochene Eier kaufen?`}
+                    actions={[
+                      {
+                        label:
+                          upgradingInventoryKind === pendingEquipmentSetUpgrade.upgradeKind
+                            ? 'Erweitere …'
+                            : 'Ja, erweitern',
+                        onClick: () =>
+                          void buyEquipmentSetUpgrade(
+                            pendingEquipmentSetUpgrade.upgradeKind
+                          ),
+                        disabled: upgradingInventoryKind !== null,
+                        variant: 'primary'
+                      },
+                      {
+                        label: 'Abbrechen',
+                        onClick: () => setPendingEquipmentSetUpgrade(null),
+                        disabled: upgradingInventoryKind !== null,
+                        variant: 'secondary'
+                      }
+                    ]}
+                    onCancel={() => setPendingEquipmentSetUpgrade(null)}
+                    cancelDisabled={upgradingInventoryKind !== null}
                   />
                 ) : null}
                 {pendingInventoryUpgrade ? (

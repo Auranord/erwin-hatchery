@@ -927,10 +927,43 @@ ul {
 }
 
 .inventory-upgrade-button {
+  position: relative;
   width: 100%;
   min-height: 0;
   color: #fde68a;
   text-align: left;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.16);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.inventory-upgrade-button::after {
+  content: "Antippen";
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  border-radius: 999px;
+  padding: 0.18rem 0.48rem;
+  background: #facc15;
+  color: #20152d;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.inventory-upgrade-button:hover:not(:disabled),
+.inventory-upgrade-button:focus-visible {
+  border-color: rgba(250, 204, 21, 0.78);
+  background: rgba(120, 53, 15, 0.36);
+  box-shadow:
+    0 0 0 2px rgba(250, 204, 21, 0.14),
+    inset 0 0 0 1px rgba(250, 204, 21, 0.22);
+  transform: translateY(-1px);
 }
 
 .inventory-upgrade-button strong,
@@ -945,6 +978,14 @@ ul {
 .inventory-upgrade-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.inventory-upgrade-button:disabled::after {
+  content: "Gesperrt";
+}
+
+.equipment-set-upgrade-button {
+  margin-top: 0;
 }
 
 .shop-panel .inventory-panel-header > button {
