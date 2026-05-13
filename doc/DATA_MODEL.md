@@ -127,7 +127,7 @@ primary key(user_id, resource_type)
 Config table for egg types.
 
 ```text
-id text primary key -- beta_egg
+id text primary key -- beta_egg, starter_egg
 display_name text not null
 base_incubation_seconds integer not null
 is_active boolean not null default true
@@ -162,7 +162,7 @@ updated_at timestamp
 primary key(user_id, egg_type_id)
 ```
 
-When a redemption grants a mystery egg, increment this balance and write an economy ledger row.
+When a redemption or system default grants a mystery egg, increment this balance and write an economy ledger row. The `starter_egg_default_granted` ledger event is used to ensure each player receives one default Starter Ei at most once.
 When a player identifies a mystery egg, decrement this balance in the same transaction that resolves the outcome and writes ledger rows.
 
 ### inventory_dimensions
@@ -599,7 +599,8 @@ Seed `pet_rarities`, `pet_classes`, `elements`, the shared MVP baseline `pet_abi
 ### Egg type
 
 ```text
-beta_egg | 1x Beta Ei | seeded active
+beta_egg    | 1x Beta Ei    | seeded active, Twitch reward synced
+starter_egg | 1x Starter Ei | seeded inactive, granted once by default, not Twitch reward synced
 ```
 
 ### Beta egg loot table weights
@@ -617,7 +618,7 @@ cracked_eggs x100       800 = 22.22% of all outcomes
 cracked_eggs x200       800 = 22.22% of all outcomes
 ```
 
-Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon, 7.00% Rare, 2.75% Epic, and 0.25% Legendary. The seed validates the pet totals, class counts, normal element counts, and that light appears only on the legendary pet before writing the data.
+Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon, 7.00% Rare, 2.75% Epic, and 0.25% Legendary. The inactive `starter_egg` loot table contains only the eight Uncommon pets at weight 30 each, for a total of 240 and a guaranteed random Uncommon pet with no `cracked_eggs` resource outcomes. The seed validates the pet totals, starter egg uncommon total, class counts, normal element counts, and that light appears only on the legendary pet before writing the data.
 
 ## Admin action log
 

@@ -575,7 +575,8 @@ function getPetAssetKey(speciesId: string): string {
 }
 
 const MYSTERY_EGG_LABELS: Record<string, string> = {
-  beta_egg: 'Beta Ei'
+  beta_egg: 'Beta Ei',
+  starter_egg: 'Starter Ei'
 };
 
 const EGG_RESOURCE_LABELS: Record<string, string> = {

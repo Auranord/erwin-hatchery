@@ -10,7 +10,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 1. Viewer redeems Twitch Channel Point reward: `1x Mystery Ei` for 500 channel points.
 2. Backend receives the EventSub redemption and creates one mystery egg for that Twitch user.
-3. Viewer can log in with Twitch to use the web UI.
+3. Viewer can log in with Twitch to use the web UI. The backend grants each player one Twitch-unsynced inactive `starter_egg` (`Starter Ei`) by default.
 4. Viewer identifies eggs in the app.
 5. Identified eggs either:
    - become cracked egg resources, or
@@ -129,8 +129,8 @@ pnpm build
 - Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for reward IDs that are mapped to active egg types in the database.
 - Creates a provisional user by Twitch user ID when needed.
-- Increments the configured mystery egg inventory, currently `beta_egg`, by +1 and writes an immutable `economy_ledger` entry.
-- Resolves the mystery egg outcome later when the player identifies/opens the egg. The seeded Beta Ei table now grants a pet about one third of the time and `cracked_eggs` resources about two thirds of the time, split evenly across 50, 100, and 200 resource outcomes.
+- Increments the configured mystery egg inventory, currently active `beta_egg`, by +1 and writes an immutable `economy_ledger` entry. The default `starter_egg` is inactive, so Twitch reward sync does not create or maintain a redeem for it.
+- Resolves the mystery egg outcome later when the player identifies/opens the egg. The seeded Beta Ei table grants a pet about one third of the time and `cracked_eggs` resources about two thirds of the time, split evenly across 50, 100, and 200 resource outcomes. The seeded Starter Ei table has only uncommon pet outcomes and no resource outcomes.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
 ## EventSub subscription auto-sync (Milestone 3+)

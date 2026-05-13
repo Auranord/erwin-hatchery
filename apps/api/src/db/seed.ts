@@ -2,18 +2,23 @@ import { db, pool } from './client.js';
 import { eq, sql } from 'drizzle-orm';
 import {
   consumableTypes,
+  economyLedger,
   eggLootTableEntries,
   eggTypes,
   equipmentTypes,
   elements,
   hats,
+  mysteryEggInventory,
   petAbilities,
   petClasses,
   petRarities,
-  petSpecies
+  petSpecies,
+  users
 } from './schema.js';
 
 const BETA_EGG_TYPE_ID = 'beta_egg';
+const STARTER_EGG_TYPE_ID = 'starter_egg';
+const STARTER_EGG_GRANT_LEDGER_EVENT_TYPE = 'starter_egg_default_granted';
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const DEFAULT_ABILITY_ID = 'beta_instinct';
 const SUBSCRIBER_SHOP_PET_IDS = new Set(['glutfink', 'bachente', 'windlerche', 'kieseltaube', 'funkenmeise']);
@@ -597,6 +602,18 @@ function validatePetPool(): void {
   }
 }
 
+function validateStarterEggLootTable(): void {
+  const starterPets = PET_POOL.filter((pet) => pet.rarity === 'uncommon');
+  if (starterPets.length !== 8) {
+    throw new Error(`Invalid seed data: expected 8 starter egg uncommon pets, got ${starterPets.length}`);
+  }
+
+  const totalWeight = starterPets.reduce((sum, pet) => sum + pet.weight, 0);
+  if (totalWeight !== 240) {
+    throw new Error(`Invalid seed data: expected starter egg total weight 240, got ${totalWeight}`);
+  }
+}
+
 function validateBetaEggResourceRewards(): void {
   const totalWeight = BETA_EGG_RESOURCE_REWARDS.reduce((sum, reward) => sum + reward.weight, 0);
   if (totalWeight !== 2400) {
@@ -650,30 +667,44 @@ function validateStatTradeoffConsumables(): void {
 async function seed(): Promise<void> {
   validatePetPool();
   validateBetaEggResourceRewards();
+  validateStarterEggLootTable();
   validateGemEquipment();
   validateStatTradeoffConsumables();
 
-  await db.insert(eggTypes).values({
-    id: BETA_EGG_TYPE_ID,
-    displayName: 'Beta Ei',
-    baseIncubationSeconds: 14400,
-    twitchRewardCost: 1000,
-    twitchRewardBackgroundColor: '#9147ff',
-    twitchRewardGlobalCooldownMinutes: 0,
-    twitchRewardMaxPerStream: 0,
-    twitchRewardMaxPerUserPerStream: 1,
-    isActive: true
-  }).onConflictDoUpdate({
+  await db.insert(eggTypes).values([
+    {
+      id: BETA_EGG_TYPE_ID,
+      displayName: 'Beta Ei',
+      baseIncubationSeconds: 14400,
+      twitchRewardCost: 1000,
+      twitchRewardBackgroundColor: '#9147ff',
+      twitchRewardGlobalCooldownMinutes: 0,
+      twitchRewardMaxPerStream: 0,
+      twitchRewardMaxPerUserPerStream: 1,
+      isActive: true
+    },
+    {
+      id: STARTER_EGG_TYPE_ID,
+      displayName: 'Starter Ei',
+      baseIncubationSeconds: 60,
+      twitchRewardCost: null,
+      twitchRewardBackgroundColor: null,
+      twitchRewardGlobalCooldownMinutes: null,
+      twitchRewardMaxPerStream: null,
+      twitchRewardMaxPerUserPerStream: null,
+      isActive: false
+    }
+  ]).onConflictDoUpdate({
     target: eggTypes.id,
     set: {
       displayName: sql`excluded.display_name`,
       baseIncubationSeconds: sql`excluded.base_incubation_seconds`,
-      twitchRewardCost: sql`coalesce(excluded.twitch_reward_cost, ${eggTypes.twitchRewardCost})`,
-      twitchRewardBackgroundColor: sql`coalesce(excluded.twitch_reward_background_color, ${eggTypes.twitchRewardBackgroundColor})`,
-      twitchRewardGlobalCooldownMinutes: sql`coalesce(excluded.twitch_reward_global_cooldown_minutes, ${eggTypes.twitchRewardGlobalCooldownMinutes})`,
-      twitchRewardMaxPerStream: sql`coalesce(excluded.twitch_reward_max_per_stream, ${eggTypes.twitchRewardMaxPerStream})`,
-      twitchRewardMaxPerUserPerStream: sql`coalesce(excluded.twitch_reward_max_per_user_per_stream, ${eggTypes.twitchRewardMaxPerUserPerStream})`,
-      isActive: true
+      twitchRewardCost: sql`excluded.twitch_reward_cost`,
+      twitchRewardBackgroundColor: sql`excluded.twitch_reward_background_color`,
+      twitchRewardGlobalCooldownMinutes: sql`excluded.twitch_reward_global_cooldown_minutes`,
+      twitchRewardMaxPerStream: sql`excluded.twitch_reward_max_per_stream`,
+      twitchRewardMaxPerUserPerStream: sql`excluded.twitch_reward_max_per_user_per_stream`,
+      isActive: sql`excluded.is_active`
     }
   });
 
@@ -853,6 +884,7 @@ async function seed(): Promise<void> {
   });
 
   await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, BETA_EGG_TYPE_ID));
+  await db.delete(eggLootTableEntries).where(eq(eggLootTableEntries.eggTypeId, STARTER_EGG_TYPE_ID));
 
   await db.insert(eggLootTableEntries).values([
     ...PET_POOL.map((pet) => ({
@@ -870,10 +902,84 @@ async function seed(): Promise<void> {
       resourceType: reward.resourceType,
       resourceAmount: reward.resourceAmount,
       petSpeciesId: null
+    })),
+    ...PET_POOL.filter((pet) => pet.rarity === 'uncommon').map((pet) => ({
+      eggTypeId: STARTER_EGG_TYPE_ID,
+      weight: pet.weight,
+      outcomeType: 'pet',
+      resourceType: null,
+      resourceAmount: null,
+      petSpeciesId: pet.code
     }))
   ]);
 
-  console.info('Seed completed for Beta Ei, tiered gem equipment, sweet stat-tradeoff consumables, MVP pet pool, and weighted pet/resource loot table.');
+  const playersMissingStarterEgg = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      sql`${users.isDeleted} = false and not exists (
+        select 1 from ${economyLedger}
+        where ${economyLedger.userId} = ${users.id}
+          and ${economyLedger.eventType} = ${STARTER_EGG_GRANT_LEDGER_EVENT_TYPE}
+          and ${economyLedger.isReverted} = false
+      )`
+    );
+
+  if (playersMissingStarterEgg.length > 0) {
+    await db.transaction(async (tx) => {
+      const now = new Date();
+      for (const player of playersMissingStarterEgg) {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(
+            hashtext('erwin_hatchery_user_inventory'),
+            hashtext(${player.id})
+          )`
+        );
+
+        const [existingGrant] = await tx
+          .select({ id: economyLedger.id })
+          .from(economyLedger)
+          .where(
+            sql`${economyLedger.userId} = ${player.id}
+              and ${economyLedger.eventType} = ${STARTER_EGG_GRANT_LEDGER_EVENT_TYPE}
+              and ${economyLedger.isReverted} = false`
+          )
+          .limit(1);
+        if (existingGrant) continue;
+
+        await tx
+          .insert(mysteryEggInventory)
+          .values({
+            userId: player.id,
+            eggTypeId: STARTER_EGG_TYPE_ID,
+            amount: 1,
+            updatedAt: now
+          })
+          .onConflictDoUpdate({
+            target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
+            set: {
+              amount: sql`${mysteryEggInventory.amount} + 1`,
+              updatedAt: now
+            }
+          });
+
+        await tx.insert(economyLedger).values({
+          userId: player.id,
+          actorUserId: null,
+          eventType: STARTER_EGG_GRANT_LEDGER_EVENT_TYPE,
+          sourceType: 'system_seed',
+          sourceId: null,
+          delta: {
+            mysteryEggInventory: [
+              { eggTypeId: STARTER_EGG_TYPE_ID, amountDelta: 1 }
+            ]
+          }
+        });
+      }
+    });
+  }
+
+  console.info('Seed completed for Beta Ei, Starter Ei, tiered gem equipment, sweet stat-tradeoff consumables, MVP pet pool, and weighted pet/resource loot tables.');
 }
 
 void seed()
