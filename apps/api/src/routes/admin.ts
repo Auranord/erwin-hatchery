@@ -518,6 +518,102 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  app.post('/api/admin/grant-test-mystery-eggs/all', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const body = (request.body ?? {}) as {
+      requestId?: string;
+      eggTypeId?: string;
+      amount?: number;
+    };
+    const requestId = body.requestId?.trim() || randomUUID();
+    const eggTypeId = body.eggTypeId?.trim();
+    const amount = Number(body.amount ?? 1);
+    if (!eggTypeId || !Number.isInteger(amount) || amount <= 0 || amount > 100) {
+      return reply.code(400).send({ message: 'Invalid payload' });
+    }
+
+    const duplicate = await db
+      .select({ id: adminActionLogs.id })
+      .from(adminActionLogs)
+      .where(eq(adminActionLogs.requestId, requestId))
+      .limit(1);
+    if (duplicate.length > 0)
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    const selectedEggType = await db
+      .select({ id: eggTypes.id })
+      .from(eggTypes)
+      .where(and(eq(eggTypes.id, eggTypeId), eq(eggTypes.isActive, true)))
+      .limit(1);
+    if (selectedEggType.length === 0) {
+      return reply.code(400).send({
+        code: 'INVALID_EGG_TYPE',
+        message: 'Egg type must exist and be active'
+      });
+    }
+
+    const targetUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.isDeleted, false));
+    if (targetUsers.length === 0) {
+      return reply.code(400).send({
+        code: 'NO_TARGET_USERS',
+        message: 'No active users found'
+      });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      for (const target of targetUsers) {
+        await tx
+          .insert(mysteryEggInventory)
+          .values({ userId: target.id, eggTypeId, amount })
+          .onConflictDoUpdate({
+            target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
+            set: {
+              amount: sql`${mysteryEggInventory.amount} + ${amount}`,
+              updatedAt: sql`now()`
+            }
+          });
+      }
+
+      const insertedLedgerRows = await tx
+        .insert(economyLedger)
+        .values(
+          targetUsers.map((target) => ({
+            userId: target.id,
+            actorUserId: identity.userId,
+            eventType: 'admin_test_mystery_egg_grant',
+            sourceType: 'admin_action',
+            delta: {
+              mysteryEggInventory: [{ eggTypeId, amountDelta: amount }]
+            }
+          }))
+        )
+        .returning({ id: economyLedger.id });
+
+      await tx.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'grant_test_mystery_egg_all',
+        requestId,
+        payload: {
+          eggTypeId,
+          amount,
+          targetUserCount: targetUsers.length,
+          ledgerIds: insertedLedgerRows.map((row) => row.id),
+          reversible: true
+        }
+      });
+
+      return { targetUserCount: targetUsers.length };
+    });
+
+    return { status: 'ok', idempotent: false, ...result };
+  });
+
   app.post('/api/admin/events/start', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles))

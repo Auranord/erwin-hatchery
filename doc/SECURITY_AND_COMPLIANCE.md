@@ -137,6 +137,8 @@ Admin actions should include:
 - timestamp
 - revert link if reversible
 
+Debug mystery-egg grants from the admin panel must remain role-protected, idempotent by admin `request_id`, and ledgered once per affected player. Single-player debug grants and each per-player row from bulk all-player grants are reversible through the ledger flow; bulk all-player grants are also auditable through a bulk admin action log.
+
 Battle resolution must be revertible in MVP.
 
 ## Anti-exploit checklist
