@@ -111,6 +111,8 @@ type OverlayAlertEvent = {
 
 const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
+const STARTER_EGG_TYPE_ID = 'starter_egg';
+const STARTER_EGG_GRANT_LEDGER_EVENT_TYPE = 'starter_egg_default_granted';
 const VOUCHER_RESOURCE_TYPE = 'voucher';
 const SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'shop_item_purchased';
 const SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'subscriber_shop_pair_purchased';
@@ -275,6 +277,63 @@ async function lockUserInventoryInTx(
       hashtext(${userId})
     )`
   );
+}
+
+async function ensureStarterEggGrantInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<void> {
+  await lockUserInventoryInTx(tx, userId);
+
+  const [existingGrant] = await tx
+    .select({ id: economyLedger.id })
+    .from(economyLedger)
+    .where(
+      and(
+        eq(economyLedger.userId, userId),
+        eq(economyLedger.eventType, STARTER_EGG_GRANT_LEDGER_EVENT_TYPE),
+        eq(economyLedger.isReverted, false)
+      )
+    )
+    .limit(1);
+  if (existingGrant) return;
+
+  const [starterEggType] = await tx
+    .select({ id: eggTypes.id })
+    .from(eggTypes)
+    .where(eq(eggTypes.id, STARTER_EGG_TYPE_ID))
+    .limit(1);
+  if (!starterEggType) return;
+
+  const now = new Date();
+  await tx
+    .insert(mysteryEggInventory)
+    .values({
+      userId,
+      eggTypeId: STARTER_EGG_TYPE_ID,
+      amount: 1,
+      updatedAt: now
+    })
+    .onConflictDoUpdate({
+      target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
+      set: {
+        amount: sql`${mysteryEggInventory.amount} + 1`,
+        updatedAt: now
+      }
+    });
+
+  await tx.insert(economyLedger).values({
+    userId,
+    actorUserId: null,
+    eventType: STARTER_EGG_GRANT_LEDGER_EVENT_TYPE,
+    sourceType: 'system_default',
+    sourceId: null,
+    delta: {
+      mysteryEggInventory: [
+        { eggTypeId: STARTER_EGG_TYPE_ID, amountDelta: 1 }
+      ]
+    }
+  });
 }
 
 async function findFreeEggSlotInTx(
@@ -924,6 +983,9 @@ function pickWeightedOutcome<T extends { weight: number }>(entries: T[]): T {
 }
 
 async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
+  await db.transaction(async (tx) => {
+    await ensureStarterEggGrantInTx(tx, userId);
+  });
   await ensureIncubatorSlots(userId);
   await db.transaction(async (tx) => {
     await syncIncubationQueueInTx(tx, userId);
