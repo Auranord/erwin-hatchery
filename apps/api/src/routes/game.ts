@@ -1084,9 +1084,14 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         progressSnapshot: incubationJobs.progressSnapshot
       })
       .from(incubationJobs)
+      .innerJoin(
+        unhatchedEggs,
+        eq(incubationJobs.unhatchedEggId, unhatchedEggs.id)
+      )
       .where(
         and(
           eq(incubationJobs.ownerUserId, userId),
+          eq(unhatchedEggs.state, 'incubating'),
           inArray(incubationJobs.state, ['queued', 'running', 'completed'])
         )
       )
