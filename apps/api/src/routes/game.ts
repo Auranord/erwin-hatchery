@@ -114,7 +114,7 @@ const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
 const VOUCHER_RESOURCE_TYPE = 'voucher';
 const SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'shop_item_purchased';
 const SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'subscriber_shop_pair_purchased';
-const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
+const DEFAULT_INCUBATOR_QUEUE_SLOTS = 1;
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
 const ADDITIONAL_EQUIPMENT_SET_UPGRADE_REF = 'additional_equipment_sets';
@@ -610,7 +610,10 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
       .from(incubatorSlots)
       .where(eq(incubatorSlots.ownerUserId, userId));
 
-    async function ensureQueueSlot(slotIndex: number): Promise<void> {
+    async function ensureQueueSlot(
+      slotIndex: number,
+      slotSource: 'default' | 'upgrade'
+    ): Promise<void> {
       const existingSlot = existingSlots.find(
         (slot) => slot.slotIndex === slotIndex
       );
@@ -627,13 +630,13 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
           .limit(1);
         const nextAvailability = activeJob ? false : true;
         if (
-          existingSlot.slotSource !== 'default' ||
+          existingSlot.slotSource !== slotSource ||
           existingSlot.isAvailable !== nextAvailability
         ) {
           await tx
             .update(incubatorSlots)
             .set({
-              slotSource: 'default',
+              slotSource,
               isAvailable: nextAvailability,
               updatedAt: new Date()
             })
@@ -646,7 +649,7 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
         .insert(incubatorSlots)
         .values({
           ownerUserId: userId,
-          slotSource: 'default',
+          slotSource,
           slotIndex,
           isAvailable: true
         })
@@ -659,7 +662,10 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
       await tx.insert(economyLedger).values({
         userId,
         actorUserId: null,
-        eventType: 'default_incubator_queue_slot_granted',
+        eventType:
+          slotSource === 'default'
+            ? 'default_incubator_queue_slot_granted'
+            : 'upgraded_incubator_queue_slot_granted',
         sourceType: 'system',
         sourceId: createdSlot.id,
         delta: {
@@ -667,7 +673,7 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
             {
               id: createdSlot.id,
               change: 1,
-              source: 'default',
+              source: slotSource,
               slotIndex,
               isAvailable: true
             }
@@ -676,12 +682,35 @@ async function ensureIncubatorSlots(userId: string): Promise<void> {
       });
     }
 
+    const [dimension] = await tx
+      .select({
+        columns: inventoryDimensions.columns,
+        baseRows: inventoryDimensions.baseRows,
+        bonusRows: inventoryDimensions.bonusRows,
+        upgradeRef: inventoryDimensions.upgradeRef
+      })
+      .from(inventoryDimensions)
+      .where(
+        and(
+          eq(inventoryDimensions.userId, userId),
+          eq(inventoryDimensions.inventoryKind, 'incubators')
+        )
+      )
+      .limit(1);
+    const incubatorDimensions = dimensionsFromRow(
+      'incubators',
+      dimension ?? null
+    );
+
     for (
       let slotIndex = 0;
-      slotIndex < DEFAULT_INCUBATOR_QUEUE_SLOTS;
+      slotIndex < incubatorDimensions.capacity;
       slotIndex += 1
     ) {
-      await ensureQueueSlot(slotIndex);
+      await ensureQueueSlot(
+        slotIndex,
+        slotIndex < DEFAULT_INCUBATOR_QUEUE_SLOTS ? 'default' : 'upgrade'
+      );
     }
   });
 }
@@ -1095,6 +1124,10 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
   const dimensionsByKind = new Map(
     dimensionRows.map((row) => [row.inventoryKind as InventoryKind, row])
   );
+  const incubatorDimensions = dimensionsFromRow(
+    'incubators',
+    dimensionsByKind.get('incubators')
+  );
   const eggDimensions = dimensionsFromRow(
     'unhatched_eggs',
     dimensionsByKind.get('unhatched_eggs')
@@ -1126,6 +1159,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       updatedAt: toIsoTimestamp(row.updatedAt)
     })),
     incubators: {
+      dimensions: incubatorDimensions,
       incubators: [...slotRows]
         .sort(
           (left, right) =>

@@ -108,7 +108,7 @@ The generated pet has:
 
 - Every player starts with exactly one standard incubator.
 - There are no admin-granted incubators and no subscriber incubators in the MVP.
-- The incubator is modeled as a fixed incubator area with queue slots. Two queue slots are enabled at launch; additional slots are future upgrades and must stay disabled until explicitly enabled.
+- The incubator is modeled as a fixed incubator area with queue slots. One default queue slot is enabled at launch; players can buy additional queue slots one at a time with Aufgebrochene Eier.
 
 ## Stream-gated incubation
 
@@ -201,7 +201,7 @@ Suggested MVP upgrades:
 | Incubator Level 2 | Shortens incubation time by a small percentage |
 | Incubator Level 3 | Larger incubation speed bonus                  |
 | Incubator Level 4 | Larger incubation speed bonus                  |
-| Inventory row    | Adds one row to a slotted inventory; costs 500 Aufgebrochene Eier for the first row on each inventory and doubles after every upgrade |
+| Inventory row    | Adds one row to a slotted inventory or one slot to the incubator queue; costs 500 Aufgebrochene Eier for the first row on each inventory and doubles after every upgrade |
 | Equipment set slot | Adds one slot to every current equipment set and all future sets; costs 500 Aufgebrochene Eier for the first slot upgrade and doubles after every upgrade |
 | Additional equipment set | Adds one extra equipment set using the current global set slot count; costs 500 Aufgebrochene Eier for the first additional set and doubles after every set purchase |
 
@@ -311,9 +311,9 @@ Implement this in a simple and transparent way.
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, consumables, equipment, and hats. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, hats, and incubator queue slots. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - The Event-Pet selector is shown directly above the pet inventory as a fixed drop target with stat labels. Selecting a pet does not move it out of the pet inventory; the original inventory slot stays occupied and is highlighted.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.

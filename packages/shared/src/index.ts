@@ -23,7 +23,7 @@ export type InventoryGridDimensions = {
 };
 
 export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; baseRows: number; bonusRows: number; upgradeRef: string | null }> = {
-  incubators: { columns: 4, baseRows: 1, bonusRows: 0, upgradeRef: null },
+  incubators: { columns: 1, baseRows: 1, bonusRows: 0, upgradeRef: 'incubator_inventory_rows' },
   unhatched_eggs: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'unhatched_egg_inventory_rows' },
   pets: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'pet_inventory_rows' },
   consumables: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'consumable_inventory_rows' },
@@ -181,6 +181,7 @@ export type SlottedGrid<T> = {
 };
 
 export type IncubatorInventory = {
+  dimensions: InventoryGridDimensions;
   incubators: IncubatorSlotItem[];
 };
 

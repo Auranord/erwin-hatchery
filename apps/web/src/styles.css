@@ -918,7 +918,7 @@ ul {
 
 .inventory-upgrade-panel {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.35rem;
   margin-top: 0.8rem;
   padding: 0.75rem;
   border: 1px solid rgba(250, 204, 21, 0.28);
@@ -926,32 +926,25 @@ ul {
   background: rgba(120, 53, 15, 0.24);
 }
 
-.inventory-upgrade-panel strong {
-  display: block;
-  margin-bottom: 0.2rem;
-}
-
-.inventory-upgrade-panel p {
-  margin: 0;
+.inventory-upgrade-button {
+  width: 100%;
+  min-height: 0;
   color: #fde68a;
-  font-size: 0.85rem;
+  text-align: left;
 }
 
-.inventory-upgrade-panel button {
-  min-height: 2.6rem;
-  border-color: rgba(250, 204, 21, 0.55);
+.inventory-upgrade-button strong,
+.inventory-upgrade-button span {
+  display: block;
 }
 
-.inventory-upgrade-panel button:disabled {
+.inventory-upgrade-button strong {
+  color: #fff7ed;
+}
+
+.inventory-upgrade-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-@media (min-width: 560px) {
-  .inventory-upgrade-panel {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
 }
 
 .shop-panel .inventory-panel-header > button {

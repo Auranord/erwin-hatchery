@@ -238,9 +238,9 @@ Local stack should use Docker Compose for PostgreSQL and local API/web dev serve
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies only to slotted inventories: unhatched eggs, pets, consumables, equipment, and hats. Incubators are fixed egg drop targets, not rearrangeable inventory slots.
-- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion.
-- Standard grid dimensions are 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, hats, and incubator queue slots. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion, including incubator queue rows.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - The Event-Pet selector is a fixed drop target directly above the pet inventory. It accepts pet drag/drop or tap selection, displays selected pet stats, and highlights the selected pet in its original pet inventory slot instead of acting as extra storage. A separate trashcan-style fixed slot asks for confirmation before scrapping a pet into `cracked_eggs`.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
