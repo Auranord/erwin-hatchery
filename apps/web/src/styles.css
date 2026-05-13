@@ -368,14 +368,27 @@ ul {
 }
 
 .incubator-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.45rem;
 }
 
 .incubator-drop-target {
-  aspect-ratio: auto;
-  min-height: 7.5rem;
+  flex: 0 1 clamp(10.95rem, calc((100% - 0.45rem) / 2), 12.45rem);
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+}
+
+.incubator-slot .slot-content {
+  justify-content: center;
+  text-align: center;
+}
+
+.incubator-slot-note {
+  color: #cbd5e1;
+  font-size: 0.76rem;
+  line-height: 1.15;
 }
 
 .inventory-slot {
