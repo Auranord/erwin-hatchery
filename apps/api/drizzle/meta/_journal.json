@@ -71,6 +71,13 @@
       "when": 1778500008000,
       "tag": "0009_remove_consumable_equipment_set_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778500009000,
+      "tag": "0010_pet_hat_shop_eligibility",
+      "breakpoints": true
     }
   ]
 }

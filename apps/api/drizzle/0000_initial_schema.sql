@@ -160,6 +160,7 @@ CREATE TABLE IF NOT EXISTS hats (
   label_de text NOT NULL,
   description text NOT NULL DEFAULT '',
   config jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_shop_purchasable boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now()
 );
@@ -177,6 +178,7 @@ CREATE TABLE IF NOT EXISTS pet_species (
   default_pow integer NOT NULL,
   default_ability_id text NOT NULL REFERENCES pet_abilities(id),
   asset_key text NOT NULL,
+  is_shop_purchasable boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true
 );
 
