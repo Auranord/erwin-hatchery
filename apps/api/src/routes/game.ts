@@ -25,11 +25,13 @@ import {
   petClasses,
   petRarities,
   petSpecies,
+  shopOfferSelections,
   petTraitAssignments,
   petTraits,
   leaderboardScores,
   users,
-  gameEvents
+  gameEvents,
+  hats
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
@@ -48,6 +50,8 @@ import {
   type PlayerInventoryPayload,
   type ShopOfferItem,
   type ShopOffersPayload,
+  type SubscriberShopOfferItem,
+  type SubscriberShopOffersPayload,
   type SlottedInventoryCell
 } from '@erwin/shared';
 
@@ -90,6 +94,11 @@ const buyShopItemsSchema = z.object({
   items: z.array(buyShopItemSchema).min(1).max(50)
 });
 
+const buySubscriberShopItemSchema = z.object({
+  petSpeciesId: z.string().min(1).max(128),
+  hatId: z.string().min(1).max(128)
+});
+
 type OverlayAlertEvent = {
   id: string;
   type: 'pet_hatched';
@@ -102,7 +111,9 @@ type OverlayAlertEvent = {
 
 const OVERLAY_ALERT_LEDGER_EVENT_TYPES = ['incubation_finished'];
 const CRACKED_EGGS_RESOURCE_TYPE = 'cracked_eggs';
+const VOUCHER_RESOURCE_TYPE = 'voucher';
 const SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'shop_item_purchased';
+const SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE = 'subscriber_shop_pair_purchased';
 const DEFAULT_INCUBATOR_QUEUE_SLOTS = 2;
 const DEFAULT_EQUIPMENT_SET_BASE_SLOTS = 3;
 const DEFAULT_EQUIPMENT_SET_UPGRADE_REF = 'equipment_set_slots';
@@ -347,6 +358,27 @@ async function findFreeEquipmentSlotInTx(
 }
 
 
+async function findFreeHatSlotInTx(
+  tx: DbTransaction,
+  userId: string
+): Promise<number | null> {
+  const dimensions = await getDimensionsInTx(tx, userId, 'hats');
+  const occupiedRows = await tx
+    .select({ slotIndex: hatInventorySlots.slotIndex })
+    .from(hatInventorySlots)
+    .where(eq(hatInventorySlots.userId, userId));
+  const occupied = new Set(
+    occupiedRows
+      .map((row) => row.slotIndex)
+      .filter((slotIndex): slotIndex is number => slotIndex !== null)
+  );
+  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
+    if (!occupied.has(slotIndex)) return slotIndex;
+  }
+  return null;
+}
+
+
 async function findFreeConsumableSlotsInTx(
   tx: DbTransaction,
   userId: string,
@@ -394,12 +426,12 @@ async function findFreeEquipmentSlotsInTx(
 }
 
 class ShopInventoryFullError extends Error {
-  constructor(readonly inventoryKind: 'equipment' | 'consumable') {
+  constructor(readonly inventoryKind: 'equipment' | 'consumable' | 'pet' | 'hat') {
     super(`${inventoryKind}_inventory_full_after_preflight`);
   }
 }
 
-type ShopWeek = {
+type ShopPeriod = {
   key: string;
   startsAt: Date;
   endsAt: Date;
@@ -414,102 +446,109 @@ type ShopCandidate = {
   stock: number;
 };
 
-function getShopWeek(now = new Date()): ShopWeek {
+type SubscriberShopCandidate = {
+  kind: 'pet_hat_pair';
+  petSpeciesId: string;
+  petDisplayName: string;
+  hatId: string;
+  hatLabelDe: string;
+  displayName: string;
+  description: string;
+  resourcePrice: number;
+  stock: number;
+};
+
+function getShopWeek(now = new Date()): ShopPeriod {
   const day = now.getUTCDay();
   const daysSinceMonday = (day + 6) % 7;
-  const startsAt = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() - daysSinceMonday,
-      0,
-      0,
-      0,
-      0
-    )
-  );
+  const startsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - daysSinceMonday, 0, 0, 0, 0));
   const endsAt = new Date(startsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
   const key = startsAt.toISOString().slice(0, 10);
   return { key, startsAt, endsAt };
 }
 
-function deterministicShopRank(
-  weekKey: string,
-  candidate: ShopCandidate
-): string {
-  return createHash('sha256')
-    .update(`${weekKey}:${candidate.kind}:${candidate.typeId}`)
-    .digest('hex');
+function getShopMonth(now = new Date()): ShopPeriod {
+  const startsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
+  const endsAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+  const key = startsAt.toISOString().slice(0, 7);
+  return { key, startsAt, endsAt };
 }
 
-function pickWeeklyShopCandidates(
-  candidates: ShopCandidate[],
-  weekKey: string,
-  count: number
-): ShopCandidate[] {
+function deterministicBasicShopRank(periodKey: string, candidate: ShopCandidate): string {
+  return createHash('sha256').update(`basic:${periodKey}:${candidate.kind}:${candidate.typeId}`).digest('hex');
+}
+
+function deterministicSubscriberShopRank(periodKey: string, candidate: SubscriberShopCandidate): string {
+  return createHash('sha256').update(`subscriber:${periodKey}:${candidate.petSpeciesId}:${candidate.hatId}`).digest('hex');
+}
+
+function pickWeeklyShopCandidates(candidates: ShopCandidate[], periodKey: string, count: number): ShopCandidate[] {
   if (count <= 0) return [];
   return [...candidates]
     .sort((left, right) => {
-      const leftRank = deterministicShopRank(weekKey, left);
-      const rightRank = deterministicShopRank(weekKey, right);
+      const leftRank = deterministicBasicShopRank(periodKey, left);
+      const rightRank = deterministicBasicShopRank(periodKey, right);
       if (leftRank !== rightRank) return leftRank.localeCompare(rightRank);
-      return left.typeId.localeCompare(right.typeId);
+      return `${left.kind}:${left.typeId}`.localeCompare(`${right.kind}:${right.typeId}`);
     })
     .slice(0, count);
 }
 
-async function loadWeeklyShopCandidatesInTx(
-  tx: DbTransaction,
-  weekKey: string
-): Promise<ShopCandidate[]> {
-  const equipmentRows = await tx
-    .select({
-      typeId: equipmentTypes.id,
-      displayName: equipmentTypes.displayName,
-      description: equipmentTypes.description,
-      resourcePrice: equipmentTypes.resourcePrice,
-      stock: equipmentTypes.stock
+function pickMonthlySubscriberShopCandidates(candidates: SubscriberShopCandidate[], periodKey: string, count: number): SubscriberShopCandidate[] {
+  if (count <= 0) return [];
+  return [...candidates]
+    .sort((left, right) => {
+      const leftRank = deterministicSubscriberShopRank(periodKey, left);
+      const rightRank = deterministicSubscriberShopRank(periodKey, right);
+      if (leftRank !== rightRank) return leftRank.localeCompare(rightRank);
+      return `${left.petSpeciesId}:${left.hatId}`.localeCompare(`${right.petSpeciesId}:${right.hatId}`);
     })
-    .from(equipmentTypes)
-    .where(
-      and(
-        eq(equipmentTypes.isActive, true),
-        eq(equipmentTypes.isShopPurchasable, true),
-        eq(equipmentTypes.equipmentSlot, 'gem'),
-        sql`${equipmentTypes.resourcePrice} > 0`,
-        sql`${equipmentTypes.stock} > 0`
-      )
-    );
-  const consumableRows = await tx
-    .select({
-      typeId: consumableTypes.id,
-      displayName: consumableTypes.displayName,
-      description: consumableTypes.description,
-      resourcePrice: consumableTypes.resourcePrice,
-      stock: consumableTypes.stock
-    })
-    .from(consumableTypes)
-    .where(
-      and(
-        eq(consumableTypes.isActive, true),
-        eq(consumableTypes.isShopPurchasable, true),
-        sql`${consumableTypes.resourcePrice} > 0`,
-        sql`${consumableTypes.stock} > 0`
-      )
-    );
+    .slice(0, count);
+}
 
-  return [
-    ...pickWeeklyShopCandidates(
-      equipmentRows.map((row) => ({ ...row, kind: 'equipment' as const })),
-      weekKey,
-      config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT
-    ),
-    ...pickWeeklyShopCandidates(
-      consumableRows.map((row) => ({ ...row, kind: 'consumable' as const })),
-      weekKey,
-      config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT
-    )
+async function ensureWeeklyShopSelectionsInTx(tx: DbTransaction, weekKey: string): Promise<void> {
+  const [existing] = await tx.select({ count: sql<number>`count(*)::int` }).from(shopOfferSelections).where(and(eq(shopOfferSelections.shopId, 'basic'), eq(shopOfferSelections.periodKey, weekKey)));
+  if ((existing?.count ?? 0) > 0) return;
+
+  const equipmentRows = await tx.select({ typeId: equipmentTypes.id, displayName: equipmentTypes.displayName, description: equipmentTypes.description, resourcePrice: equipmentTypes.resourcePrice, stock: equipmentTypes.stock }).from(equipmentTypes).where(and(eq(equipmentTypes.isActive, true), eq(equipmentTypes.isShopPurchasable, true), eq(equipmentTypes.equipmentSlot, 'gem'), sql`${equipmentTypes.resourcePrice} > 0`, sql`${equipmentTypes.stock} > 0`));
+  const consumableRows = await tx.select({ typeId: consumableTypes.id, displayName: consumableTypes.displayName, description: consumableTypes.description, resourcePrice: consumableTypes.resourcePrice, stock: consumableTypes.stock }).from(consumableTypes).where(and(eq(consumableTypes.isActive, true), eq(consumableTypes.isShopPurchasable, true), sql`${consumableTypes.resourcePrice} > 0`, sql`${consumableTypes.stock} > 0`));
+  const selected = [
+    ...pickWeeklyShopCandidates(equipmentRows.map((row) => ({ ...row, kind: 'equipment' as const })), weekKey, config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT),
+    ...pickWeeklyShopCandidates(consumableRows.map((row) => ({ ...row, kind: 'consumable' as const })), weekKey, config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT)
   ];
+  if (selected.length === 0) return;
+  await tx.insert(shopOfferSelections).values(selected.map((offer, displayOrder) => ({ shopId: 'basic', periodKey: weekKey, itemKind: offer.kind, typeId: offer.typeId, pairedTypeId: null, displayName: offer.displayName, description: offer.description, resourcePrice: offer.resourcePrice, stock: offer.stock, displayOrder }))).onConflictDoNothing({ target: [shopOfferSelections.shopId, shopOfferSelections.periodKey, shopOfferSelections.displayOrder] });
+}
+
+async function loadWeeklyShopCandidatesInTx(tx: DbTransaction, weekKey: string): Promise<ShopCandidate[]> {
+  await ensureWeeklyShopSelectionsInTx(tx, weekKey);
+  const rows = await tx.select({ kind: shopOfferSelections.itemKind, typeId: shopOfferSelections.typeId, displayName: shopOfferSelections.displayName, description: shopOfferSelections.description, resourcePrice: shopOfferSelections.resourcePrice, stock: shopOfferSelections.stock }).from(shopOfferSelections).where(and(eq(shopOfferSelections.shopId, 'basic'), eq(shopOfferSelections.periodKey, weekKey))).orderBy(shopOfferSelections.displayOrder);
+  return rows.filter((row): row is ShopCandidate => row.kind === 'equipment' || row.kind === 'consumable');
+}
+
+async function ensureMonthlySubscriberShopSelectionsInTx(tx: DbTransaction, monthKey: string): Promise<void> {
+  const [existing] = await tx.select({ count: sql<number>`count(*)::int` }).from(shopOfferSelections).where(and(eq(shopOfferSelections.shopId, 'subscriber'), eq(shopOfferSelections.periodKey, monthKey)));
+  if ((existing?.count ?? 0) > 0) return;
+
+  const petRows = await tx.select({ petSpeciesId: petSpecies.id, petDisplayName: petSpecies.displayName }).from(petSpecies).where(and(eq(petSpecies.isActive, true), eq(petSpecies.isShopPurchasable, true)));
+  const hatRows = await tx.select({ hatId: hats.id, hatLabelDe: hats.labelDe, description: hats.description }).from(hats).where(and(eq(hats.isActive, true), eq(hats.isShopPurchasable, true)));
+  const candidates: SubscriberShopCandidate[] = petRows.flatMap((pet) => hatRows.map((hat) => ({ kind: 'pet_hat_pair' as const, petSpeciesId: pet.petSpeciesId, petDisplayName: pet.petDisplayName, hatId: hat.hatId, hatLabelDe: hat.hatLabelDe, displayName: `${pet.petDisplayName} + ${hat.hatLabelDe}`, description: `Pet-Hut-Paar: ${pet.petDisplayName} mit ${hat.hatLabelDe}.`, resourcePrice: 1, stock: 1 })));
+  const selected = pickMonthlySubscriberShopCandidates(candidates, monthKey, config.SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT);
+  if (selected.length === 0) return;
+  await tx.insert(shopOfferSelections).values(selected.map((offer, displayOrder) => ({ shopId: 'subscriber', periodKey: monthKey, itemKind: offer.kind, typeId: offer.petSpeciesId, pairedTypeId: offer.hatId, displayName: offer.displayName, description: offer.description, resourcePrice: offer.resourcePrice, stock: offer.stock, displayOrder }))).onConflictDoNothing({ target: [shopOfferSelections.shopId, shopOfferSelections.periodKey, shopOfferSelections.displayOrder] });
+}
+
+async function loadMonthlySubscriberShopCandidatesInTx(tx: DbTransaction, monthKey: string): Promise<SubscriberShopCandidate[]> {
+  await ensureMonthlySubscriberShopSelectionsInTx(tx, monthKey);
+  const rows = await tx.select({ kind: shopOfferSelections.itemKind, petSpeciesId: shopOfferSelections.typeId, hatId: shopOfferSelections.pairedTypeId, displayName: shopOfferSelections.displayName, description: shopOfferSelections.description, resourcePrice: shopOfferSelections.resourcePrice, stock: shopOfferSelections.stock }).from(shopOfferSelections).where(and(eq(shopOfferSelections.shopId, 'subscriber'), eq(shopOfferSelections.periodKey, monthKey))).orderBy(shopOfferSelections.displayOrder);
+  const offers: SubscriberShopCandidate[] = [];
+  for (const row of rows) {
+    if (row.kind !== 'pet_hat_pair' || !row.hatId) continue;
+    const [petRow] = await tx.select({ displayName: petSpecies.displayName }).from(petSpecies).where(eq(petSpecies.id, row.petSpeciesId)).limit(1);
+    const [hatRow] = await tx.select({ labelDe: hats.labelDe }).from(hats).where(eq(hats.id, row.hatId)).limit(1);
+    offers.push({ kind: 'pet_hat_pair', petSpeciesId: row.petSpeciesId, petDisplayName: petRow?.displayName ?? row.petSpeciesId, hatId: row.hatId, hatLabelDe: hatRow?.labelDe ?? row.hatId, displayName: row.displayName, description: row.description, resourcePrice: row.resourcePrice, stock: row.stock });
+  }
+  return offers;
 }
 
 async function countShopPurchasesThisWeekInTx(
@@ -519,58 +558,43 @@ async function countShopPurchasesThisWeekInTx(
   kind: 'equipment' | 'consumable',
   typeId: string
 ): Promise<number> {
-  const [row] = await tx
-    .select({ count: sql<number>`count(*)::int` })
-    .from(economyLedger)
-    .where(
-      and(
-        eq(economyLedger.userId, userId),
-        eq(economyLedger.eventType, SHOP_PURCHASE_LEDGER_EVENT_TYPE),
-        eq(economyLedger.isReverted, false),
-        sql`${economyLedger.delta}->>'shopWeekKey' = ${weekKey}`,
-        sql`${economyLedger.delta}->>'itemKind' = ${kind}`,
-        sql`${economyLedger.delta}->>'itemTypeId' = ${typeId}`
-      )
-    );
+  const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(economyLedger).where(and(eq(economyLedger.userId, userId), eq(economyLedger.eventType, SHOP_PURCHASE_LEDGER_EVENT_TYPE), eq(economyLedger.isReverted, false), sql`${economyLedger.delta}->>'shopWeekKey' = ${weekKey}`, sql`${economyLedger.delta}->>'itemKind' = ${kind}`, sql`${economyLedger.delta}->>'itemTypeId' = ${typeId}`));
   return row?.count ?? 0;
 }
 
-async function buildShopOffersInTx(
-  tx: DbTransaction,
-  userId: string,
-  now = new Date()
-): Promise<ShopOffersPayload> {
+async function countSubscriberShopPurchasesThisMonthInTx(tx: DbTransaction, userId: string, monthKey: string, petSpeciesId: string, hatId: string): Promise<number> {
+  const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(economyLedger).where(and(eq(economyLedger.userId, userId), eq(economyLedger.eventType, SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE), eq(economyLedger.isReverted, false), sql`${economyLedger.delta}->>'shopMonthKey' = ${monthKey}`, sql`${economyLedger.delta}->>'petSpeciesId' = ${petSpeciesId}`, sql`${economyLedger.delta}->>'hatId' = ${hatId}`));
+  return row?.count ?? 0;
+}
+
+async function buildShopOffersInTx(tx: DbTransaction, userId: string, now = new Date()): Promise<ShopOffersPayload> {
   const week = getShopWeek(now);
   const candidates = await loadWeeklyShopCandidatesInTx(tx, week.key);
   const offers: ShopOfferItem[] = [];
   for (const candidate of candidates) {
-    const purchasedThisWeek = await countShopPurchasesThisWeekInTx(
-      tx,
-      userId,
-      week.key,
-      candidate.kind,
-      candidate.typeId
-    );
-    offers.push({
-      ...candidate,
-      purchasedThisWeek,
-      remainingThisWeek: Math.max(0, candidate.stock - purchasedThisWeek)
-    });
+    const purchasedThisWeek = await countShopPurchasesThisWeekInTx(tx, userId, week.key, candidate.kind, candidate.typeId);
+    offers.push({ ...candidate, purchasedThisWeek, remainingThisWeek: Math.max(0, candidate.stock - purchasedThisWeek) });
   }
+  return { weekKey: week.key, weekStartsAt: week.startsAt.toISOString(), weekEndsAt: week.endsAt.toISOString(), currencyResourceType: CRACKED_EGGS_RESOURCE_TYPE, equipmentOfferCount: config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT, consumableOfferCount: config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT, offers };
+}
 
-  return {
-    weekKey: week.key,
-    weekStartsAt: week.startsAt.toISOString(),
-    weekEndsAt: week.endsAt.toISOString(),
-    currencyResourceType: CRACKED_EGGS_RESOURCE_TYPE,
-    equipmentOfferCount: config.SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT,
-    consumableOfferCount: config.SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT,
-    offers
-  };
+async function buildSubscriberShopOffersInTx(tx: DbTransaction, userId: string, now = new Date()): Promise<SubscriberShopOffersPayload> {
+  const month = getShopMonth(now);
+  const candidates = await loadMonthlySubscriberShopCandidatesInTx(tx, month.key);
+  const offers: SubscriberShopOfferItem[] = [];
+  for (const candidate of candidates) {
+    const purchasedThisMonth = await countSubscriberShopPurchasesThisMonthInTx(tx, userId, month.key, candidate.petSpeciesId, candidate.hatId);
+    offers.push({ ...candidate, purchasedThisMonth, remainingThisMonth: Math.max(0, candidate.stock - purchasedThisMonth) });
+  }
+  return { monthKey: month.key, monthStartsAt: month.startsAt.toISOString(), monthEndsAt: month.endsAt.toISOString(), currencyResourceType: VOUCHER_RESOURCE_TYPE, offerCount: config.SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT, offers };
 }
 
 async function loadShopOffers(userId: string): Promise<ShopOffersPayload> {
   return db.transaction((tx) => buildShopOffersInTx(tx, userId));
+}
+
+async function loadSubscriberShopOffers(userId: string): Promise<SubscriberShopOffersPayload> {
+  return db.transaction((tx) => buildSubscriberShopOffersInTx(tx, userId));
 }
 
 async function ensureIncubatorSlots(userId: string): Promise<void> {
@@ -1629,6 +1653,62 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
     return { shop: await loadShopOffers(identity.userId) };
+  });
+
+  app.get('/api/game/subscriber-shop', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+    return { shop: await loadSubscriberShopOffers(identity.userId) };
+  });
+
+  app.post('/api/game/subscriber-shop/buy', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const parsedBody = buySubscriberShopItemSchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      return reply.code(400).send({ message: 'Ungültiger Subscriber-Shop-Kauf.' });
+    }
+    const { petSpeciesId, hatId } = parsedBody.data;
+
+    const result = await db.transaction(async (tx) => {
+      await lockUserInventoryInTx(tx, identity.userId);
+      await ensureInventoryDimensionsInTx(tx, identity.userId);
+      const shop = await buildSubscriberShopOffersInTx(tx, identity.userId);
+      const offer = shop.offers.find((item) => item.petSpeciesId === petSpeciesId && item.hatId === hatId);
+      if (!offer) return { kind: 'not_offered' as const };
+      if (offer.remainingThisMonth <= 0) return { kind: 'sold_out' as const };
+
+      const freePetSlot = await findFreePetSlotInTx(tx, identity.userId);
+      if (freePetSlot === null) return { kind: 'inventory_full' as const, inventoryKind: 'pet' as const };
+      const freeHatSlot = await findFreeHatSlotInTx(tx, identity.userId);
+      if (freeHatSlot === null) return { kind: 'inventory_full' as const, inventoryKind: 'hat' as const };
+
+      const [petSpeciesRow] = await tx.select({ id: petSpecies.id, defaultHp: petSpecies.defaultHp, defaultAtk: petSpecies.defaultAtk, defaultDef: petSpecies.defaultDef, defaultSpd: petSpecies.defaultSpd, defaultGain: petSpecies.defaultGain, defaultPow: petSpecies.defaultPow, rarityId: petSpecies.rarityId, classId: petSpecies.classId, elementId: petSpecies.elementId, defaultAbilityId: petSpecies.defaultAbilityId }).from(petSpecies).where(eq(petSpecies.id, petSpeciesId)).limit(1);
+      if (!petSpeciesRow) return { kind: 'not_offered' as const };
+
+      const now = new Date();
+      const debitedResources = await tx.update(resources).set({ amount: sql`${resources.amount} - ${offer.resourcePrice}`, updatedAt: now }).where(and(eq(resources.userId, identity.userId), eq(resources.resourceType, VOUCHER_RESOURCE_TYPE), sql`${resources.amount} >= ${offer.resourcePrice}`)).returning({ amount: resources.amount });
+      if (debitedResources.length === 0) return { kind: 'insufficient_resources' as const, cost: offer.resourcePrice };
+
+      const [createdPet] = await tx.insert(pets).values({ ownerUserId: identity.userId, speciesId: petSpeciesRow.id, rarityId: petSpeciesRow.rarityId, classId: petSpeciesRow.classId, elementId: petSpeciesRow.elementId, abilityId: petSpeciesRow.defaultAbilityId, baseHp: petSpeciesRow.defaultHp, baseAtk: petSpeciesRow.defaultAtk, baseDef: petSpeciesRow.defaultDef, baseSpd: petSpeciesRow.defaultSpd, baseGain: petSpeciesRow.defaultGain, basePow: petSpeciesRow.defaultPow, hatchVariance: { hp: 0, atk: 0, def: 0, spd: 0, gain: 0, pow: 0 }, equippedHatId: hatId, sourceUnhatchedEggId: null, slotIndex: freePetSlot, createdAt: now }).returning({ id: pets.id });
+      if (!createdPet) throw new Error('Failed to create subscriber shop pet');
+
+      const [createdHatSlot] = await tx.insert(hatInventorySlots).values({ userId: identity.userId, hatId, slotIndex: freeHatSlot, updatedAt: now }).returning({ id: hatInventorySlots.id });
+      if (!createdHatSlot) throw new ShopInventoryFullError('hat');
+
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE, sourceType: 'player_action', sourceId: createdPet.id, delta: { shopMonthKey: shop.monthKey, itemKind: 'pet_hat_pair', petSpeciesId, hatId, pets: [{ id: createdPet.id, speciesId: petSpeciesId, equippedHatId: hatId, slotIndex: freePetSlot, change: 1 }], hatInventorySlots: [{ id: createdHatSlot.id, hatId, slotIndex: freeHatSlot, change: 1 }], resources: [{ resourceType: VOUCHER_RESOURCE_TYPE, amountDelta: -offer.resourcePrice }] } });
+
+      return { kind: 'ok' as const };
+    });
+
+    if (result.kind === 'not_offered') return reply.code(404).send({ message: 'Dieses Angebot ist diesen Monat nicht im Subscriber-Shop.' });
+    if (result.kind === 'sold_out') return reply.code(409).send({ message: 'Dein Monatsbestand für dieses Angebot ist aufgebraucht.' });
+    if (result.kind === 'inventory_full') return reply.code(409).send({ message: result.inventoryKind === 'pet' ? 'Dein Pet-Inventar ist voll.' : 'Dein Hut-Inventar ist voll.' });
+    if (result.kind === 'insufficient_resources') return reply.code(409).send({ message: `Nicht genug Gutscheine. Benötigt: ${result.cost}.` });
+
+    const [inventory, shop, subscriberShop] = await Promise.all([loadPlayerInventory(identity.userId), loadShopOffers(identity.userId), loadSubscriberShopOffers(identity.userId)]);
+    return { inventory, shop, subscriberShop };
   });
 
   app.post('/api/game/shop/buy', async (request, reply) => {

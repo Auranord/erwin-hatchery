@@ -300,6 +300,34 @@ export const hats = pgTable('hats', {
     .defaultNow()
 });
 
+
+export const shopOfferSelections = pgTable(
+  'shop_offer_selections',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    shopId: text('shop_id').notNull(),
+    periodKey: text('period_key').notNull(),
+    itemKind: text('item_kind').notNull(),
+    typeId: text('type_id').notNull(),
+    pairedTypeId: text('paired_type_id'),
+    displayName: text('display_name').notNull(),
+    description: text('description').notNull().default(''),
+    resourcePrice: integer('resource_price').notNull(),
+    stock: integer('stock').notNull(),
+    displayOrder: integer('display_order').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+  },
+  (table) => ({
+    shopPeriodOrderUnique: uniqueIndex('shop_offer_selections_period_order_idx').on(
+      table.shopId,
+      table.periodKey,
+      table.displayOrder
+    )
+  })
+);
+
 export const petSpecies = pgTable('pet_species', {
   id: text('id').primaryKey(),
   displayName: text('display_name').notNull(),
@@ -514,9 +542,7 @@ export const pets = pgTable(
     experience: integer('experience').notNull().default(0),
     level: integer('level').notNull().default(0),
     equippedHatId: text('equipped_hat_id').references(() => hats.id),
-    sourceUnhatchedEggId: uuid('source_unhatched_egg_id')
-      .notNull()
-      .references(() => unhatchedEggs.id),
+    sourceUnhatchedEggId: uuid('source_unhatched_egg_id').references(() => unhatchedEggs.id),
     slotIndex: integer('slot_index'),
     isFavorite: boolean('is_favorite').notNull().default(false),
     selectedForEvent: boolean('selected_for_event').notNull().default(false),
