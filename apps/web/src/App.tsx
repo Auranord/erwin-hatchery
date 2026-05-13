@@ -2958,29 +2958,35 @@ export function App(): JSX.Element {
                 : `${upgrades.nextSlotUpgradeCostCrackedEggs} Aufgebrochene Eier`}
             </span>
           </button>
-          <div className="inventory-upgrade-panel equipment-set-upgrade-panel">
-            <div>
-              <strong>Weiteres Set kaufen</strong>
-              <p>
-                +1 zusätzliches Ausrüstungsset mit {DEFAULT_EQUIPMENT_SET_BASE_SLOTS + upgrades.setSlotBonusCount} Slots · Du hast {crackedEggBalance} Aufgebrochene Eier.
-                Der nächste Set-Kauf kostet danach doppelt.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                void buyEquipmentSetUpgrade('additional-equipment-set');
-              }}
-              disabled={
-                upgradingInventoryKind !== null ||
-                crackedEggBalance < upgrades.nextSetCostCrackedEggs
-              }
-            >
+          <button
+            type="button"
+            className="inventory-upgrade-panel inventory-upgrade-button equipment-set-upgrade-button"
+            onClick={() =>
+              requestEquipmentSetUpgrade(
+                'additional-equipment-set',
+                'Weiteres Set kaufen',
+                `+1 zusätzliches Ausrüstungsset mit ${
+                  DEFAULT_EQUIPMENT_SET_BASE_SLOTS + upgrades.setSlotBonusCount
+                } Slots. Der nächste Set-Kauf kostet danach doppelt.`,
+                upgrades.nextSetCostCrackedEggs
+              )
+            }
+            disabled={
+              upgradingInventoryKind !== null ||
+              crackedEggBalance < upgrades.nextSetCostCrackedEggs
+            }
+          >
+            <strong>Weiteres Set kaufen</strong>
+            <span>
+              +1 zusätzliches Set mit {DEFAULT_EQUIPMENT_SET_BASE_SLOTS + upgrades.setSlotBonusCount}{' '}
+              Slots · Du hast {crackedEggBalance} Aufgebrochene Eier
+            </span>
+            <span>
               {isSetBuyPending
                 ? 'Kaufe …'
                 : `${upgrades.nextSetCostCrackedEggs} Aufgebrochene Eier`}
-            </button>
-          </div>
+            </span>
+          </button>
         </div>
         <div className="equipment-set-list">
           {sets.map((set) => (
@@ -3443,8 +3449,12 @@ export function App(): JSX.Element {
                       {
                         label:
                           upgradingInventoryKind === pendingEquipmentSetUpgrade.upgradeKind
-                            ? 'Erweitere …'
-                            : 'Ja, erweitern',
+                            ? pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
+                              ? 'Kaufe …'
+                              : 'Erweitere …'
+                            : pendingEquipmentSetUpgrade.upgradeKind === 'additional-equipment-set'
+                              ? 'Ja, kaufen'
+                              : 'Ja, erweitern',
                         onClick: () =>
                           void buyEquipmentSetUpgrade(
                             pendingEquipmentSetUpgrade.upgradeKind
