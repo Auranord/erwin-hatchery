@@ -731,7 +731,7 @@ export function App(): JSX.Element {
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const [activePlayerPageIndex, setActivePlayerPageIndex] = useState(0);
-  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const toastIdRef = useRef(0);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
   const isAlertOverlayRoute = window.location.pathname === '/overlay/alerts';
@@ -3518,21 +3518,49 @@ export function App(): JSX.Element {
     );
   }
 
-  function handlePlayerPageSwipeStart(clientX: number): void {
-    swipeStartXRef.current = clientX;
+  function scrollPlayerPageToTop(): void {
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   }
 
-  function handlePlayerPageSwipeEnd(clientX: number, pageCount: number): void {
-    const startX = swipeStartXRef.current;
-    swipeStartXRef.current = null;
-    if (startX === null) return;
+  function setPlayerPageIndex(pageIndex: number, pageCount: number): void {
+    setActivePlayerPageIndex((currentIndex) => {
+      const nextIndex = Math.min(Math.max(pageIndex, 0), pageCount - 1);
+      if (nextIndex !== currentIndex) scrollPlayerPageToTop();
+      return nextIndex;
+    });
+  }
 
-    const distance = clientX - startX;
-    if (Math.abs(distance) < 48) return;
+  function handlePlayerPageSwipeStart(clientX: number, clientY: number): void {
+    swipeStartRef.current = { x: clientX, y: clientY };
+  }
+
+  function handlePlayerPageSwipeEnd(
+    clientX: number,
+    clientY: number,
+    pageCount: number
+  ): void {
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (!start) return;
+
+    const distanceX = clientX - start.x;
+    const distanceY = clientY - start.y;
+    const absoluteDistanceX = Math.abs(distanceX);
+    const absoluteDistanceY = Math.abs(distanceY);
+
+    if (absoluteDistanceX < 84 || absoluteDistanceX < absoluteDistanceY * 1.75) {
+      return;
+    }
 
     setActivePlayerPageIndex((currentIndex) => {
-      if (distance < 0) return Math.min(pageCount - 1, currentIndex + 1);
-      return Math.max(0, currentIndex - 1);
+      const nextIndex =
+        distanceX < 0
+          ? Math.min(pageCount - 1, currentIndex + 1)
+          : Math.max(0, currentIndex - 1);
+      if (nextIndex !== currentIndex) scrollPlayerPageToTop();
+      return nextIndex;
     });
   }
 
@@ -3541,10 +3569,11 @@ export function App(): JSX.Element {
     return renderSetupScreen();
   }
 
-  const playerPages: Array<{ id: string; label: string; content: JSX.Element }> = [
+  const playerPages: Array<{ id: string; label: string; icon: string; content: JSX.Element }> = [
     {
       id: 'main',
       label: 'Start',
+      icon: '⌂',
       content: (
         <div className="player-page-content">
           <header className="hero">
@@ -3612,6 +3641,7 @@ export function App(): JSX.Element {
         {
           id: 'incubator',
           label: 'Inkubator',
+          icon: '🥚',
           content: (
             <div className="player-page-content inventory-stack">
               {renderResourceSummary(playerInventory)}
@@ -3623,6 +3653,7 @@ export function App(): JSX.Element {
         {
           id: 'pets',
           label: 'Pets',
+          icon: '🐾',
           content: (
             <div className="player-page-content inventory-stack">
               {renderEventBox(playerInventory)}
@@ -3632,7 +3663,8 @@ export function App(): JSX.Element {
         },
         {
           id: 'consumables',
-          label: 'Items',
+          label: 'Verbrauchbares',
+          icon: '✦',
           content: (
             <div className="player-page-content inventory-stack">
               {renderConsumableGrid(playerInventory)}
@@ -3643,6 +3675,7 @@ export function App(): JSX.Element {
         {
           id: 'equipment',
           label: 'Ausrüstung',
+          icon: '⚔',
           content: (
             <div className="player-page-content inventory-stack">
               {renderEquipmentSetsPanel(
@@ -3656,6 +3689,7 @@ export function App(): JSX.Element {
         {
           id: 'profile',
           label: 'Profil',
+          icon: '🎩',
           content: (
             <div className="player-page-content inventory-stack">
               {renderHatGrid(playerInventory)}
@@ -3665,6 +3699,7 @@ export function App(): JSX.Element {
         {
           id: 'shop',
           label: 'Shop',
+          icon: '🛒',
           content: (
             <div className="player-page-content inventory-stack">
               {renderShopPanel(shopOffers)}
@@ -3677,6 +3712,7 @@ export function App(): JSX.Element {
       playerPages.push({
         id: 'loading',
         label: 'Spiel',
+        icon: '…',
         content: (
           <section className="card player-page-content">
             <h2>Spielbereich</h2>
@@ -3692,9 +3728,7 @@ export function App(): JSX.Element {
     playerPages.length - 1
   );
   const goToPlayerPage = (pageIndex: number): void => {
-    setActivePlayerPageIndex(
-      Math.min(Math.max(pageIndex, 0), playerPages.length - 1)
-    );
+    setPlayerPageIndex(pageIndex, playerPages.length);
   };
 
   return (
@@ -3958,11 +3992,15 @@ export function App(): JSX.Element {
         className="player-page-shell"
         aria-label="Spielbereiche"
         onTouchStart={(event) =>
-          handlePlayerPageSwipeStart(event.changedTouches[0]?.clientX ?? 0)
+          handlePlayerPageSwipeStart(
+            event.changedTouches[0]?.clientX ?? 0,
+            event.changedTouches[0]?.clientY ?? 0
+          )
         }
         onTouchEnd={(event) =>
           handlePlayerPageSwipeEnd(
             event.changedTouches[0]?.clientX ?? 0,
+            event.changedTouches[0]?.clientY ?? 0,
             playerPages.length
           )
         }
@@ -4022,8 +4060,13 @@ export function App(): JSX.Element {
             className={index === currentPlayerPageIndex ? 'active' : undefined}
             onClick={() => goToPlayerPage(index)}
             aria-current={index === currentPlayerPageIndex ? 'page' : undefined}
+            aria-label={page.label}
+            title={page.label}
           >
-            {page.label}
+            <span className="player-page-tab-icon" aria-hidden="true">
+              {page.icon}
+            </span>
+            <span className="player-page-tab-label">{page.label}</span>
           </button>
         ))}
       </nav>
