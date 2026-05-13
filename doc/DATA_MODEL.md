@@ -320,6 +320,7 @@ class_id text not null references pet_classes(id)
 element_id text not null references elements(id)
 default_ability_id text not null references pet_abilities(id)
 asset_key text not null
+is_shop_purchasable boolean not null default false -- eligible to appear as a future shop purchase
 is_active boolean not null default true
 created_at timestamp
 updated_at timestamp
@@ -471,6 +472,7 @@ id text primary key
 label_de text
 description text
 config jsonb -- cosmetic display/positioning metadata only; no stat effects
+is_shop_purchasable boolean -- eligible to appear as a future shop purchase
 is_active boolean
 created_at timestamp
 

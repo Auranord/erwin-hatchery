@@ -293,6 +293,7 @@ export const hats = pgTable('hats', {
   labelDe: text('label_de').notNull(),
   description: text('description').notNull().default(''),
   config: jsonb('config').notNull().default({}),
+  isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
@@ -323,6 +324,7 @@ export const petSpecies = pgTable('pet_species', {
     .notNull()
     .references(() => petAbilities.id),
   assetKey: text('asset_key').notNull(),
+  isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true)
 });
 
