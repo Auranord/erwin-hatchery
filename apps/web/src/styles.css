@@ -17,16 +17,28 @@
   box-sizing: border-box;
 }
 
-body {
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
-  min-height: 100vh;
-  padding-bottom: calc(
-    var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)
-  );
+  overflow: hidden;
 }
 
-#root {
-  min-height: 100vh;
+.app-shell {
+  height: 100svh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.app-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 1rem;
 }
 
 .container {
@@ -1156,9 +1168,9 @@ ul {
 }
 
 .player-page-container {
+  width: 100%;
   max-width: 46rem;
-  overflow: visible;
-  padding-bottom: 1rem;
+  overflow-x: visible;
 }
 
 .player-page-shell {
@@ -1239,24 +1251,19 @@ ul {
 }
 
 .bottom-nav {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 9999;
+  z-index: 10;
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   align-items: center;
   width: 100%;
-  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
   margin: 0;
   padding: 0 0 env(safe-area-inset-bottom, 0px);
   overflow: hidden;
   background: var(--nav-background, #111);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 -0.75rem 1.5rem rgba(0, 0, 0, 0.2);
-  transform: translateZ(0);
-  will-change: transform;
-  contain: paint;
+  flex-shrink: 0;
 }
 
 .bottom-nav a,
@@ -1269,7 +1276,7 @@ ul {
   isolation: isolate;
   min-width: 0;
   width: 100%;
-  height: var(--bottom-nav-height);
+  height: 64px;
   padding: 0;
   border: 0;
   border-radius: 0;
