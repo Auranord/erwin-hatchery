@@ -2015,18 +2015,21 @@ export function App(): JSX.Element {
   if (isAdminRoute) {
     if (!me?.authenticated || !me.isAdmin)
       return (
-        <main className="container">
-          <section className="card">
-            <h2>Adminbereich</h2>
-            <p>Zugriff verweigert.</p>
-          </section>
-        </main>
+        <div className="app-shell app-shell--single">
+          <main className="app-scroll container">
+            <section className="card">
+              <h2>Adminbereich</h2>
+              <p>Zugriff verweigert.</p>
+            </section>
+          </main>
+        </div>
       );
     const selected = users.find((x) => x.id === selectedUserId) ?? null;
 
     return (
-      <main className="container">
-        <section className="card">
+      <div className="app-shell app-shell--single">
+        <main className="app-scroll container">
+          <section className="card">
           <h2>Adminbereich</h2>
           {adminHealthIssue?.code === 'NO_ACTIVE_EGG_TYPES' ? (
             <p role="alert">
@@ -2370,7 +2373,8 @@ export function App(): JSX.Element {
             ))}
           </ul>
         </section>
-      </main>
+        </main>
+      </div>
     );
   }
 
@@ -2379,8 +2383,9 @@ export function App(): JSX.Element {
     const status = setupStatus;
     const eventSubs = status?.eventSub.subscriptions ?? [];
     return (
-      <main className="container">
-        <header className="hero">
+      <div className="app-shell app-shell--single">
+        <main className="app-scroll container">
+          <header className="hero">
           <p className="badge">Ersteinrichtung · Twitch</p>
           <h1>Erwin Hatchery einrichten</h1>
           <p>Twitch-abhängige Admin- und Spielfunktionen sind gesperrt, bis die Einrichtung abgeschlossen ist.</p>
@@ -2415,7 +2420,8 @@ export function App(): JSX.Element {
             </ul>
           ) : null}
         </section>
-      </main>
+        </main>
+      </div>
     );
   }
 
@@ -3520,6 +3526,12 @@ export function App(): JSX.Element {
 
   function scrollPlayerPageToTop(): void {
     window.requestAnimationFrame(() => {
+      const scrollContainer = document.querySelector<HTMLElement>('.app-scroll');
+      if (scrollContainer) {
+        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   }
@@ -3731,13 +3743,9 @@ export function App(): JSX.Element {
     setPlayerPageIndex(pageIndex, playerPages.length);
   };
 
-  const bottomNavStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${playerPages.length}, minmax(0, 1fr))`
-  };
-
   return (
-    <>
-      <main className="container player-page-container">
+    <div className="app-shell">
+      <main className="app-scroll container player-page-container">
       {me?.authenticated && playerInventory ? (
         <>
 {pendingPetScrap ? (
@@ -4076,7 +4084,6 @@ export function App(): JSX.Element {
       </main>
       <nav
         className="bottom-nav player-page-tabs"
-        style={bottomNavStyle}
         aria-label="Spielbereich wechseln"
       >
         {playerPages.map((page, index) => (
@@ -4096,6 +4103,6 @@ export function App(): JSX.Element {
           </button>
         ))}
       </nav>
-    </>
+    </div>
   );
 }
