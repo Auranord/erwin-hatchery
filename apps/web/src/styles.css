@@ -1,4 +1,6 @@
 :root {
+  --bottom-nav-height: 64px;
+  --nav-background: rgba(23, 20, 32, 0.98);
   font-family:
     Inter,
     system-ui,
@@ -18,6 +20,9 @@
 body {
   margin: 0;
   min-height: 100vh;
+  padding-bottom: calc(
+    var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px)
+  );
 }
 
 #root {
@@ -1153,7 +1158,7 @@ ul {
 .player-page-container {
   max-width: 46rem;
   overflow: visible;
-  padding-bottom: calc(4.85rem + env(safe-area-inset-bottom));
+  padding-bottom: 1rem;
 }
 
 .player-page-shell {
@@ -1233,43 +1238,56 @@ ul {
   right: -3.25rem;
 }
 
-.player-page-tabs {
+.bottom-nav {
   position: fixed;
-  bottom: env(safe-area-inset-bottom);
-  left: 50%;
-  z-index: 4;
-  display: flex;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: grid;
   align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  height: 3.35rem;
-  min-height: 3.35rem;
-  max-height: 3.35rem;
-  margin: 0.85rem -1rem env(safe-area-inset-bottom);
-  padding: 0.38rem 0.75rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-  background: rgba(23, 20, 32, 0.96);
+  width: 100%;
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  margin: 0;
+  padding: 0 0 env(safe-area-inset-bottom, 0px);
+  overflow: hidden;
+  background: var(--nav-background, #111);
   border-top: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 -0.75rem 1.5rem rgba(0, 0, 0, 0.2);
+  transform: translateZ(0);
+  will-change: transform;
+  contain: paint;
 }
 
-.player-page-tabs::-webkit-scrollbar {
-  display: none;
+.bottom-nav a,
+.bottom-nav button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  width: 100%;
+  height: var(--bottom-nav-height);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #d8d3e8;
+  cursor: pointer;
 }
 
-.player-page-tabs button {
-  display: grid;
-  flex: 0 0 2.45rem;
-  width: 2.45rem;
-  height: 2.45rem;
-  place-items: center;
+.bottom-nav a::before,
+.bottom-nav button::before {
+  content: '';
+  position: absolute;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 1px solid rgba(148, 163, 184, 0.24);
   border-radius: 999px;
   background: rgba(38, 32, 58, 0.92);
-  color: #d8d3e8;
-  cursor: pointer;
+  z-index: -1;
 }
 
 .player-page-tab-icon {
@@ -1289,11 +1307,19 @@ ul {
   border: 0;
 }
 
-.player-page-tabs button.active,
-.player-page-tabs button:focus-visible {
+.bottom-nav a.active,
+.bottom-nav a:focus-visible,
+.bottom-nav button.active,
+.bottom-nav button:focus-visible {
+  color: #ffffff;
+}
+
+.bottom-nav a.active::before,
+.bottom-nav a:focus-visible::before,
+.bottom-nav button.active::before,
+.bottom-nav button:focus-visible::before {
   border-color: rgba(250, 204, 21, 0.82);
   background: #4d3b81;
-  color: #ffffff;
   transform: translateY(-0.08rem);
 }
 
