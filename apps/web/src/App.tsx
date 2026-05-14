@@ -3731,8 +3731,13 @@ export function App(): JSX.Element {
     setPlayerPageIndex(pageIndex, playerPages.length);
   };
 
+  const bottomNavStyle: CSSProperties = {
+    gridTemplateColumns: `repeat(${playerPages.length}, minmax(0, 1fr))`
+  };
+
   return (
-    <main className="container player-page-container">
+    <>
+      <main className="container player-page-container">
       {me?.authenticated && playerInventory ? (
         <>
 {pendingPetScrap ? (
@@ -4052,7 +4057,28 @@ export function App(): JSX.Element {
           ›
         </button>
       </section>
-      <nav className="player-page-tabs" aria-label="Spielbereich wechseln">
+      {!me?.authenticated ? (
+        <section className="card player-login-hint">
+          <p>Nach dem Login kannst du per Wischgeste zwischen Inkubator, Pets, Verbrauchbarem, Ausrüstung, Profil und Shop wechseln.</p>
+        </section>
+      ) : null}
+      {toastMessage ? (
+        <div className="toast-viewport" aria-live="polite" aria-atomic="true">
+          <p
+            key={toastMessage.id}
+            className={`status-toast status-toast--${toastMessage.tone}`}
+            role="status"
+          >
+            {toastMessage.text}
+          </p>
+        </div>
+      ) : null}
+      </main>
+      <nav
+        className="bottom-nav player-page-tabs"
+        style={bottomNavStyle}
+        aria-label="Spielbereich wechseln"
+      >
         {playerPages.map((page, index) => (
           <button
             key={page.id}
@@ -4070,22 +4096,6 @@ export function App(): JSX.Element {
           </button>
         ))}
       </nav>
-      {!me?.authenticated ? (
-        <section className="card player-login-hint">
-          <p>Nach dem Login kannst du per Wischgeste zwischen Inkubator, Pets, Verbrauchbarem, Ausrüstung, Profil und Shop wechseln.</p>
-        </section>
-      ) : null}
-      {toastMessage ? (
-        <div className="toast-viewport" aria-live="polite" aria-atomic="true">
-          <p
-            key={toastMessage.id}
-            className={`status-toast status-toast--${toastMessage.tone}`}
-            role="status"
-          >
-            {toastMessage.text}
-          </p>
-        </div>
-      ) : null}
-    </main>
+    </>
   );
 }
