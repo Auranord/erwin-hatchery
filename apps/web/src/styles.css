@@ -1053,30 +1053,73 @@ ul {
 .shop-offer-card {
   position: relative;
   display: grid;
+  grid-template-rows: minmax(7.1rem, 1fr) minmax(2.4rem, auto);
   min-width: 0;
-  min-height: 8.1rem;
-  place-items: center;
-  align-content: center;
-  gap: 0.3rem;
-  padding: 0.65rem 0.5rem;
+  min-height: 10rem;
+  gap: 0.35rem;
+  padding: 0.35rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   color: #f8f4ff;
   text-align: center;
-  cursor: pointer;
 }
 
-.shop-offer-card:hover:not(:disabled),
-.shop-offer-card:focus-visible,
 .shop-offer-card.queued {
   border-color: rgba(250, 204, 21, 0.65);
   box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.12);
 }
 
-.shop-offer-card:disabled {
+.shop-offer-action {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  place-items: center;
+  gap: 0.25rem;
+  padding: 0.6rem 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.8rem;
+  color: #f8f4ff;
+  text-align: center;
+  cursor: pointer;
+}
+
+.shop-offer-action:focus-visible {
+  outline: 3px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 2px;
+}
+
+.shop-offer-action:disabled {
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.45;
+}
+
+.shop-offer-add {
+  min-height: 7.1rem;
+  background: rgba(34, 197, 94, 0.11);
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.shop-offer-add:hover:not(:disabled),
+.shop-offer-add:focus-visible {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(74, 222, 128, 0.58);
+}
+
+.shop-offer-remove {
+  min-height: 2.75rem;
+  padding-block: 0.45rem;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(248, 113, 113, 0.3);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.shop-offer-remove:hover:not(:disabled),
+.shop-offer-remove:focus-visible {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(248, 113, 113, 0.58);
 }
 
 .shop-offer-card strong {
@@ -1087,10 +1130,23 @@ ul {
 }
 
 .shop-offer-card small,
-.shop-offer-card span:not(.shop-queue-badge) {
+.shop-offer-card span:not(.shop-queue-badge):not(.shop-offer-symbol) {
   color: #b8b0ca;
   font-size: 0.7rem;
   line-height: 1.15;
+}
+
+.shop-offer-symbol {
+  color: #bbf7d0;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.shop-offer-card .shop-offer-remove span {
+  color: #fecaca;
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .shop-queue-badge {
@@ -1123,20 +1179,52 @@ ul {
 }
 
 .shop-queue-list {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   min-width: 0;
   gap: 0.5rem;
 }
 
-.shop-queue-list button {
-  max-width: 100%;
-  border-color: rgba(255, 255, 255, 0.18);
+.shop-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(2.75rem, auto);
+  align-items: center;
+  min-width: 0;
+  gap: 0.35rem 0.5rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.85rem;
   background: rgba(255, 255, 255, 0.07);
+}
+
+.shop-queue-row-name {
+  grid-column: 1 / 3;
+  min-width: 0;
   color: #f8f4ff;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.shop-queue-row-quantity,
+.shop-queue-row-price {
+  color: #b8b0ca;
+  font-size: 0.78rem;
+}
+
+.shop-queue-row button {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.shop-queue-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .shop-queue-panel > button {
@@ -1161,6 +1249,7 @@ ul {
 
   .shop-queue-list {
     grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .shop-queue-panel > button {

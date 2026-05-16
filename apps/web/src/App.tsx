@@ -2663,6 +2663,29 @@ export function App(): JSX.Element {
       { kind: 'consumable', title: 'Verbrauchbares', folder: 'consumables' },
       { kind: 'equipment', title: 'Ausrüstung', folder: 'equipment' }
     ];
+    const groupedQueuedShopItems = queuedShopItems.reduce<
+      Array<{
+        key: string;
+        item: ShopOfferItem;
+        quantity: number;
+        totalPrice: number;
+      }>
+    >((groups, item) => {
+      const itemKey = getShopItemKey(item);
+      const existingGroup = groups.find((group) => group.key === itemKey);
+      if (existingGroup) {
+        existingGroup.quantity += 1;
+        existingGroup.totalPrice += item.resourcePrice;
+      } else {
+        groups.push({
+          key: itemKey,
+          item,
+          quantity: 1,
+          totalPrice: item.resourcePrice
+        });
+      }
+      return groups;
+    }, []);
 
     return (
       <section className="inventory-panel shop-panel">
@@ -2694,36 +2717,62 @@ export function App(): JSX.Element {
                           const remainingAfterQueue = offer.remainingThisWeek - queuedCount;
                           const isSoldOut = offer.remainingThisWeek <= 0;
                           const isQueuedOut = remainingAfterQueue <= 0;
-                          const isTooExpensive = crackedEggBalance < queueTotal + offer.resourcePrice;
+                          const isTooExpensive =
+                            crackedEggBalance < queueTotal + offer.resourcePrice;
                           return (
-                            <button
+                            <article
                               key={itemKey}
-                              type="button"
                               className={`shop-offer-card ${queuedCount > 0 ? 'queued' : ''}`}
-                              onClick={() => queueShopOffer(offer)}
-                              disabled={isBuyingShopQueue}
-                              title={
-                                isSoldOut || isQueuedOut
-                                  ? 'Wochenbestand aufgebraucht'
-                                  : isTooExpensive
-                                    ? 'Nicht genug Aufgebrochene Eier für die Auswahl'
-                                    : 'Zur Kaufliste hinzufügen'
-                              }
                             >
                               {queuedCount > 0 ? (
                                 <span className="shop-queue-badge">×{queuedCount}</span>
                               ) : null}
-                              {renderSlotAsset({
-                                folder: group.folder,
-                                assetKey: offer.typeId,
-                                label: offer.displayName,
-                                size: 56,
-                                className: 'shop-offer-asset'
-                              })}
-                              <strong>{offer.displayName}</strong>
-                              <small>Bestand: {Math.max(0, remainingAfterQueue)}/{offer.stock}</small>
-                              <span>{offer.resourcePrice} Eier</span>
-                            </button>
+                              <button
+                                type="button"
+                                className="shop-offer-action shop-offer-add"
+                                onClick={() => queueShopOffer(offer)}
+                                disabled={
+                                  isBuyingShopQueue ||
+                                  isSoldOut ||
+                                  isQueuedOut ||
+                                  isTooExpensive
+                                }
+                                title={
+                                  isSoldOut || isQueuedOut
+                                    ? 'Wochenbestand aufgebraucht'
+                                    : isTooExpensive
+                                      ? 'Nicht genug Aufgebrochene Eier für die Auswahl'
+                                      : 'Zur Kaufliste hinzufügen'
+                                }
+                                aria-label={`${offer.displayName} zur Kaufliste hinzufügen`}
+                              >
+                                {renderSlotAsset({
+                                  folder: group.folder,
+                                  assetKey: offer.typeId,
+                                  label: offer.displayName,
+                                  size: 56,
+                                  className: 'shop-offer-asset'
+                                })}
+                                <strong>{offer.displayName}</strong>
+                                <small>
+                                  Bestand: {Math.max(0, remainingAfterQueue)}/{offer.stock}
+                                </small>
+                                <span>{offer.resourcePrice} Eier</span>
+                                <span className="shop-offer-symbol" aria-hidden="true">
+                                  +
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                className="shop-offer-action shop-offer-remove"
+                                onClick={() => removeQueuedShopOffer(offer)}
+                                disabled={queuedCount <= 0 || isBuyingShopQueue}
+                                title="Aus Kaufliste entfernen"
+                                aria-label={`${offer.displayName} aus Kaufliste entfernen`}
+                              >
+                                <span aria-hidden="true">−</span>
+                              </button>
+                            </article>
                           );
                         })
                       )}
@@ -2741,18 +2790,23 @@ export function App(): JSX.Element {
                     : 'Tippe Angebote an, um sie vorzumerken.'}
                 </p>
               </div>
-              {queuedShopItems.length > 0 ? (
+              {groupedQueuedShopItems.length > 0 ? (
                 <div className="shop-queue-list">
-                  {queuedShopItems.map((item, index) => (
-                    <button
-                      key={`${getShopItemKey(item)}:${index}`}
-                      type="button"
-                      onClick={() => removeQueuedShopOffer(item)}
-                      disabled={isBuyingShopQueue}
-                      title="Aus Kaufliste entfernen"
-                    >
-                      {item.displayName} − {item.resourcePrice}
-                    </button>
+                  {groupedQueuedShopItems.map((group) => (
+                    <div key={group.key} className="shop-queue-row">
+                      <span className="shop-queue-row-name">{group.item.displayName}</span>
+                      <span className="shop-queue-row-quantity">×{group.quantity}</span>
+                      <span className="shop-queue-row-price">{group.totalPrice} Eier</span>
+                      <button
+                        type="button"
+                        onClick={() => removeQueuedShopOffer(group.item)}
+                        disabled={isBuyingShopQueue}
+                        title="Ein Item aus Kaufliste entfernen"
+                        aria-label={`${group.item.displayName} einmal aus Kaufliste entfernen`}
+                      >
+                        −
+                      </button>
+                    </div>
                   ))}
                 </div>
               ) : null}
