@@ -1508,3 +1508,16 @@ ul {
     transition: none;
   }
 }
+
+.hat-collection-slot.hat-locked {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.hat-collection-slot.hat-locked .slot-asset {
+  opacity: 0.65;
+}
+
+.hat-collection-slot.hat-unlocked {
+  border-color: rgba(246, 196, 83, 0.75);
+}

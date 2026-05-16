@@ -60,7 +60,7 @@ Each player needs separate inventories for:
 - Mystery eggs (integer balance per egg type, not individual rows)
 - Unhatched eggs
 - Hatched pets
-- Cosmetic hats
+- Cosmetic hat unlocks
 - Consumables
 - Resources, starting with cracked eggs
 
@@ -140,7 +140,7 @@ Definitions:
 - The seeded MVP pool does not include traits. The trait tables remain schema-only for future training/content systems.
 - Seeded default stats are fixed by rarity: Common 10 in each non-HP stat, Uncommon 12, Rare 14, Epic 16, Legendary 18, with HP equal to that value times 10.
 - Each seeded pet has exactly one class and one element. Fire, water, air, and earth are normal elements; light is reserved for the legendary pet.
-- Each pet may equip one cosmetic hat. Hats are cosmetic only and must not affect combat stats.
+- Each pet may equip one cosmetic hat that the player has unlocked. Hats are cosmetic-only progression unlocks, each hat can be unlocked at most once per player, and hats must not affect combat stats.
 - Gems are equipment-set items rather than direct pet equipment. The seed data includes themed gem equipment in three tiers with explicit `config.statBonuses`: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP. Seeded gem future shop metadata uses cracked-egg `resource_price`/`stock` pairs of 250/10 for tier 1, 750/5 for tier 2, and 1500/2 for tier 3, with `is_shop_purchasable = true` for all seeded gems. Final event stat aggregation can consume these config values later; paid random gem rewards are not part of the MVP.
 
 Seeded class roles:
@@ -320,7 +320,7 @@ Implement this in a simple and transparent way.
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the job stays running, the egg stays incubating, no pet is created, and the incubator remains occupied.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space. Scrapping a pet deletes the pet after explicit confirmation, grants `cracked_eggs` from rarity recycle metadata, and writes a ledger row; rarity still never multiplies stats.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables and equipment are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Cosmetic hats are represented as one-time unlock progression rows and are shown in a tiled locked/unlocked catalog. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, and equipment expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Reward-ingestion milestone rules
@@ -340,4 +340,4 @@ Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy 
 
 The player UI also includes a separate mobile-first `Subscriber-Shop` box. It lists monthly pet-and-hat pair offers built from the cross-product of active `pet_species` and `hats` rows where both sides have `is_shop_purchasable = true`. The monthly selection is deterministic for the UTC month key and is snapshotted in `shop_offer_selections` when generated, so newly added pets or hats do not change the current month's contents. `SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT` configures how many pet-hat pairs appear each month and defaults to 5.
 
-Each subscriber-shop pair costs exactly 1 `voucher` / **Gutschein** and has stock 1 per player per month. Buying a pair creates one owned pet with the selected cosmetic hat equipped, creates one matching hat inventory slot, debits one Gutschein, and writes a non-reverted `subscriber_shop_pair_purchased` economy ledger row in the same transaction. The hat remains cosmetic only and does not affect combat stats.
+Each subscriber-shop pair costs exactly 1 `voucher` / **Gutschein** and has stock 1 per player per month. Buying a pair creates one owned pet with the selected cosmetic hat equipped, unlocks that hat once through `user_hat_unlocks`, debits one Gutschein, and writes a non-reverted `subscriber_shop_pair_purchased` economy ledger row in the same transaction. If the player already unlocked that hat, the purchase is rejected rather than duplicating the unlock. The hat remains cosmetic only and does not affect combat stats.

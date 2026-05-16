@@ -27,7 +27,7 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 - `pet_species` defines species templates, default stats, fixed rarity/class/element assignments, and the default ability; `pets` stores owned instances with permanent base stats, copied rarity/class/element IDs, and an individual `ability_id` copied from the species at hatch so later training can change that one pet without changing the species template.
 - Rarity is display/economy/combine/recycle metadata only and must not be used as a stat multiplier.
-- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic only. Equipment seeding includes gem-themed gear in three tiers with config-only stat bonuses: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP.
+- Each seeded MVP pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability. No traits are included in the seeded MVP pet pool. Hats are cosmetic-only progression unlocks; each hat can be unlocked at most once per user. Equipment seeding includes gem-themed gear in three tiers with config-only stat bonuses: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP.
 - Future boss-event AP, current HP, attack counts, effective stats, class stacks, and element stacks are runtime participant state, not pet state. Ability logic is documentation-only for now: attacks grant 20 base AP, GAIN modifies AP gain, POW scales ability effects, and abilities auto-trigger after meeting AP and minimum-attack requirements.
 
 ## Public vs authenticated access
@@ -40,10 +40,10 @@ Public without Twitch login:
 
 Requires Twitch login:
 
-- Inventory, including separate consumable, equipment, and cosmetic hat grids
+- Inventory, including separate consumable/equipment grids and a cosmetic hat unlock collection
 - Egg identification
 - Incubation
-- Pet selection, cosmetic hat styling
+- Pet selection and cosmetic hat styling from one-time hat unlocks
 - Consumables/upgrades
 - Account deletion
 
@@ -76,7 +76,7 @@ Last reevaluated: **2026-05-13**.
 The current repo implementation includes:
 
 - TypeScript monorepo (`apps/web`, `apps/api`, `packages/shared`)
-- React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment/hat grids, queue/incubate/finish hatch actions, pet event selection, persisted weekly shop offers, monthly Gutschein subscriber-shop pet-hat offers, and public leaderboard view
+- React + Vite frontend shell with authenticated slotted player inventory, separate nonstackable consumable/equipment grids, a hat unlock collection, queue/incubate/finish hatch actions, pet event selection, persisted weekly shop offers, monthly Gutschein subscriber-shop pet-hat offers, and public leaderboard view
 - Fastify backend with `GET /api/health` and `GET /api/admin/health` readiness checks
 - PostgreSQL + a consolidated Drizzle base schema migration and MVP seed scripts
 - Twitch OAuth login/logout and `/api/me` identity route

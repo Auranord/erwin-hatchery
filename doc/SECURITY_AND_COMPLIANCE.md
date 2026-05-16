@@ -181,9 +181,9 @@ Use official/current Twitch docs when implementing:
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, hats, and incubator queue slots. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, and incubator queue slots. Hats are one-time cosmetic unlocks, not capacity-limited items. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
 - Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion, including incubator queue rows.
-- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables and equipment. The hat view is a fixed tiled catalog showing locked and unlocked hats.
 - Incubators are shown directly above the unhatched egg grid as fixed drop targets backed by a row-upgradeable queue. Starting incubation requires the chosen unhatched egg and an available queue slot.
 - Event-Pet selection uses a fixed drop target above the pet inventory. Selection only marks an owned pet as selected for events and must not create an extra pet inventory slot or remove the pet from capacity checks.
 - Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a queued or running incubation job, and writes a ledger row.
@@ -191,7 +191,7 @@ Use official/current Twitch docs when implementing:
 - Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queued jobs are not blocked by the unclaimed result.
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables and equipment are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Cosmetic hats are immutable per-user unlock rows and cannot be duplicated, moved, or discarded. Unhatched eggs, consumables, and equipment expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Twitch OAuth, EventSub, and paid reward compliance

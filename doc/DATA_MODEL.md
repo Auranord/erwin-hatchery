@@ -395,15 +395,15 @@ Pet invariants:
 - Hatch generation starts from species defaults, applies hatch variance, copies `pet_species.rarity_id`, `pet_species.class_id`, `pet_species.element_id`, and `pet_species.default_ability_id` into the owned pet row, and writes an immutable ledger row.
 - Training may later modify `base_*` values, change `pets.ability_id`, update trait assignments, or append to `training_adjustments`; it must be server-authoritative and ledgered.
 - Rarity is used for display, economy metadata, combine progression, and recycle value only. It is never a stat multiplier.
-- A pet may equip at most one cosmetic hat. Hats must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
+- A pet may equip at most one cosmetic hat that the owner has unlocked. Hats are one-time cosmetic progression unlocks and must not affect combat stats, AP gain, ability effects, or boss-event stack logic.
 - Gem equipment is modeled through `equipment_types` with `equipment_slot = gem` and config-only stat bonuses. Seeded gems use three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 for HP. Tiered gem future shop metadata uses cracked-egg `resource_price`/`stock` pairs of 250/10 for tier 1, 750/5 for tier 2, and 1500/2 for tier 3, with `is_shop_purchasable = true` for all seeded gems. Event stat aggregation may consume these values server-side later; browsers must not be trusted to apply equipment effects.
 - Current AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime boss-event state and must not be stored on `pets`.
 
 Future fields can include level, experience, fusion count, and richer training history.
 
-### consumables, equipment, and hats
+### consumables, equipment, and hat unlocks
 
-Consumables are no longer a generic item stack. They are nonstackable slotted instances in their own 8×3 inventory. Equipment and hats use separate, similar nonstackable inventories so future pet battle gear and cosmetics can evolve independently. Equipment can also be assigned to player-owned equipment sets; assigned equipment no longer occupies or appears in the normal equipment grid.
+Consumables are no longer a generic item stack. They are nonstackable slotted instances in their own 8×3 inventory. Equipment uses a separate nonstackable inventory and can also be assigned to player-owned equipment sets; assigned equipment no longer occupies or appears in the normal equipment grid. Hats are not items and do not consume inventory capacity. They are catalog entries unlocked once per user through immutable progression rows.
 
 ```text
 consumable_types:
@@ -494,14 +494,13 @@ unique(shop_id, period_key, display_order)
 
 `shop_offer_selections` persists the generated offer identities and pricing for both player shops. A period's rows are created only once, when first requested, and are reused afterward so adding new eligible pets, hats, consumables, or equipment does not alter the already-active basic weekly shop or subscriber monthly shop.
 
-hat_inventory_slots:
-id uuid primary key
+user_hat_unlocks:
 user_id uuid references users(id)
 hat_id text references hats(id)
-slot_index integer nullable
-created_at timestamp
-updated_at timestamp
-unique(user_id, slot_index)
+unlocked_at timestamp
+source_type text -- e.g. subscriber_shop or legacy_hat_inventory
+source_id uuid nullable -- ledger/source object when available
+primary key(user_id, hat_id) -- each hat can only be unlocked once per user
 ```
 
 ### hatchery_upgrades
@@ -636,16 +635,16 @@ Within the pet subset, rarity proportions remain 70.00% Common, 20.00% Uncommon,
 
 - Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
 - Egg resources such as `cracked_eggs` and `voucher` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
-- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, hats, and incubator queue slots. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
-- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for row expansion. Upgradeable slotted inventories are expanded one row at a time; the first row upgrade for each inventory costs 500 `cracked_eggs`, and each subsequent upgrade for that same inventory doubles the cost based on its current `bonus_rows`.
-- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables, equipment, and hats.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, and incubator queue slots. Hats are one-time unlocks and are not capacity-limited items. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for row expansion for slotted inventories only. Upgradeable slotted inventories are expanded one row at a time; the first row upgrade for each inventory costs 500 `cracked_eggs`, and each subsequent upgrade for that same inventory doubles the cost based on its current `bonus_rows`.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables and equipment. The hat UI is a tiled catalog that displays every active hat and whether it is unlocked.
 - The standard incubator is shown directly above the unhatched egg grid as a fixed drop target/queue area. Queueing incubation requires the chosen unhatched egg and an available standard incubator queue slot.
 - Event-Pet selection is represented by the `pets.selected_for_event` flag. The UI exposes it as a fixed drop target above the pet grid, but the selected pet remains in the pet grid and therefore continues to consume its normal pet inventory slot.
 - Queueing incubation validates ownership and queue-slot availability, frees the unhatched egg inventory slot, occupies the incubator queue slot, creates a queued or running incubation job, and writes a ledger row. Running jobs accumulate countdown progress only while the stream is live.
 - Queue sync marks a fully progressed running job as `completed` before pet redemption and then can auto-start the next queued job. Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queue jobs are not blocked by the unclaimed result.
 - Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables and equipment are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Cosmetic hats are represented by `user_hat_unlocks` progression rows keyed by `(user_id, hat_id)` and cannot be moved, discarded, or duplicated. Equipment also supports server-authoritative equipment sets: every player receives one default 3-slot set, items in a set are removed from the normal equipment grid, and one set can be marked as the battle Event-Set. Players can spend `cracked_eggs` on set upgrades: a slot upgrade adds one slot to every current set and all future sets, while an additional-set purchase creates another set with the current upgraded slot count. Unhatched eggs, consumables, and equipment expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation and inventory row upgrade is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Twitch reward-ingestion tables
