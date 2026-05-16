@@ -1340,8 +1340,29 @@ ul {
 
 @media (min-width: 56rem) {
   .player-page-arrow {
+    position: fixed;
+    top: calc((100svh - var(--bottom-nav-row-height)) / 2);
     display: grid;
     place-items: center;
+    transform: translateY(-50%);
+  }
+
+  .player-page-arrow--previous {
+    left: max(1rem, calc((100vw - 46rem) / 2 - 3.75rem));
+  }
+
+  .player-page-arrow--next {
+    right: max(1rem, calc((100vw - 46rem) / 2 - 3.75rem));
+  }
+
+  .player-page-tabs {
+    width: min(100% - 2rem, 46rem);
+    margin-right: auto;
+    margin-left: auto;
+    border-right: 1px solid rgba(148, 163, 184, 0.16);
+    border-left: 1px solid rgba(148, 163, 184, 0.16);
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
   }
 }
 
