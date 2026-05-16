@@ -353,7 +353,20 @@ type EquipmentSet = {
   upgradeRef: string | null;
   slots: EquipmentSetSlot[];
 };
-type HatItem = { id: string; hatId: string };
+type HatItem = {
+  id: string;
+  hatId: string;
+  labelDe: string;
+  description: string;
+  unlocked: boolean;
+  unlockedAt: string | null;
+};
+type HatCollection = {
+  columns: number;
+  total: number;
+  unlockedCount: number;
+  slots: Array<{ slotIndex: number; item: HatItem }>;
+};
 type EquipmentSetUpgrades = {
   setCount: number;
   setSlotBonusCount: number;
@@ -370,7 +383,7 @@ type PlayerInventory = {
   equipment: InventoryGrid<EquipmentItem>;
   equipmentSets: EquipmentSet[];
   equipmentSetUpgrades: EquipmentSetUpgrades;
-  hats: InventoryGrid<HatItem>;
+  hats: HatCollection;
 };
 type ShopOfferKind = 'equipment' | 'consumable';
 type ShopOfferItem = {
@@ -423,7 +436,7 @@ type SelectionPayload =
   | { kind: 'equipment-set'; id: string }
   | { kind: 'hat'; id: string };
 type PetScrapTarget = { petId: string; label: string; rarity: string };
-type InventoryDiscardKind = 'egg' | 'consumable' | 'equipment' | 'hat';
+type InventoryDiscardKind = 'egg' | 'consumable' | 'equipment';
 type InventoryDiscardTarget = {
   kind: InventoryDiscardKind;
   id: string;
@@ -1189,14 +1202,12 @@ export function App(): JSX.Element {
     const endpointByKind: Record<InventoryDiscardKind, string> = {
       egg: '/api/game/inventory/egg-slots/discard',
       consumable: '/api/game/inventory/consumable-slots/discard',
-      equipment: '/api/game/inventory/equipment-slots/discard',
-      hat: '/api/game/inventory/hat-slots/discard'
+      equipment: '/api/game/inventory/equipment-slots/discard'
     };
     const idKeyByKind: Record<InventoryDiscardKind, string> = {
       egg: 'unhatchedEggId',
       consumable: 'consumableSlotId',
-      equipment: 'equipmentSlotId',
-      hat: 'hatSlotId'
+      equipment: 'equipmentSlotId'
     };
     await postInventoryAction(endpointByKind[target.kind], {
       [idKeyByKind[target.kind]]: target.id,
@@ -1210,8 +1221,7 @@ export function App(): JSX.Element {
     return (
       kind === 'egg' ||
       kind === 'consumable' ||
-      kind === 'equipment' ||
-      kind === 'hat'
+      kind === 'equipment'
     );
   }
 
@@ -1237,10 +1247,7 @@ export function App(): JSX.Element {
         .find((item): item is EquipmentItem => item?.id === payload.id);
       return equipment?.equipmentTypeId ?? 'diese Ausrüstung';
     }
-    const hat = playerInventory?.hats.slots
-      .map((cell) => cell.item)
-      .find((item): item is HatItem => item?.id === payload.id);
-    return hat?.hatId ?? 'diesen Hut';
+    return 'dieses Objekt';
   }
 
   function requestSubscriberShopPurchase(offer: SubscriberShopOfferItem): void {
@@ -1406,11 +1413,6 @@ export function App(): JSX.Element {
       else if (payload.kind === 'equipment' && targetKind === 'equipment')
         await postInventoryMove('/api/game/inventory/equipment-slots/move', {
           equipmentSlotId: payload.id,
-          toSlotIndex: slotIndex
-        });
-      else if (payload.kind === 'hat' && targetKind === 'hat')
-        await postInventoryMove('/api/game/inventory/hat-slots/move', {
-          hatSlotId: payload.id,
           toSlotIndex: slotIndex
         });
     } catch (error) {
@@ -2542,7 +2544,9 @@ export function App(): JSX.Element {
     const hat = item as HatItem;
     return (
       <dl className="stats-grid">
-        <div><dt>Typ</dt><dd>{hat.hatId}</dd></div>
+        <div><dt>Typ</dt><dd>{hat.labelDe}</dd></div>
+        <div><dt>Status</dt><dd>{hat.unlocked ? 'Freigeschaltet' : 'Gesperrt'}</dd></div>
+        <div><dt>Beschreibung</dt><dd>{hat.description || 'Kosmetischer Hut ohne Stat-Effekt.'}</dd></div>
         <div><dt>ID</dt><dd>{hat.id}</dd></div>
       </dl>
     );
@@ -2596,7 +2600,7 @@ export function App(): JSX.Element {
   ): JSX.Element {
     const isSelectedHere = selectedPayload?.kind === kind;
     const selectedPet = isSelectedHere && kind === 'pet' ? getSelectedPet() : null;
-    const recycleDisabled = !isSelectedHere || selectedPet?.isFavorite === true;
+    const recycleDisabled = !isSelectedHere || kind === 'hat' || selectedPet?.isFavorite === true;
     return (
       <div className="inventory-control-center" aria-label="Inventar-Steuerung">
         <button
@@ -3555,26 +3559,56 @@ export function App(): JSX.Element {
   }
 
   function renderHatGrid(inventory: PlayerInventory): JSX.Element {
-    return renderGrid(
-      'Hüte',
-      inventory.hats,
-      'hat',
-      (hat) => (
-        <div className="slot-content slot-content-with-asset">
-          {renderSlotAsset({
-            folder: 'hats',
-            assetKey: hat.hatId,
-            label: hat.hatId,
-            size: 28
-          })}
-          <div className="slot-text">
-            <strong>{hat.hatId}</strong>
-            <span>Einzeln</span>
+    return (
+      <section className="inventory-panel item-panel hat-collection-panel">
+        <div className="inventory-panel-header">
+          <div>
+            <h3>Hüte</h3>
+            <p className="inventory-capacity">
+              {inventory.hats.unlockedCount}/{inventory.hats.total} freigeschaltet · Sammlung
+            </p>
           </div>
+          {renderInventoryControlCenter('hat')}
         </div>
-      ),
-      'item-panel',
-      undefined
+        <div
+          className="inventory-grid hat-collection-grid"
+          style={{
+            gridTemplateColumns: `repeat(${inventory.hats.columns}, minmax(0, 1fr))`
+          }}
+        >
+          {inventory.hats.slots.map((cell) => {
+            const hat = cell.item;
+            return (
+              <div
+                key={cell.slotIndex}
+                role="button"
+                tabIndex={0}
+                className={`inventory-slot occupied hat-slot hat-collection-slot ${hat.unlocked ? 'hat-unlocked' : 'hat-locked'} ${selectedPayload?.kind === 'hat' && selectedPayload.id === hat.id ? 'selected-source' : ''}`}
+                onClick={() => selectOrRun({ kind: 'hat', id: hat.id }, 'hat', cell.slotIndex)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  selectOrRun({ kind: 'hat', id: hat.id }, 'hat', cell.slotIndex);
+                }}
+                aria-label={`${hat.labelDe} ${hat.unlocked ? 'freigeschaltet' : 'gesperrt'}`}
+              >
+                <div className="slot-content slot-content-with-asset">
+                  {renderSlotAsset({
+                    folder: 'hats',
+                    assetKey: hat.hatId,
+                    label: hat.labelDe,
+                    size: 28
+                  })}
+                  <div className="slot-text">
+                    <strong>{hat.labelDe}</strong>
+                    <span>{hat.unlocked ? 'Freigeschaltet' : 'Gesperrt'}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     );
   }
 

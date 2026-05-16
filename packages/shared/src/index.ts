@@ -8,7 +8,7 @@ export const healthResponseSchema = z.object({
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
-export const INVENTORY_KINDS = ['incubators', 'unhatched_eggs', 'pets', 'consumables', 'equipment', 'hats'] as const;
+export const INVENTORY_KINDS = ['incubators', 'unhatched_eggs', 'pets', 'consumables', 'equipment'] as const;
 export type InventoryKind = (typeof INVENTORY_KINDS)[number];
 
 export type InventoryGridDimensions = {
@@ -27,8 +27,7 @@ export const DEFAULT_INVENTORY_GRIDS: Record<InventoryKind, { columns: number; b
   unhatched_eggs: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'unhatched_egg_inventory_rows' },
   pets: { columns: 4, baseRows: 4, bonusRows: 0, upgradeRef: 'pet_inventory_rows' },
   consumables: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'consumable_inventory_rows' },
-  equipment: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'equipment_inventory_rows' },
-  hats: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'hat_inventory_rows' }
+  equipment: { columns: 8, baseRows: 3, bonusRows: 0, upgradeRef: 'equipment_inventory_rows' }
 };
 
 export const INVENTORY_ROW_UPGRADE_BASE_COST_CRACKED_EGGS = 500;
@@ -170,9 +169,20 @@ export type EquipmentSetPayload = {
   slots: EquipmentSetSlotCell[];
 };
 
-export type HatSlotItem = {
+export type HatCollectionItem = {
   id: string;
   hatId: string;
+  labelDe: string;
+  description: string;
+  unlocked: boolean;
+  unlockedAt: string | null;
+};
+
+export type HatCollection = {
+  columns: number;
+  total: number;
+  unlockedCount: number;
+  slots: Array<SlottedInventoryCell<HatCollectionItem>>;
 };
 
 export type SlottedGrid<T> = {
@@ -249,5 +259,5 @@ export type PlayerInventoryPayload = {
   equipment: SlottedGrid<EquipmentSlotItem>;
   equipmentSets: EquipmentSetPayload[];
   equipmentSetUpgrades: EquipmentSetUpgradesPayload;
-  hats: SlottedGrid<HatSlotItem>;
+  hats: HatCollection;
 };

@@ -7,7 +7,7 @@ import {
   consumableInventorySlots,
   equipmentInventorySlots,
   equipmentSets,
-  hatInventorySlots,
+  userHatUnlocks,
   economyLedger,
   eggTypes,
   unhatchedEggs,
@@ -273,8 +273,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         .where(eq(equipmentInventorySlots.userId, userId)),
       db
         .select()
-        .from(hatInventorySlots)
-        .where(eq(hatInventorySlots.userId, userId)),
+        .from(userHatUnlocks)
+        .where(eq(userHatUnlocks.userId, userId)),
       db.select().from(resources).where(eq(resources.userId, userId)),
       db
         .select()
@@ -290,7 +290,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         hatchedPets: petRows,
         consumables: consumableRows,
         equipment: equipmentRows,
-        hats: hatRows,
+        hatUnlocks: hatRows,
         crackedEggResources: resourceRows,
         incubatorSlots: incubatorSlotRows
       }

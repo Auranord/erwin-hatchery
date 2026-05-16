@@ -25,7 +25,7 @@ Reevaluation notes for 2026-05-11:
 
 
 - ✅ Added persisted `shop_offer_selections` rows for basic weekly shop and monthly subscriber-shop periods so active offers do not change when new catalog entries are added mid-period.
-- ✅ Added a player UI Subscriber-Shop box with monthly pet-hat pairs, 1 Gutschein price, stock 1, and server-authoritative ledgered purchases.
+- ✅ Added a player UI Subscriber-Shop box with monthly pet-hat pairs, 1 Gutschein price, stock 1, and server-authoritative ledgered purchases that now unlock hats once instead of creating hat item slots.
 
 ## Milestone 0 - Repo skeleton
 
@@ -230,7 +230,7 @@ Acceptance:
 - Queue sync marks a fully progressed running job as completed before pet redemption and can then auto-start the next queued job. Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queue jobs are not blocked by the unclaimed result.
 - Identifying a mystery egg into an unhatched egg requires free unhatched egg inventory space before consuming the counted mystery egg. If full, the counted mystery egg remains unchanged.
 - Identifying a mystery egg into egg resources does not need slotted inventory space.
-- Consumables, equipment, and cosmetic hats are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Unhatched eggs, consumables, equipment, and hats expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Consumables and equipment are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Cosmetic hats are represented as one-time unlock progression rows and are shown in a tiled locked/unlocked catalog. Unhatched eggs, consumables, and equipment expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
 - Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
 
 ## Completed: Twitch reward ingestion milestone

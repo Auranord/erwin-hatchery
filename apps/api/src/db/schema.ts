@@ -688,29 +688,23 @@ export const equipmentInventorySlots = pgTable(
   })
 );
 
-export const hatInventorySlots = pgTable(
-  'hat_inventory_slots',
+export const userHatUnlocks = pgTable(
+  'user_hat_unlocks',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
     hatId: text('hat_id')
       .notNull()
       .references(() => hats.id),
-    slotIndex: integer('slot_index'),
-    createdAt: timestamp('created_at', { withTimezone: true })
+    unlockedAt: timestamp('unlocked_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    sourceType: text('source_type').notNull().default('unknown'),
+    sourceId: uuid('source_id')
   },
   (table) => ({
-    userSlotUnique: uniqueIndex('hat_inventory_slots_user_slot_idx').on(
-      table.userId,
-      table.slotIndex
-    )
+    pk: primaryKey({ columns: [table.userId, table.hatId] })
   })
 );
 

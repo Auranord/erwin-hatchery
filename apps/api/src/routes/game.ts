@@ -9,7 +9,7 @@ import {
   equipmentInventorySlots,
   equipmentTypes,
   equipmentSets,
-  hatInventorySlots,
+  userHatUnlocks,
   economyLedger,
   eggLootTableEntries,
   unhatchedEggs,
@@ -417,26 +417,6 @@ async function findFreeEquipmentSlotInTx(
 }
 
 
-async function findFreeHatSlotInTx(
-  tx: DbTransaction,
-  userId: string
-): Promise<number | null> {
-  const dimensions = await getDimensionsInTx(tx, userId, 'hats');
-  const occupiedRows = await tx
-    .select({ slotIndex: hatInventorySlots.slotIndex })
-    .from(hatInventorySlots)
-    .where(eq(hatInventorySlots.userId, userId));
-  const occupied = new Set(
-    occupiedRows
-      .map((row) => row.slotIndex)
-      .filter((slotIndex): slotIndex is number => slotIndex !== null)
-  );
-  for (let slotIndex = 0; slotIndex < dimensions.capacity; slotIndex += 1) {
-    if (!occupied.has(slotIndex)) return slotIndex;
-  }
-  return null;
-}
-
 
 async function findFreeConsumableSlotsInTx(
   tx: DbTransaction,
@@ -485,7 +465,7 @@ async function findFreeEquipmentSlotsInTx(
 }
 
 class ShopInventoryFullError extends Error {
-  constructor(readonly inventoryKind: 'equipment' | 'consumable' | 'pet' | 'hat') {
+  constructor(readonly inventoryKind: 'equipment' | 'consumable' | 'pet') {
     super(`${inventoryKind}_inventory_full_after_preflight`);
   }
 }
@@ -1001,6 +981,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     equipmentSetRows,
     equipmentRows,
     hatRows,
+    unlockedHatRows,
     resourceRows,
     slotRows,
     jobRows
@@ -1105,12 +1086,20 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       .where(eq(equipmentInventorySlots.userId, userId)),
     db
       .select({
-        id: hatInventorySlots.id,
-        hatId: hatInventorySlots.hatId,
-        slotIndex: hatInventorySlots.slotIndex
+        hatId: hats.id,
+        labelDe: hats.labelDe,
+        description: hats.description
       })
-      .from(hatInventorySlots)
-      .where(eq(hatInventorySlots.userId, userId)),
+      .from(hats)
+      .where(eq(hats.isActive, true))
+      .orderBy(hats.id),
+    db
+      .select({
+        hatId: userHatUnlocks.hatId,
+        unlockedAt: userHatUnlocks.unlockedAt
+      })
+      .from(userHatUnlocks)
+      .where(eq(userHatUnlocks.userId, userId)),
     db
       .select({
         resourceType: resources.resourceType,
@@ -1208,13 +1197,13 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
     'equipment',
     dimensionsByKind.get('equipment')
   );
-  const hatDimensions = dimensionsFromRow('hats', dimensionsByKind.get('hats'));
   const jobsBySlot = new Map(jobRows.map((job) => [job.incubatorSlotId, job]));
   const equipmentSetBonusSlotCount = equipmentSetRows.reduce(
     (maxBonus, set) => Math.max(maxBonus, set.bonusSlotCount),
     0
   );
   const additionalEquipmentSetCount = Math.max(0, equipmentSetRows.length - 1);
+  const unlockedHatIds = new Set(unlockedHatRows.map((entry) => entry.hatId));
 
   return {
     mysteryEggs: mysteryEggs.map((row) => ({
@@ -1376,14 +1365,23 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       )
     },
     hats: {
-      dimensions: hatDimensions,
-      slots: cellsForGrid(
-        hatDimensions,
-        hatRows.map((row) => ({
-          slotIndex: row.slotIndex,
-          item: { id: row.id, hatId: row.hatId }
-        }))
-      )
+      columns: 8,
+      total: hatRows.length,
+      unlockedCount: hatRows.filter((row) => unlockedHatIds.has(row.hatId)).length,
+      slots: hatRows.map((row, slotIndex) => {
+        const unlock = unlockedHatRows.find((entry) => entry.hatId === row.hatId);
+        return {
+          slotIndex,
+          item: {
+            id: row.hatId,
+            hatId: row.hatId,
+            labelDe: row.labelDe,
+            description: row.description,
+            unlocked: Boolean(unlock),
+            unlockedAt: unlock ? toIsoTimestamp(unlock.unlockedAt) : null
+          }
+        };
+      })
     }
   };
 }
@@ -1476,11 +1474,11 @@ async function computeInventoryRevision(userId: string): Promise<string> {
     db
       .select({
         count: sql<number>`count(*)`,
-        updatedAt: sql<Date>`max(${hatInventorySlots.updatedAt})`,
-        slotSum: sql<number>`coalesce(sum(${hatInventorySlots.slotIndex}), 0)`
+        updatedAt: sql<Date>`max(${userHatUnlocks.unlockedAt})`,
+        slotSum: sql<number>`0`
       })
-      .from(hatInventorySlots)
-      .where(eq(hatInventorySlots.userId, userId)),
+      .from(userHatUnlocks)
+      .where(eq(userHatUnlocks.userId, userId)),
     db
       .select({ updatedAt: sql<Date>`max(${inventoryDimensions.updatedAt})` })
       .from(inventoryDimensions)
@@ -1830,8 +1828,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
 
       const freePetSlot = await findFreePetSlotInTx(tx, identity.userId);
       if (freePetSlot === null) return { kind: 'inventory_full' as const, inventoryKind: 'pet' as const };
-      const freeHatSlot = await findFreeHatSlotInTx(tx, identity.userId);
-      if (freeHatSlot === null) return { kind: 'inventory_full' as const, inventoryKind: 'hat' as const };
+      const [existingHatUnlock] = await tx.select({ hatId: userHatUnlocks.hatId }).from(userHatUnlocks).where(and(eq(userHatUnlocks.userId, identity.userId), eq(userHatUnlocks.hatId, hatId))).limit(1);
+      if (existingHatUnlock) return { kind: 'hat_already_unlocked' as const };
 
       const [petSpeciesRow] = await tx.select({ id: petSpecies.id, defaultHp: petSpecies.defaultHp, defaultAtk: petSpecies.defaultAtk, defaultDef: petSpecies.defaultDef, defaultSpd: petSpecies.defaultSpd, defaultGain: petSpecies.defaultGain, defaultPow: petSpecies.defaultPow, rarityId: petSpecies.rarityId, classId: petSpecies.classId, elementId: petSpecies.elementId, defaultAbilityId: petSpecies.defaultAbilityId }).from(petSpecies).where(eq(petSpecies.id, petSpeciesId)).limit(1);
       if (!petSpeciesRow) return { kind: 'not_offered' as const };
@@ -1843,17 +1841,17 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       const [createdPet] = await tx.insert(pets).values({ ownerUserId: identity.userId, speciesId: petSpeciesRow.id, rarityId: petSpeciesRow.rarityId, classId: petSpeciesRow.classId, elementId: petSpeciesRow.elementId, abilityId: petSpeciesRow.defaultAbilityId, baseHp: petSpeciesRow.defaultHp, baseAtk: petSpeciesRow.defaultAtk, baseDef: petSpeciesRow.defaultDef, baseSpd: petSpeciesRow.defaultSpd, baseGain: petSpeciesRow.defaultGain, basePow: petSpeciesRow.defaultPow, hatchVariance: { hp: 0, atk: 0, def: 0, spd: 0, gain: 0, pow: 0 }, equippedHatId: hatId, sourceUnhatchedEggId: null, slotIndex: freePetSlot, createdAt: now }).returning({ id: pets.id });
       if (!createdPet) throw new Error('Failed to create subscriber shop pet');
 
-      const [createdHatSlot] = await tx.insert(hatInventorySlots).values({ userId: identity.userId, hatId, slotIndex: freeHatSlot, updatedAt: now }).returning({ id: hatInventorySlots.id });
-      if (!createdHatSlot) throw new ShopInventoryFullError('hat');
+      await tx.insert(userHatUnlocks).values({ userId: identity.userId, hatId, unlockedAt: now, sourceType: 'subscriber_shop', sourceId: createdPet.id });
 
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE, sourceType: 'player_action', sourceId: createdPet.id, delta: { shopMonthKey: shop.monthKey, itemKind: 'pet_hat_pair', petSpeciesId, hatId, pets: [{ id: createdPet.id, speciesId: petSpeciesId, equippedHatId: hatId, slotIndex: freePetSlot, change: 1 }], hatInventorySlots: [{ id: createdHatSlot.id, hatId, slotIndex: freeHatSlot, change: 1 }], resources: [{ resourceType: VOUCHER_RESOURCE_TYPE, amountDelta: -offer.resourcePrice }] } });
+      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: SUBSCRIBER_SHOP_PURCHASE_LEDGER_EVENT_TYPE, sourceType: 'player_action', sourceId: createdPet.id, delta: { shopMonthKey: shop.monthKey, itemKind: 'pet_hat_pair', petSpeciesId, hatId, pets: [{ id: createdPet.id, speciesId: petSpeciesId, equippedHatId: hatId, slotIndex: freePetSlot, change: 1 }], hatUnlocks: [{ hatId, unlockedAt: now.toISOString(), change: 1 }], resources: [{ resourceType: VOUCHER_RESOURCE_TYPE, amountDelta: -offer.resourcePrice }] } });
 
       return { kind: 'ok' as const };
     });
 
     if (result.kind === 'not_offered') return reply.code(404).send({ message: 'Dieses Angebot ist diesen Monat nicht im Subscriber-Shop.' });
     if (result.kind === 'sold_out') return reply.code(409).send({ message: 'Dein Monatsbestand für dieses Angebot ist aufgebraucht.' });
-    if (result.kind === 'inventory_full') return reply.code(409).send({ message: result.inventoryKind === 'pet' ? 'Dein Pet-Inventar ist voll.' : 'Dein Hut-Inventar ist voll.' });
+    if (result.kind === 'inventory_full') return reply.code(409).send({ message: 'Dein Pet-Inventar ist voll.' });
+    if (result.kind === 'hat_already_unlocked') return reply.code(409).send({ message: 'Du hast diesen Hut bereits freigeschaltet.' });
     if (result.kind === 'insufficient_resources') return reply.code(409).send({ message: `Nicht genug Gutscheine. Benötigt: ${result.cost}.` });
 
     const [inventory, shop, subscriberShop] = await Promise.all([loadPlayerInventory(identity.userId), loadShopOffers(identity.userId), loadSubscriberShopOffers(identity.userId)]);
@@ -3770,59 +3768,6 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  app.post('/api/game/inventory/hat-slots/discard', async (request, reply) => {
-    const identity = await getSessionIdentity(request);
-    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    const body = (request.body ?? {}) as { hatSlotId?: string; confirm?: boolean };
-    if (!body.hatSlotId || body.confirm !== true)
-      return reply
-        .code(400)
-        .send({ message: 'hatSlotId and confirm=true are required' });
-
-    const result = await db.transaction(async (tx) => {
-      const [hat] = await tx
-        .select({
-          id: hatInventorySlots.id,
-          hatId: hatInventorySlots.hatId,
-          slotIndex: hatInventorySlots.slotIndex
-        })
-        .from(hatInventorySlots)
-        .where(
-          and(
-            eq(hatInventorySlots.id, body.hatSlotId!),
-            eq(hatInventorySlots.userId, identity.userId)
-          )
-        )
-        .limit(1);
-      if (!hat) return { kind: 'not_found' as const };
-
-      await tx.delete(hatInventorySlots).where(eq(hatInventorySlots.id, hat.id));
-      await tx.insert(economyLedger).values({
-        userId: identity.userId,
-        actorUserId: identity.userId,
-        eventType: 'inventory_hat_discarded',
-        sourceType: 'player_action',
-        sourceId: hat.id,
-        delta: {
-          hats: [
-            {
-              id: hat.id,
-              hatId: hat.hatId,
-              slotIndex: hat.slotIndex,
-              change: -1
-            }
-          ],
-          resources: []
-        }
-      });
-      return { kind: 'ok' as const };
-    });
-
-    if (result.kind !== 'ok')
-      return reply.code(404).send({ message: 'Hut nicht gefunden.' });
-    return { ok: true };
-  });
-
   app.post('/api/game/inventory/consumable-slots/move', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
@@ -3995,29 +3940,6 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
       if (destination) await tx.update(equipmentInventorySlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, destination.id));
       await tx.update(equipmentInventorySlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(equipmentInventorySlots.id, source.id));
       await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_equipment_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { equipmentSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
-      return { kind: 'ok' as const };
-    });
-    if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
-    return { ok: true };
-  });
-
-  app.post('/api/game/inventory/hat-slots/move', async (request, reply) => {
-    const identity = await getSessionIdentity(request);
-    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
-    const body = (request.body ?? {}) as { hatSlotId?: string; toSlotIndex?: number };
-    if (!body.hatSlotId || !Number.isInteger(body.toSlotIndex))
-      return reply.code(400).send({ message: 'hatSlotId and toSlotIndex are required' });
-    const toSlotIndex = body.toSlotIndex as number;
-    const result = await db.transaction(async (tx) => {
-      const dimensions = await getDimensionsInTx(tx, identity.userId, 'hats');
-      if (!isSlotInsideGrid(toSlotIndex, dimensions)) return { kind: 'slot_out_of_bounds' as const };
-      const [source] = await tx.select({ id: hatInventorySlots.id, slotIndex: hatInventorySlots.slotIndex }).from(hatInventorySlots).where(and(eq(hatInventorySlots.id, body.hatSlotId!), eq(hatInventorySlots.userId, identity.userId))).limit(1);
-      if (!source || source.slotIndex === null) return { kind: 'not_found' as const };
-      const [destination] = await tx.select({ id: hatInventorySlots.id, slotIndex: hatInventorySlots.slotIndex }).from(hatInventorySlots).where(and(eq(hatInventorySlots.userId, identity.userId), eq(hatInventorySlots.slotIndex, toSlotIndex), not(eq(hatInventorySlots.id, source.id)))).limit(1);
-      await tx.update(hatInventorySlots).set({ slotIndex: null, updatedAt: new Date() }).where(eq(hatInventorySlots.id, source.id));
-      if (destination) await tx.update(hatInventorySlots).set({ slotIndex: source.slotIndex, updatedAt: new Date() }).where(eq(hatInventorySlots.id, destination.id));
-      await tx.update(hatInventorySlots).set({ slotIndex: toSlotIndex, updatedAt: new Date() }).where(eq(hatInventorySlots.id, source.id));
-      await tx.insert(economyLedger).values({ userId: identity.userId, actorUserId: identity.userId, eventType: 'inventory_hat_slot_moved', sourceType: 'player_action', sourceId: source.id, delta: { hatSlots: [{ id: source.id, fromSlotIndex: source.slotIndex, toSlotIndex, swappedWithSlotId: destination?.id ?? null }] } });
       return { kind: 'ok' as const };
     });
     if (result.kind !== 'ok') return reply.code(409).send({ message: result.kind });
