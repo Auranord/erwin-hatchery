@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -8,6 +9,133 @@ import {
   type SyntheticEvent
 } from 'react';
 
+
+type PlayerPage = {
+  id: string;
+  label: string;
+  icon: string;
+  content: JSX.Element;
+};
+
+type PlayerPageSectionProps = {
+  pages: PlayerPage[];
+  currentPageIndex: number;
+  goToPage: (pageIndex: number) => void;
+  onSwipeStart: (clientX: number, clientY: number) => void;
+  onSwipeEnd: (clientX: number, clientY: number, pageCount: number) => void;
+};
+
+function PlayerPageSection({
+  pages,
+  currentPageIndex,
+  goToPage,
+  onSwipeStart,
+  onSwipeEnd
+}: PlayerPageSectionProps): JSX.Element {
+  const pageRefs = useRef<Array<HTMLElement | null>>([]);
+  const [activePageHeight, setActivePageHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    pageRefs.current.length = pages.length;
+    const activePage = pageRefs.current[currentPageIndex];
+    if (!activePage) {
+      setActivePageHeight(null);
+      return;
+    }
+
+    const updateActivePageHeight = () => {
+      const nextHeight = Math.ceil(activePage.getBoundingClientRect().height);
+      setActivePageHeight((currentHeight) =>
+        currentHeight === nextHeight ? currentHeight : nextHeight
+      );
+    };
+
+    updateActivePageHeight();
+
+    const resizeObserver = new ResizeObserver(updateActivePageHeight);
+    resizeObserver.observe(activePage);
+    window.addEventListener('resize', updateActivePageHeight);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateActivePageHeight);
+    };
+  }, [currentPageIndex, pages.length, pages[currentPageIndex]?.id]);
+
+  const viewportStyle: CSSProperties | undefined = activePageHeight
+    ? { height: activePageHeight }
+    : undefined;
+
+  return (
+    <section
+      className="player-page-shell"
+      aria-label="Spielbereiche"
+      onTouchStart={(event) =>
+        onSwipeStart(
+          event.changedTouches[0]?.clientX ?? 0,
+          event.changedTouches[0]?.clientY ?? 0
+        )
+      }
+      onTouchEnd={(event) =>
+        onSwipeEnd(
+          event.changedTouches[0]?.clientX ?? 0,
+          event.changedTouches[0]?.clientY ?? 0,
+          pages.length
+        )
+      }
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') {
+          event.preventDefault();
+          goToPage(currentPageIndex - 1);
+        }
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          goToPage(currentPageIndex + 1);
+        }
+      }}
+      tabIndex={0}
+    >
+      <button
+        type="button"
+        className="player-page-arrow player-page-arrow--previous"
+        onClick={() => goToPage(currentPageIndex - 1)}
+        disabled={currentPageIndex === 0}
+        aria-label="Vorherige Seite"
+      >
+        ‹
+      </button>
+      <div className="player-page-viewport" style={viewportStyle}>
+        <div
+          className="player-page-track"
+          style={{ transform: `translateX(-${currentPageIndex * 100}%)` }}
+        >
+          {pages.map((page, index) => (
+            <article
+              key={page.id}
+              ref={(element) => {
+                pageRefs.current[index] = element;
+              }}
+              className="player-page"
+              aria-hidden={index !== currentPageIndex}
+              aria-label={page.label}
+            >
+              {page.content}
+            </article>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="player-page-arrow player-page-arrow--next"
+        onClick={() => goToPage(currentPageIndex + 1)}
+        disabled={currentPageIndex === pages.length - 1}
+        aria-label="Nächste Seite"
+      >
+        ›
+      </button>
+    </section>
+  );
+}
 
 type PlayerDialogAction = {
   label: string;
@@ -3921,7 +4049,7 @@ export function App(): JSX.Element {
     return renderSetupScreen();
   }
 
-  const playerPages: Array<{ id: string; label: string; icon: string; content: JSX.Element }> = [
+  const playerPages: PlayerPage[] = [
     {
       id: 'main',
       label: 'Start',
@@ -4359,70 +4487,13 @@ export function App(): JSX.Element {
 ) : null}
         </>
       ) : null}
-      <section
-        className="player-page-shell"
-        aria-label="Spielbereiche"
-        onTouchStart={(event) =>
-          handlePlayerPageSwipeStart(
-            event.changedTouches[0]?.clientX ?? 0,
-            event.changedTouches[0]?.clientY ?? 0
-          )
-        }
-        onTouchEnd={(event) =>
-          handlePlayerPageSwipeEnd(
-            event.changedTouches[0]?.clientX ?? 0,
-            event.changedTouches[0]?.clientY ?? 0,
-            playerPages.length
-          )
-        }
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowLeft') {
-            event.preventDefault();
-            goToPlayerPage(currentPlayerPageIndex - 1);
-          }
-          if (event.key === 'ArrowRight') {
-            event.preventDefault();
-            goToPlayerPage(currentPlayerPageIndex + 1);
-          }
-        }}
-        tabIndex={0}
-      >
-        <button
-          type="button"
-          className="player-page-arrow player-page-arrow--previous"
-          onClick={() => goToPlayerPage(currentPlayerPageIndex - 1)}
-          disabled={currentPlayerPageIndex === 0}
-          aria-label="Vorherige Seite"
-        >
-          ‹
-        </button>
-        <div className="player-page-viewport">
-          <div
-            className="player-page-track"
-            style={{ transform: `translateX(-${currentPlayerPageIndex * 100}%)` }}
-          >
-            {playerPages.map((page, index) => (
-              <article
-                key={page.id}
-                className="player-page"
-                aria-hidden={index !== currentPlayerPageIndex}
-                aria-label={page.label}
-              >
-                {page.content}
-              </article>
-            ))}
-          </div>
-        </div>
-        <button
-          type="button"
-          className="player-page-arrow player-page-arrow--next"
-          onClick={() => goToPlayerPage(currentPlayerPageIndex + 1)}
-          disabled={currentPlayerPageIndex === playerPages.length - 1}
-          aria-label="Nächste Seite"
-        >
-          ›
-        </button>
-      </section>
+      <PlayerPageSection
+        pages={playerPages}
+        currentPageIndex={currentPlayerPageIndex}
+        goToPage={goToPlayerPage}
+        onSwipeStart={handlePlayerPageSwipeStart}
+        onSwipeEnd={handlePlayerPageSwipeEnd}
+      />
       {!me?.authenticated ? (
         <section className="card player-login-hint">
           <p>Nach dem Login kannst du per Wischgeste zwischen Inkubator, Pets, Verbrauchbarem, Ausrüstung, Profil und Shop wechseln.</p>
