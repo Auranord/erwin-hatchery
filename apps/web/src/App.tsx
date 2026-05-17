@@ -994,6 +994,7 @@ export function App(): JSX.Element {
   const [reportMessage, setReportMessage] = useState('');
   const [reportStatus, setReportStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const appScrollRef = useRef<HTMLElement | null>(null);
   const hasRenderedInitialPlayerPageRef = useRef(false);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -1576,7 +1577,8 @@ export function App(): JSX.Element {
   }
 
   function openReportForm(): void {
-    setActivePlayerPageIndex(1);
+    setReportStatus(null);
+    setIsReportDialogOpen(true);
   }
 
   function buildReportClientContext() {
@@ -4332,85 +4334,6 @@ export function App(): JSX.Element {
           )}
         </div>
       )
-    },
-    {
-      id: 'report',
-      label: 'Melden',
-      icon: '!',
-      content: (
-        <div className="player-page-content">
-          <section className="card report-card">
-            <h2>Fehler oder Feedback melden</h2>
-            <p>
-              Schick uns Bugs oder Feedback direkt aus dem Spiel. Bitte sende
-              keine Passwörter, Tokens oder privaten Geheimnisse mit.
-            </p>
-            {!me?.authenticated ? (
-              <p className="report-status report-status--error">
-                Bitte melde dich zuerst mit Twitch an, bevor du eine Meldung sendest.
-              </p>
-            ) : null}
-            <form className="report-form" onSubmit={(event) => void submitUserReport(event)}>
-              <fieldset disabled={isReportSubmitting}>
-                <legend>Kategorie</legend>
-                <label className="report-option">
-                  <input
-                    type="radio"
-                    name="report-category"
-                    value="bug"
-                    checked={reportCategory === 'bug'}
-                    onChange={() => setReportCategory('bug')}
-                  />
-                  Fehler
-                </label>
-                <label className="report-option">
-                  <input
-                    type="radio"
-                    name="report-category"
-                    value="feedback"
-                    checked={reportCategory === 'feedback'}
-                    onChange={() => setReportCategory('feedback')}
-                  />
-                  Feedback
-                </label>
-              </fieldset>
-
-              <label>
-                Kurzer Titel
-                <input
-                  value={reportTitle}
-                  maxLength={120}
-                  required
-                  onChange={(event) => setReportTitle(event.target.value)}
-                  placeholder="Kurze Zusammenfassung"
-                />
-              </label>
-
-              <label>
-                Was ist passiert?
-                <textarea
-                  value={reportMessage}
-                  maxLength={4000}
-                  required
-                  rows={7}
-                  onChange={(event) => setReportMessage(event.target.value)}
-                  placeholder="Beschreibe kurz, was du gesehen oder erwartet hast."
-                />
-              </label>
-
-              {reportStatus ? (
-                <p className={`report-status report-status--${reportStatus.tone}`} role="status">
-                  {reportStatus.text}
-                </p>
-              ) : null}
-
-              <button type="submit" disabled={isReportSubmitting || !me?.authenticated}>
-                {isReportSubmitting ? 'Wird gesendet …' : 'Absenden'}
-              </button>
-            </form>
-          </section>
-        </div>
-      )
     }
   ];
 
@@ -4771,6 +4694,92 @@ export function App(): JSX.Element {
   </PlayerDialog>
 ) : null}
         </>
+      ) : null}
+      {isReportDialogOpen ? (
+        <PlayerDialog
+          id="user-report-dialog"
+          title="Fehler oder Feedback melden"
+          variant="info"
+          description="Schick uns Bugs oder Feedback direkt aus dem Spiel. Bitte sende keine Passwörter, Tokens oder privaten Geheimnisse mit."
+          className="report-dialog"
+          onSubmit={(event) => void submitUserReport(event)}
+          actions={[
+            {
+              label: isReportSubmitting ? 'Wird gesendet …' : 'Absenden',
+              type: 'submit',
+              disabled: isReportSubmitting || !me?.authenticated,
+              variant: 'primary'
+            },
+            {
+              label: 'Schließen',
+              onClick: () => setIsReportDialogOpen(false),
+              disabled: isReportSubmitting,
+              variant: 'secondary'
+            }
+          ]}
+          onCancel={() => setIsReportDialogOpen(false)}
+          cancelDisabled={isReportSubmitting}
+        >
+          {!me?.authenticated ? (
+            <p className="report-status report-status--error">
+              Bitte melde dich zuerst mit Twitch an, bevor du eine Meldung sendest.
+            </p>
+          ) : null}
+          <div className="report-form">
+            <fieldset disabled={isReportSubmitting}>
+              <legend>Kategorie</legend>
+              <label className="report-option">
+                <input
+                  type="radio"
+                  name="report-category"
+                  value="bug"
+                  checked={reportCategory === 'bug'}
+                  onChange={() => setReportCategory('bug')}
+                />
+                Fehler
+              </label>
+              <label className="report-option">
+                <input
+                  type="radio"
+                  name="report-category"
+                  value="feedback"
+                  checked={reportCategory === 'feedback'}
+                  onChange={() => setReportCategory('feedback')}
+                />
+                Feedback
+              </label>
+            </fieldset>
+
+            <label>
+              Kurzer Titel
+              <input
+                value={reportTitle}
+                maxLength={120}
+                required
+                onChange={(event) => setReportTitle(event.target.value)}
+                placeholder="Kurze Zusammenfassung"
+              />
+            </label>
+
+            <label>
+              Was ist passiert?
+              <textarea
+                value={reportMessage}
+                maxLength={4000}
+                required
+                rows={7}
+                onChange={(event) => setReportMessage(event.target.value)}
+                placeholder="Beschreibe kurz, was du gesehen oder erwartet hast."
+              />
+            </label>
+
+            {reportStatus ? (
+              <p className={`report-status report-status--${reportStatus.tone}`} role="status">
+                {reportStatus.text}
+              </p>
+            ) : null}
+          </div>
+        </PlayerDialog>
       ) : null}
       <PlayerPageSection
         pages={playerPages}

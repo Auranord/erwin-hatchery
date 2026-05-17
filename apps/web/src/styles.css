@@ -1909,3 +1909,33 @@ ul {
     width: 100%;
   }
 }
+
+.report-dialog {
+  width: min(100%, 32rem);
+  max-height: calc(100svh - 2rem);
+  overflow-y: auto;
+}
+
+.report-dialog .confirm-actions button {
+  min-height: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.report-dialog .confirm-actions .dialog-action-primary {
+  background: linear-gradient(135deg, #9146ff 0%, #facc15 100%);
+  color: #ffffff;
+}
+
+.report-dialog .confirm-actions .dialog-action-secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e0f2fe;
+}
+
+.report-dialog .confirm-actions button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.45) brightness(0.72);
+}
