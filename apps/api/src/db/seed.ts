@@ -719,17 +719,20 @@ async function seed(): Promise<void> {
   });
 
   await db.insert(petClasses).values([
-    { id: 'protector', labelDe: 'Beschützer', description: 'Senkt gegnerischen ATK.', relatedEnemyStat: 'ATK' },
-    { id: 'sunderer', labelDe: 'Spalter', description: 'Senkt gegnerische DEF.', relatedEnemyStat: 'DEF' },
-    { id: 'saboteur', labelDe: 'Saboteur', description: 'Senkt gegnerische SPD.', relatedEnemyStat: 'SPD' },
-    { id: 'drainer', labelDe: 'Entlader', description: 'Senkt gegnerischen GAIN.', relatedEnemyStat: 'GAIN' },
-    { id: 'nullifier', labelDe: 'Bannbrecher', description: 'Senkt gegnerischen POW.', relatedEnemyStat: 'POW' }
+    { id: 'protector', labelDe: 'Beschützer', description: 'Senkt gegnerischen ATK.', relatedEnemyStat: 'ATK', mainStat: 'DEF', secondaryStatOne: 'HP', secondaryStatTwo: 'GAIN' },
+    { id: 'sunderer', labelDe: 'Spalter', description: 'Senkt gegnerische DEF.', relatedEnemyStat: 'DEF', mainStat: 'ATK', secondaryStatOne: 'SPD', secondaryStatTwo: 'POW' },
+    { id: 'saboteur', labelDe: 'Saboteur', description: 'Senkt gegnerische SPD.', relatedEnemyStat: 'SPD', mainStat: 'SPD', secondaryStatOne: 'ATK', secondaryStatTwo: 'GAIN' },
+    { id: 'drainer', labelDe: 'Entlader', description: 'Senkt gegnerischen GAIN.', relatedEnemyStat: 'GAIN', mainStat: 'GAIN', secondaryStatOne: 'HP', secondaryStatTwo: 'POW' },
+    { id: 'nullifier', labelDe: 'Bannbrecher', description: 'Senkt gegnerischen POW.', relatedEnemyStat: 'POW', mainStat: 'POW', secondaryStatOne: 'DEF', secondaryStatTwo: 'SPD' }
   ]).onConflictDoUpdate({
     target: petClasses.id,
     set: {
       labelDe: sql`excluded.label_de`,
       description: sql`excluded.description`,
-      relatedEnemyStat: sql`excluded.related_enemy_stat`
+      relatedEnemyStat: sql`excluded.related_enemy_stat`,
+      mainStat: sql`excluded.main_stat`,
+      secondaryStatOne: sql`excluded.secondary_stat_one`,
+      secondaryStatTwo: sql`excluded.secondary_stat_two`
     }
   });
 

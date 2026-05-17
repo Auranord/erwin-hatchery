@@ -134,7 +134,14 @@ CREATE TABLE IF NOT EXISTS pet_classes (
   id text PRIMARY KEY,
   label_de text NOT NULL,
   description text NOT NULL DEFAULT '',
-  related_enemy_stat text NOT NULL
+  related_enemy_stat text NOT NULL,
+  main_stat text NOT NULL,
+  secondary_stat_one text NOT NULL,
+  secondary_stat_two text NOT NULL,
+  CONSTRAINT pet_classes_related_enemy_stat_check CHECK (related_enemy_stat IN ('HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW')),
+  CONSTRAINT pet_classes_main_stat_check CHECK (main_stat IN ('HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW')),
+  CONSTRAINT pet_classes_secondary_stat_one_check CHECK (secondary_stat_one IN ('HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW')),
+  CONSTRAINT pet_classes_secondary_stat_two_check CHECK (secondary_stat_two IN ('HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'))
 );
 
 CREATE TABLE IF NOT EXISTS elements (

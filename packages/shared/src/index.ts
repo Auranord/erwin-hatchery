@@ -101,6 +101,9 @@ export type IncubatorSlotItem = {
 
 export type UnhatchedEggSlotItem = { id: string; eggTypeId: string; state: string };
 
+export const PET_STAT_IDS = ['HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'] as const;
+export type PetStatId = (typeof PET_STAT_IDS)[number];
+
 export type PetTrait = {
   id: string;
   labelDe: string;
@@ -121,6 +124,9 @@ export type PetSlotItem = {
   rarityLabelDe: string;
   classId: string;
   classLabelDe: string;
+  classMainStat: PetStatId;
+  classSecondaryStatOne: PetStatId;
+  classSecondaryStatTwo: PetStatId;
   elementId: string;
   elementLabelDe: string;
   abilityId: string;

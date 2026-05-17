@@ -143,15 +143,15 @@ Definitions:
 - Each pet may equip one cosmetic hat that the player has unlocked. Hats are cosmetic-only progression unlocks, each hat can be unlocked at most once per player, and hats must not affect combat stats.
 - Gems are equipment-set items rather than direct pet equipment. The seed data includes themed gem equipment in three tiers with explicit `config.statBonuses`: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, plus +10/+20/+30 HP. Seeded gem future shop metadata uses cracked-egg `resource_price`/`stock` pairs of 250/10 for tier 1, 750/5 for tier 2, and 1500/2 for tier 3, with `is_shop_purchasable = true` for all seeded gems. Final event stat aggregation can consume these config values later; paid random gem rewards are not part of the MVP.
 
-Seeded class roles:
+Seeded class roles and training stat focus:
 
-| Class | Enemy stat debuffed |
-| --- | --- |
-| Protector | ATK |
-| Sunderer | DEF |
-| Saboteur | SPD |
-| Drainer | GAIN |
-| Nullifier | POW |
+| Class | Enemy stat debuffed | Main stat | Secondary stat | Secondary stat |
+| --- | --- | --- | --- | --- |
+| Protector | ATK | DEF | HP | GAIN |
+| Sunderer | DEF | ATK | SPD | POW |
+| Saboteur | SPD | SPD | ATK | GAIN |
+| Drainer | GAIN | GAIN | HP | POW |
+| Nullifier | POW | POW | DEF | SPD |
 
 Seeded pet rarity weight totals within the `beta_egg` pet subset:
 

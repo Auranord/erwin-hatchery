@@ -297,6 +297,8 @@ type IncubatorItem = {
   } | null;
 };
 type EggItem = { id: string; eggTypeId: string; state: string };
+type PetStatId = 'HP' | 'ATK' | 'DEF' | 'SPD' | 'GAIN' | 'POW';
+
 type PetTrait = {
   id: string;
   labelDe: string;
@@ -316,6 +318,9 @@ type PetItem = {
   rarityLabelDe: string;
   classId: string;
   classLabelDe: string;
+  classMainStat: PetStatId;
+  classSecondaryStatOne: PetStatId;
+  classSecondaryStatTwo: PetStatId;
   elementId: string;
   elementLabelDe: string;
   abilityId: string;
@@ -2491,6 +2496,8 @@ export function App(): JSX.Element {
           <div><dt>Spitzname</dt><dd>{pet.nickname ?? '—'}</dd></div>
           <div><dt>Seltenheit</dt><dd>{pet.rarityLabelDe}</dd></div>
           <div><dt>Klasse</dt><dd>{pet.classLabelDe}</dd></div>
+          <div><dt>Hauptstat</dt><dd>{pet.classMainStat}</dd></div>
+          <div><dt>Nebenstats</dt><dd>{pet.classSecondaryStatOne} · {pet.classSecondaryStatTwo}</dd></div>
           <div><dt>Element</dt><dd>{pet.elementLabelDe}</dd></div>
           <div><dt>Fähigkeit</dt><dd>{pet.abilityLabelDe}</dd></div>
           <div><dt>Level</dt><dd>{pet.level}</dd></div>

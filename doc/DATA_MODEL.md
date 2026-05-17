@@ -261,13 +261,16 @@ updated_at timestamp
 
 ### pet_classes
 
-Config table for the exactly-one class assigned to each pet. Class metadata is static pet identity data. Boss class stacks are runtime boss-event state and are not stored on `pets`.
+Config table for the exactly-one class assigned to each pet. Class metadata is static pet identity data. The `main_stat` and secondary stat columns define which pet stats future training systems should prefer for class-focused stat increases. Boss class stacks are runtime boss-event state and are not stored on `pets`.
 
 ```text
 id text primary key
 label_de text not null
 description text not null default ''
 related_enemy_stat text not null -- enemy stat this class counters or targets: ATK, DEF, SPD, GAIN, POW
+main_stat text not null -- class's primary training stat: HP, ATK, DEF, SPD, GAIN, POW
+secondary_stat_one text not null -- first secondary training stat
+secondary_stat_two text not null -- second secondary training stat
 ```
 
 ### elements
@@ -593,7 +596,7 @@ The MVP seed creates one 30-species Beta pet pool. Every species uses the shared
 | bergwyrm_kondor | Bergwyrm-Kondor | epic | 11 | earth | drainer | 160 | 16 |
 | lichtseraph | Lichtseraph | legendary | 3 | light | nullifier | 180 | 18 |
 
-Seed `pet_rarities`, `pet_classes`, `elements`, the shared MVP baseline `pet_abilities` row, and `hats` before seeding owned pet fixtures. Rarity seed values define display/economy/combine/recycle metadata and the static seed defaults above.
+Seed `pet_rarities`, `pet_classes`, `elements`, the shared MVP baseline `pet_abilities` row, and `hats` before seeding owned pet fixtures. Class seed values define the boss target stat plus main/secondary training stats. Rarity seed values define display/economy/combine/recycle metadata and the static seed defaults above.
 
 ### Egg type
 

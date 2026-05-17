@@ -267,7 +267,10 @@ export const petClasses = pgTable('pet_classes', {
   id: text('id').primaryKey(),
   labelDe: text('label_de').notNull(),
   description: text('description').notNull().default(''),
-  relatedEnemyStat: text('related_enemy_stat').notNull()
+  relatedEnemyStat: text('related_enemy_stat').notNull(),
+  mainStat: text('main_stat').notNull(),
+  secondaryStatOne: text('secondary_stat_one').notNull(),
+  secondaryStatTwo: text('secondary_stat_two').notNull()
 });
 
 export const elements = pgTable('elements', {
