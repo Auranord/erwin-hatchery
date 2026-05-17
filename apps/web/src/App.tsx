@@ -382,6 +382,31 @@ type SetupStatus = {
   lastBackfillRuns: Array<{ id: string; type: string; status: string; startedAt: string; completedAt: string | null; source: string; error: string | null }>;
 };
 
+
+type StreamPanel = {
+  broadcaster: {
+    id: string;
+    login: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  stream: {
+    isLive: boolean;
+    viewerCount: number;
+    title: string | null;
+    category: string | null;
+    startedAt: string | null;
+    source: string;
+  };
+  nextStream: {
+    id: string;
+    title: string | null;
+    startTime: string;
+    endTime: string | null;
+    category: string | null;
+  } | null;
+};
+
 type GridDimensions = {
   kind: string;
   columns: number;
@@ -931,6 +956,7 @@ export function App(): JSX.Element {
   const [leaderboardEntries, setLeaderboardEntries] = useState<
     LeaderboardEntry[]
   >([]);
+  const [streamPanel, setStreamPanel] = useState<StreamPanel | null>(null);
   const [nowMs, setNowMs] = useState<number>(Date.now());
   const [selectedPayload, setSelectedPayload] = useState<SelectionPayload | null>(
     null
@@ -1043,10 +1069,20 @@ export function App(): JSX.Element {
     setLeaderboardEntries(payload.entries ?? []);
   }
 
+  async function loadStreamPanel(): Promise<void> {
+    const response = await fetch('/api/public/stream-panel', {
+      credentials: 'include'
+    });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { streamPanel?: StreamPanel };
+    setStreamPanel(payload.streamPanel ?? null);
+  }
+
   useEffect(() => {
     void loadSetupStatus();
     void loadMe();
     void loadLeaderboard();
+    void loadStreamPanel();
   }, []);
 
   useEffect(() => {
@@ -4032,6 +4068,25 @@ export function App(): JSX.Element {
     swipeStartRef.current = { x: clientX, y: clientY };
   }
 
+  function formatStreamDateTime(value: string): string {
+    return new Date(value).toLocaleString('de-DE', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  function twitchEmbedUrl(channelLogin: string): string {
+    const params = new URLSearchParams({
+      channel: channelLogin,
+      parent: window.location.hostname,
+      muted: 'true'
+    });
+    return `https://player.twitch.tv/?${params.toString()}`;
+  }
+
   function handlePlayerPageSwipeEnd(
     clientX: number,
     clientY: number,
@@ -4072,60 +4127,116 @@ export function App(): JSX.Element {
       icon: '⌂',
       content: (
         <div className="player-page-content">
-          <header className="hero">
-            <p className="badge">Öffentliche Vorschau · MVP</p>
-            <h1>Erwin Hatchery</h1>
+          <header className="hero landing-banner">
+            <div>
+              <h1>Erwin Hatchery</h1>
+              <p>Brüte Stream-Eier aus, sammle Pets und bereite dein Team für die nächste NTKOH-Session vor.</p>
+            </div>
+            <div className="landing-banner-placeholder" aria-hidden="true">
+              <span>🥚</span>
+            </div>
           </header>
-          <section className="card">
-            <h2>Login</h2>
+
+          <section className="card stream-card">
+            <div className="section-heading-row">
+              <h2>Stream</h2>
+              {streamPanel?.stream.isLive ? (
+                <span className="live-status live">Live</span>
+              ) : (
+                <span className="live-status offline">Offline</span>
+              )}
+            </div>
+            {streamPanel?.broadcaster.login ? (
+              <div className="twitch-embed-frame">
+                <iframe
+                  title="NTKOH Twitch Stream"
+                  src={twitchEmbedUrl(streamPanel.broadcaster.login)}
+                  allowFullScreen
+                />
+              </div>
+            ) : (
+              <div className="stream-placeholder">
+                Twitch-Kanal wird geladen …
+              </div>
+            )}
+            <div className="stream-meta">
+              {streamPanel?.stream.isLive ? (
+                <>
+                  <strong>{streamPanel.stream.title ?? 'NTKOH ist gerade live.'}</strong>
+                  <span>
+                    {streamPanel.stream.category ? `${streamPanel.stream.category} · ` : ''}
+                    {streamPanel.stream.viewerCount} Zuschauer
+                  </span>
+                </>
+              ) : streamPanel?.nextStream ? (
+                <>
+                  <strong>Nächster Stream: {streamPanel.nextStream.title ?? 'NTKOH'}</strong>
+                  <span>
+                    {formatStreamDateTime(streamPanel.nextStream.startTime)}
+                    {streamPanel.nextStream.category ? ` · ${streamPanel.nextStream.category}` : ''}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>Aktuell kein Live-Stream.</strong>
+                  <span>Der Twitch-Zeitplan ist momentan nicht verfügbar.</span>
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="card account-card">
+            <div className="section-heading-row">
+              <h2>Konto</h2>
+              {me?.authenticated ? <span className="compact-status">Verbunden</span> : null}
+            </div>
             {me?.authenticated ? (
-              <>
-                <p>
-                  Angemeldet als{' '}
-                  <strong>{me.user.displayName ?? me.user.login}</strong>
-                </p>
+              <div className="account-summary">
                 {me.user.avatarUrl ? (
                   <img
                     src={me.user.avatarUrl}
                     alt="Profilbild"
-                    width={72}
-                    height={72}
+                    width={48}
+                    height={48}
                   />
                 ) : null}
-                <p>Rolle: {me.isAdmin ? 'Admin' : 'Spieler'}</p>
-                {showAdminNav ? (
+                <div>
                   <p>
-                    <a href="/admin">Zum Adminbereich</a>
+                    Angemeldet als <strong>{me.user.displayName ?? me.user.login}</strong>
                   </p>
-                ) : null}
-                <button onClick={() => void logout()}>Logout</button>
-              </>
+                  <button onClick={() => void logout()}>Logout</button>
+                </div>
+              </div>
             ) : (
-              <>
-                <p>Bitte melde dich mit Twitch an.</p>
-                <a href="/api/auth/twitch/login">Mit Twitch einloggen</a>
-              </>
+              <div className="account-login-row">
+                <p>Mit Twitch einloggen und deinen Fortschritt speichern.</p>
+                <a href="/api/auth/twitch/login">Login</a>
+              </div>
             )}
+            <div className="compact-leaderboard">
+              <strong>Leaderboard</strong>
+              {leaderboardEntries.length > 0 ? (
+                <ol>
+                  {leaderboardEntries.slice(0, 3).map((entry) => (
+                    <li key={entry.userId}>
+                      <span>{entry.rank}. {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}</span>
+                      <span>{entry.score} Punkte</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>Noch keine Event-Punkte vorhanden.</p>
+              )}
+            </div>
           </section>
 
-          <section className="card">
-            <h2>Globales Leaderboard</h2>
-            <p>Top 10 Spieler nach Event-Punkten.</p>
-            {leaderboardEntries.length > 0 ? (
-              <ol>
-                {leaderboardEntries.map((entry) => (
-                  <li key={entry.userId}>
-                    <strong>
-                      {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}
-                    </strong>{' '}
-                    · {entry.score} Punkte
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p>Noch keine Event-Punkte vorhanden.</p>
-            )}
-          </section>
+          {showAdminNav ? (
+            <section className="card admin-shortcut-card">
+              <h2>Admin</h2>
+              <p>Schnellzugriff auf Setup, Rewards, Nutzer und Debug-Ansichten.</p>
+              <a href="/admin">Zum Adminbereich</a>
+            </section>
+          ) : null}
         </div>
       )
     }
