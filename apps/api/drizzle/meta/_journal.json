@@ -92,6 +92,13 @@
       "when": 1778500011000,
       "tag": "0012_hat_unlock_progression",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778500012000,
+      "tag": "0013_pet_class_training_stats",
+      "breakpoints": true
     }
   ]
 }
