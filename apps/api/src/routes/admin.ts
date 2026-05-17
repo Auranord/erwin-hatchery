@@ -15,6 +15,7 @@ import {
   incubatorSlots,
   inventoryDimensions,
   pets,
+  petClasses,
   resources,
   roles,
   twitchEvents,
@@ -38,9 +39,46 @@ import {
   setManualStreamStateOverride
 } from '../services/streamState.js';
 import { config } from '../config.js';
+import { calculateLevelStatBonus, levelForTrainingPoints, type PetStatId, type PetStats } from '@erwin/shared';
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
+
+
+type TrainingLedgerDelta = {
+  target_pet_id: string;
+  consumed_pet_ids: string[];
+  consumed_pet_previous_slots?: Array<{ id: string; slotIndex: number | null }>;
+  training_points_awarded: number;
+  training_points_before: number;
+  training_points_after: number;
+  target_level_before: number;
+  target_level_after: number;
+  levels_gained: number;
+  stat_bonus_before: PetStats;
+  stat_bonus_after: PetStats;
+  stat_changes: PetStats;
+};
+
+function isPetStatId(value: string): value is PetStatId {
+  return ['HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'].includes(value);
+}
+
+function normalizePetStat(value: string): PetStatId {
+  if (!isPetStatId(value)) throw new Error(`Invalid pet stat id: ${value}`);
+  return value;
+}
+
+function petStatsToBonusColumns(stats: PetStats) {
+  return {
+    levelBonusHp: stats.HP,
+    levelBonusAtk: stats.ATK,
+    levelBonusDef: stats.DEF,
+    levelBonusSpd: stats.SPD,
+    levelBonusGain: stats.GAIN,
+    levelBonusPow: stats.POW
+  };
+}
 
 function hasAdminAccess(roleNames: string[]): boolean {
   return (
@@ -262,7 +300,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
           createdAt: pets.createdAt
         })
         .from(pets)
-        .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
+        .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false), eq(pets.status, 'active'))),
       db
         .select()
         .from(consumableInventorySlots)
@@ -634,7 +672,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       const selectedPets = await tx
         .select({ id: pets.id, ownerUserId: pets.ownerUserId })
         .from(pets)
-        .where(and(eq(pets.selectedForEvent, true), eq(pets.isScrapped, false)))
+        .where(and(eq(pets.selectedForEvent, true), eq(pets.isScrapped, false), eq(pets.status, 'active')))
         .orderBy(sql`random()`)
         .limit(3);
 
@@ -778,7 +816,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         .update(pets)
         .set({ selectedForEvent: false })
         .where(
-          and(eq(pets.selectedForEvent, true), eq(pets.isScrapped, false))
+          and(eq(pets.selectedForEvent, true), eq(pets.isScrapped, false), eq(pets.status, 'active'))
         );
 
       await tx
@@ -990,7 +1028,7 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (duplicate.length > 0)
       return reply.code(200).send({ status: 'ok', idempotent: true });
 
-    await db.transaction(async (tx) => {
+    const revertResult = await db.transaction(async (tx) => {
       const [entry] = await tx
         .select()
         .from(economyLedger)
@@ -998,9 +1036,147 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         .limit(1);
       if (!entry) throw new Error('Ledger entry not found');
       if (entry.isReverted) throw new Error('Ledger entry already reverted');
+      if (entry.eventType === 'duplicate_pet_training') {
+        const delta = entry.delta as TrainingLedgerDelta;
+        if (!entry.userId) throw new Error('Invalid training ledger entry');
+
+        const laterTrainingRows = await tx
+          .select({ id: economyLedger.id })
+          .from(economyLedger)
+          .where(
+            and(
+              eq(economyLedger.eventType, 'duplicate_pet_training'),
+              eq(economyLedger.isReverted, false),
+              sql`${economyLedger.createdAt} > ${entry.createdAt}`,
+              sql`${economyLedger.delta}->>'target_pet_id' = ${delta.target_pet_id}`
+            )
+          )
+          .limit(1);
+        if (laterTrainingRows.length > 0) {
+          return {
+            kind: 'blocked' as const,
+            message:
+              'Cannot revert this training because later training events depend on the target pet state. Revert newer training first.'
+          };
+        }
+
+        const consumedSlotRows = delta.consumed_pet_previous_slots ?? [];
+        const slotsToRestore = consumedSlotRows.filter((slot) => slot.slotIndex !== null);
+        if (slotsToRestore.length > 0) {
+          const occupiedSlots = await tx
+            .select({ id: pets.id, slotIndex: pets.slotIndex })
+            .from(pets)
+            .where(
+              and(
+                eq(pets.ownerUserId, entry.userId),
+                eq(pets.status, 'active'),
+                eq(pets.isScrapped, false),
+                inArray(
+                  pets.slotIndex,
+                  slotsToRestore.map((slot) => slot.slotIndex as number)
+                )
+              )
+            );
+          const consumedIds = new Set(delta.consumed_pet_ids);
+          const blockingSlot = occupiedSlots.find((pet) => !consumedIds.has(pet.id));
+          if (blockingSlot) {
+            return {
+              kind: 'blocked' as const,
+              message: `Cannot safely restore consumed pets because inventory slot ${blockingSlot.slotIndex} is occupied.`
+            };
+          }
+        }
+
+        const [targetPet] = await tx
+          .select({
+            id: pets.id,
+            trainingPoints: pets.trainingPoints,
+            classMainStat: petClasses.mainStat,
+            classSecondaryStatOne: petClasses.secondaryStatOne,
+            classSecondaryStatTwo: petClasses.secondaryStatTwo
+          })
+          .from(pets)
+          .innerJoin(petClasses, eq(pets.classId, petClasses.id))
+          .where(and(eq(pets.id, delta.target_pet_id), eq(pets.ownerUserId, entry.userId)))
+          .limit(1);
+        if (!targetPet) throw new Error('Training target pet not found');
+
+        const restoredTrainingPoints = Math.max(
+          0,
+          targetPet.trainingPoints - delta.training_points_awarded
+        );
+        const restoredLevel = levelForTrainingPoints(
+          restoredTrainingPoints,
+          config.PET_TRAINING_MAX_LEVEL
+        );
+        const restoredBonus = calculateLevelStatBonus(restoredLevel, {
+          mainStat: normalizePetStat(targetPet.classMainStat),
+          secondaryStatOne: normalizePetStat(targetPet.classSecondaryStatOne),
+          secondaryStatTwo: normalizePetStat(targetPet.classSecondaryStatTwo)
+        });
+
+        await tx
+          .update(pets)
+          .set({
+            trainingPoints: restoredTrainingPoints,
+            experience: restoredTrainingPoints,
+            level: restoredLevel,
+            ...petStatsToBonusColumns(restoredBonus)
+          })
+          .where(eq(pets.id, delta.target_pet_id));
+
+        for (const consumedPetId of delta.consumed_pet_ids) {
+          const previousSlot = consumedSlotRows.find((slot) => slot.id === consumedPetId)?.slotIndex ?? null;
+          await tx
+            .update(pets)
+            .set({
+              status: 'active',
+              consumedByPetId: null,
+              consumedAt: null,
+              slotIndex: previousSlot
+            })
+            .where(
+              and(
+                eq(pets.id, consumedPetId),
+                eq(pets.ownerUserId, entry.userId),
+                eq(pets.status, 'consumed'),
+                eq(pets.consumedByPetId, delta.target_pet_id)
+              )
+            );
+        }
+
+        await tx.insert(economyLedger).values({
+          userId: entry.userId,
+          actorUserId: identity.userId,
+          eventType: 'admin_revert_duplicate_pet_training',
+          sourceType: 'admin_revert',
+          sourceId: entry.id,
+          delta: {
+            target_pet_id: delta.target_pet_id,
+            restored_consumed_pet_ids: delta.consumed_pet_ids,
+            training_points_removed: delta.training_points_awarded,
+            target_level_after_revert: restoredLevel,
+            stat_bonus_after_revert: restoredBonus
+          },
+          revertsLedgerId: entry.id
+        });
+        await tx
+          .update(economyLedger)
+          .set({ isReverted: true })
+          .where(eq(economyLedger.id, entry.id));
+        await tx.insert(adminActionLogs).values({
+          actorUserId: identity.userId,
+          targetUserId: entry.userId,
+          actionType: 'revert_duplicate_pet_training',
+          requestId,
+          payload: { ledgerId }
+        });
+        return { kind: 'ok' as const };
+      }
+
       if (entry.eventType !== 'admin_test_mystery_egg_grant')
         throw new Error(
-          'Only reversible admin test grant events are supported'
+          'Only reversible admin test grant and duplicate pet training events are supported'
         );
       const delta = entry.delta as {
         mysteryEggInventory?: Array<{ eggTypeId: string; amountDelta: number }>;
@@ -1055,7 +1231,11 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
         requestId,
         payload: { ledgerId }
       });
+      return { kind: 'ok' as const };
     });
+    if (revertResult.kind === 'blocked') {
+      return reply.code(409).send({ message: revertResult.message });
+    }
     return { status: 'ok', idempotent: false };
   });
 }

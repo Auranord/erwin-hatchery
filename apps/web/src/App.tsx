@@ -333,8 +333,30 @@ type PetItem = {
   baseGain: number;
   basePow: number;
   experience: number;
+  trainingPoints: number;
   level: number;
+  levelBonusHp: number;
+  levelBonusAtk: number;
+  levelBonusDef: number;
+  levelBonusSpd: number;
+  levelBonusGain: number;
+  levelBonusPow: number;
+  effectiveHp: number;
+  effectiveAtk: number;
+  effectiveDef: number;
+  effectiveSpd: number;
+  effectiveGain: number;
+  effectivePow: number;
+  trainingProgress: {
+    level: number;
+    trainingPoints: number;
+    maxLevel: number;
+    pointsIntoCurrentLevel: number;
+    pointsRequiredForNextLevel: number | null;
+    pointsRemainingForNextLevel: number | null;
+  };
   isFavorite: boolean;
+  isLocked: boolean;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;
@@ -423,6 +445,19 @@ type SubscriberShopOfferItem = {
   purchasedThisMonth: number;
   remainingThisMonth: number;
 };
+
+type TrainingDialogState = {
+  target: PetItem;
+  selectedIds: string[];
+};
+
+type TrainingPreview = {
+  pointsAwarded: number;
+  levelBefore: number;
+  levelAfter: number;
+  statChanges: Record<PetStatId, number>;
+};
+
 type SubscriberShopOffers = {
   monthKey: string;
   monthStartsAt: string;
@@ -689,6 +724,47 @@ function formatUpgradeSlotCount(slotCount: number): string {
 
 const DEBUG_EGG_GRANT_AMOUNTS = [1, 5, 10] as const;
 
+
+const PET_STAT_IDS: PetStatId[] = ['HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'];
+
+function consumedPetTrainingValue(level: number): number {
+  if (level === 0) return 2;
+  if (level === 1) return 3;
+  return 2 ** level;
+}
+
+function trainingLevelForPoints(points: number, maxLevel: number): number {
+  let level = 0;
+  let spent = 0;
+  while (level < maxLevel) {
+    const nextCost = 2 ** (level + 1);
+    if (points < spent + nextCost) break;
+    spent += nextCost;
+    level += 1;
+  }
+  return level;
+}
+
+function levelBonusForPet(pet: PetItem, level: number): Record<PetStatId, number> {
+  const bonus: Record<PetStatId, number> = { HP: 0, ATK: 0, DEF: 0, SPD: 0, GAIN: 0, POW: 0 };
+  bonus[pet.classMainStat] += level * 2;
+  bonus[pet.classSecondaryStatOne] += level;
+  bonus[pet.classSecondaryStatTwo] += level;
+  return bonus;
+}
+
+function petBaseStatValue(pet: PetItem, stat: PetStatId): number {
+  return stat === 'HP' ? pet.baseHp : stat === 'ATK' ? pet.baseAtk : stat === 'DEF' ? pet.baseDef : stat === 'SPD' ? pet.baseSpd : stat === 'GAIN' ? pet.baseGain : pet.basePow;
+}
+
+function petLevelBonusValue(pet: PetItem, stat: PetStatId): number {
+  return stat === 'HP' ? pet.levelBonusHp : stat === 'ATK' ? pet.levelBonusAtk : stat === 'DEF' ? pet.levelBonusDef : stat === 'SPD' ? pet.levelBonusSpd : stat === 'GAIN' ? pet.levelBonusGain : pet.levelBonusPow;
+}
+
+function petEffectiveStatValue(pet: PetItem, stat: PetStatId): number {
+  return stat === 'HP' ? pet.effectiveHp : stat === 'ATK' ? pet.effectiveAtk : stat === 'DEF' ? pet.effectiveDef : stat === 'SPD' ? pet.effectiveSpd : stat === 'GAIN' ? pet.effectiveGain : pet.effectivePow;
+}
+
 export function App(): JSX.Element {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -747,6 +823,8 @@ export function App(): JSX.Element {
   const [statsPayload, setStatsPayload] = useState<SelectionPayload | null>(null);
   const [renamePetDraft, setRenamePetDraft] = useState<{ petId: string; nickname: string } | null>(null);
   const [isPetRenameSubmitting, setIsPetRenameSubmitting] = useState(false);
+  const [trainingDialog, setTrainingDialog] = useState<TrainingDialogState | null>(null);
+  const [isTrainingSubmitting, setIsTrainingSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const [activePlayerPageIndex, setActivePlayerPageIndex] = useState(0);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -1707,6 +1785,42 @@ export function App(): JSX.Element {
     }
   }
 
+  async function trainPet(targetPetId: string, consumedPetIds: string[]): Promise<void> {
+    const response = await fetch(`/api/game/pets/${targetPetId}/train`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ consumedPetIds })
+    });
+
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string;
+      inventory?: PlayerInventory;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.message ?? 'Training konnte nicht gespeichert werden.');
+    }
+
+    if (payload?.inventory) setPlayerInventory(payload.inventory);
+  }
+
+  async function confirmPetTraining(): Promise<void> {
+    if (!trainingDialog || isTrainingSubmitting || trainingDialog.selectedIds.length === 0) return;
+
+    setIsTrainingSubmitting(true);
+    try {
+      await trainPet(trainingDialog.target.id, trainingDialog.selectedIds);
+      setTrainingDialog(null);
+      setSelectedPayload(null);
+      showGameMessage('Pet-Training abgeschlossen.');
+    } catch (error) {
+      showGameError(error);
+    } finally {
+      setIsTrainingSubmitting(false);
+    }
+  }
+
   async function confirmPetRename(): Promise<void> {
     if (!renamePetDraft || isPetRenameSubmitting) return;
 
@@ -2370,7 +2484,7 @@ export function App(): JSX.Element {
                 <button
                   disabled={
                     entry.isReverted ||
-                    entry.eventType !== 'admin_test_mystery_egg_grant'
+                    !['admin_test_mystery_egg_grant', 'duplicate_pet_training'].includes(entry.eventType)
                   }
                   onClick={() => void revertLedger(entry.id, entry.userId)}
                 >
@@ -2501,15 +2615,16 @@ export function App(): JSX.Element {
           <div><dt>Element</dt><dd>{pet.elementLabelDe}</dd></div>
           <div><dt>Fähigkeit</dt><dd>{pet.abilityLabelDe}</dd></div>
           <div><dt>Level</dt><dd>{pet.level}</dd></div>
-          <div><dt>EXP</dt><dd>{pet.experience}</dd></div>
+          <div><dt>Trainingspunkte</dt><dd>{pet.trainingPoints}</dd></div>
+          <div><dt>Training</dt><dd>{pet.trainingProgress.pointsRequiredForNextLevel === null ? 'Max-Level erreicht' : `${pet.trainingProgress.pointsIntoCurrentLevel}/${pet.trainingProgress.pointsRequiredForNextLevel} bis Level ${pet.level + 1}`}</dd></div>
           <div><dt>Favorit</dt><dd>{pet.isFavorite ? 'Ja' : 'Nein'}</dd></div>
           <div><dt>Event-Pet</dt><dd>{pet.selectedForEvent ? 'Ja' : 'Nein'}</dd></div>
-          <div><dt>HP</dt><dd>{pet.baseHp}</dd></div>
-          <div><dt>ATK</dt><dd>{pet.baseAtk}</dd></div>
-          <div><dt>DEF</dt><dd>{pet.baseDef}</dd></div>
-          <div><dt>SPD</dt><dd>{pet.baseSpd}</dd></div>
-          <div><dt>Gain</dt><dd>{pet.baseGain}</dd></div>
-          <div><dt>Power</dt><dd>{pet.basePow}</dd></div>
+          {PET_STAT_IDS.map((stat) => (
+            <div key={stat}>
+              <dt>{stat}</dt>
+              <dd>Basis {petBaseStatValue(pet, stat)} · Bonus +{petLevelBonusValue(pet, stat)} · Effektiv {petEffectiveStatValue(pet, stat)}</dd>
+            </div>
+          ))}
           <div><dt>Traits</dt><dd>{pet.traits.length > 0 ? pet.traits.map((trait) => trait.labelDe).join(', ') : '—'}</dd></div>
         </dl>
       );
@@ -3452,6 +3567,124 @@ export function App(): JSX.Element {
     );
   }
 
+  function getEligibleTrainingDuplicates(target: PetItem): PetItem[] {
+    if (!playerInventory) return [];
+    return playerInventory.pets.slots
+      .map((slot) => slot.item)
+      .filter(
+        (pet): pet is PetItem =>
+          pet !== null &&
+          pet.id !== target.id &&
+          pet.speciesId === target.speciesId &&
+          !pet.isFavorite &&
+          !pet.isLocked &&
+          !pet.selectedForEvent
+      );
+  }
+
+  function getTrainingPreview(target: PetItem, selectedIds: string[]): TrainingPreview {
+    const selected = getEligibleTrainingDuplicates(target).filter((pet) => selectedIds.includes(pet.id));
+    const pointsAwarded = selected.reduce((sum, pet) => sum + consumedPetTrainingValue(pet.level), 0);
+    const levelBefore = target.level;
+    const levelAfter = trainingLevelForPoints(
+      target.trainingPoints + pointsAwarded,
+      target.trainingProgress.maxLevel
+    );
+    const beforeBonus = levelBonusForPet(target, levelBefore);
+    const afterBonus = levelBonusForPet(target, levelAfter);
+    return {
+      pointsAwarded,
+      levelBefore,
+      levelAfter,
+      statChanges: {
+        HP: afterBonus.HP - beforeBonus.HP,
+        ATK: afterBonus.ATK - beforeBonus.ATK,
+        DEF: afterBonus.DEF - beforeBonus.DEF,
+        SPD: afterBonus.SPD - beforeBonus.SPD,
+        GAIN: afterBonus.GAIN - beforeBonus.GAIN,
+        POW: afterBonus.POW - beforeBonus.POW
+      }
+    };
+  }
+
+  function renderTrainingDialog(): JSX.Element | null {
+    if (!trainingDialog) return null;
+    const eligibleDuplicates = getEligibleTrainingDuplicates(trainingDialog.target);
+    const selectedPets = eligibleDuplicates.filter((pet) => trainingDialog.selectedIds.includes(pet.id));
+    const preview = getTrainingPreview(trainingDialog.target, trainingDialog.selectedIds);
+    const togglePet = (petId: string) => {
+      setTrainingDialog((current) => {
+        if (!current) return current;
+        const selected = new Set(current.selectedIds);
+        if (selected.has(petId)) selected.delete(petId);
+        else selected.add(petId);
+        return { ...current, selectedIds: [...selected] };
+      });
+    };
+
+    return (
+      <PlayerDialog
+        id="pet-training"
+        title={`${trainingDialog.target.nickname ?? trainingDialog.target.speciesDisplayName} trainieren`}
+        variant="info"
+        description="Wähle aktive Duplikate derselben Art. Das Training wird vollständig serverseitig berechnet."
+        actions={[
+          {
+            label: isTrainingSubmitting ? 'Trainiert…' : 'Training bestätigen',
+            onClick: () => void confirmPetTraining(),
+            disabled: isTrainingSubmitting || trainingDialog.selectedIds.length === 0,
+            variant: 'primary'
+          },
+          {
+            label: 'Abbrechen',
+            onClick: () => setTrainingDialog(null),
+            disabled: isTrainingSubmitting,
+            variant: 'secondary'
+          }
+        ]}
+        onCancel={() => setTrainingDialog(null)}
+        cancelDisabled={isTrainingSubmitting}
+      >
+        <div className="training-dialog-body">
+          <p className="training-warning">
+            Achtung: Verbrauchte Pets verschwinden aus deiner aktiven Sammlung und können nicht mehr für Battles genutzt werden.
+          </p>
+          <div className="training-progress-summary">
+            <strong>Fortschritt</strong>
+            <span>
+              Level {trainingDialog.target.level} · {trainingDialog.target.trainingProgress.pointsRequiredForNextLevel === null
+                ? 'Max-Level erreicht'
+                : `${trainingDialog.target.trainingProgress.pointsIntoCurrentLevel}/${trainingDialog.target.trainingProgress.pointsRequiredForNextLevel} Punkte bis Level ${trainingDialog.target.level + 1}`}
+            </span>
+          </div>
+          <div className="training-material-list">
+            {eligibleDuplicates.length > 0 ? eligibleDuplicates.map((pet) => (
+              <label key={pet.id} className="training-material-row">
+                <input
+                  type="checkbox"
+                  checked={trainingDialog.selectedIds.includes(pet.id)}
+                  onChange={() => togglePet(pet.id)}
+                  disabled={isTrainingSubmitting}
+                />
+                <span>
+                  <strong>{pet.nickname ?? pet.speciesDisplayName}</strong>
+                  <small>Level {pet.level} · +{consumedPetTrainingValue(pet.level)} Trainingspunkte</small>
+                </span>
+              </label>
+            )) : <p>Keine geeigneten Duplikate vorhanden.</p>}
+          </div>
+          <div className="training-preview">
+            <strong>Vorschau</strong>
+            <span>Verbrauchte Pets: {selectedPets.length > 0 ? selectedPets.map((pet) => pet.nickname ?? pet.speciesDisplayName).join(', ') : '—'}</span>
+            <span>Trainingspunkte: +{preview.pointsAwarded}</span>
+            <span>Level: {preview.levelBefore} → {preview.levelAfter}</span>
+            <span>Stat-Änderungen: {PET_STAT_IDS.map((stat) => `${stat} ${preview.statChanges[stat] >= 0 ? '+' : ''}${preview.statChanges[stat]}`).join(' · ')}</span>
+          </div>
+        </div>
+      </PlayerDialog>
+    );
+  }
+
   function renderPetInventoryGrid(inventory: PlayerInventory): JSX.Element {
     return renderGrid(
       'Pet-Inventar',
@@ -4040,7 +4273,24 @@ export function App(): JSX.Element {
     id="inventory-stats"
     title={`Werte: ${getInventoryItemLabel(statsPayload)}`}
     className="stats-modal"
-    actions={[
+    actions={statsPayload.kind === 'pet' ? [
+      {
+        label: 'Trainieren',
+        onClick: () => {
+          const pet = findInventoryItem(statsPayload) as PetItem | null;
+          if (pet) {
+            setTrainingDialog({ target: pet, selectedIds: [] });
+            setStatsPayload(null);
+          }
+        },
+        variant: 'primary'
+      },
+      {
+        label: 'Schließen',
+        onClick: () => setStatsPayload(null),
+        variant: 'secondary'
+      }
+    ] : [
       {
         label: 'Schließen',
         onClick: () => setStatsPayload(null),
@@ -4052,6 +4302,7 @@ export function App(): JSX.Element {
     {renderStatsRows(statsPayload)}
   </PlayerDialog>
 ) : null}
+{renderTrainingDialog()}
 {renamePetDraft ? (
   <PlayerDialog
     id="pet-rename"

@@ -236,3 +236,5 @@ Acceptance:
 ## Completed: Twitch reward ingestion milestone
 
 Implemented persisted Twitch setup state, broadcaster setup OAuth, EventSub sync/status persistence, subscription/gift-sub/Bits voucher handling, subscription and Bits backfill tables, setup/admin observability, revocation repair state, and documentation of Twitch historical replay limitations. Follow-up test work should add a real API test harness when the project introduces one; package scripts currently only contain placeholder tests.
+
+- Duplicate pet training implemented: active same-species duplicate materials can be consumed into one target, training points/levels/stat bonuses are calculated server-side, ledgered transactionally, and reversible by admins when no newer dependent training event exists.

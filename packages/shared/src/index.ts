@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { TrainingProgress } from './training.js';
 
 export const healthResponseSchema = z.object({
   ok: z.literal(true),
@@ -139,8 +140,23 @@ export type PetSlotItem = {
   baseGain: number;
   basePow: number;
   experience: number;
+  trainingPoints: number;
   level: number;
+  levelBonusHp: number;
+  levelBonusAtk: number;
+  levelBonusDef: number;
+  levelBonusSpd: number;
+  levelBonusGain: number;
+  levelBonusPow: number;
+  effectiveHp: number;
+  effectiveAtk: number;
+  effectiveDef: number;
+  effectiveSpd: number;
+  effectiveGain: number;
+  effectivePow: number;
+  trainingProgress: TrainingProgress;
   isFavorite: boolean;
+  isLocked: boolean;
   equippedHatId: string | null;
   traits: PetTrait[];
   selectedForEvent: boolean;
@@ -267,3 +283,5 @@ export type PlayerInventoryPayload = {
   equipmentSetUpgrades: EquipmentSetUpgradesPayload;
   hats: HatCollection;
 };
+
+export * from './training.js';

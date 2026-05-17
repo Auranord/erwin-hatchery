@@ -31,6 +31,7 @@ import {
   leaderboardScores,
   users,
   gameEvents,
+  gameEventParticipants,
   hats
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
@@ -41,13 +42,20 @@ import {
 } from '../services/streamState.js';
 import {
   DEFAULT_INVENTORY_GRIDS,
+  addPetStats,
+  calculateLevelStatBonus,
+  consumedPetTrainingValue,
+  diffPetStats,
   getAdditionalEquipmentSetCostCrackedEggs,
   getEquipmentSetSlotUpgradeCostCrackedEggs,
   getInventoryRowUpgradeCostCrackedEggs,
+  levelForTrainingPoints,
   isSlotInsideGrid,
+  trainingProgress,
   type InventoryGridDimensions,
   type InventoryKind,
   type PetStatId,
+  type PetStats,
   type PlayerInventoryPayload,
   type ShopOfferItem,
   type ShopOffersPayload,
@@ -128,6 +136,87 @@ const PET_SCRAP_REWARD_BY_RARITY: Record<string, number> = {
   epic: 20,
   legendary: 50
 };
+
+
+const PET_TRAINING_LEDGER_EVENT_TYPE = 'duplicate_pet_training';
+const PET_TRAINING_REVERT_LEDGER_EVENT_TYPE = 'admin_revert_duplicate_pet_training';
+const PET_STAT_COLUMN_BY_ID = {
+  HP: 'levelBonusHp',
+  ATK: 'levelBonusAtk',
+  DEF: 'levelBonusDef',
+  SPD: 'levelBonusSpd',
+  GAIN: 'levelBonusGain',
+  POW: 'levelBonusPow'
+} as const satisfies Record<PetStatId, string>;
+
+const trainPetSchema = z.object({
+  consumedPetIds: z.array(z.string().uuid()).min(1).max(50)
+});
+
+function petStatsFromBonusColumns(row: {
+  levelBonusHp: number;
+  levelBonusAtk: number;
+  levelBonusDef: number;
+  levelBonusSpd: number;
+  levelBonusGain: number;
+  levelBonusPow: number;
+}): PetStats {
+  return {
+    HP: row.levelBonusHp,
+    ATK: row.levelBonusAtk,
+    DEF: row.levelBonusDef,
+    SPD: row.levelBonusSpd,
+    GAIN: row.levelBonusGain,
+    POW: row.levelBonusPow
+  };
+}
+
+function petStatsToBonusColumns(stats: PetStats) {
+  return {
+    levelBonusHp: stats.HP,
+    levelBonusAtk: stats.ATK,
+    levelBonusDef: stats.DEF,
+    levelBonusSpd: stats.SPD,
+    levelBonusGain: stats.GAIN,
+    levelBonusPow: stats.POW
+  };
+}
+
+function effectivePetStats(row: {
+  baseHp: number;
+  baseAtk: number;
+  baseDef: number;
+  baseSpd: number;
+  baseGain: number;
+  basePow: number;
+  levelBonusHp: number;
+  levelBonusAtk: number;
+  levelBonusDef: number;
+  levelBonusSpd: number;
+  levelBonusGain: number;
+  levelBonusPow: number;
+}): PetStats {
+  return addPetStats(
+    {
+      HP: row.baseHp,
+      ATK: row.baseAtk,
+      DEF: row.baseDef,
+      SPD: row.baseSpd,
+      GAIN: row.baseGain,
+      POW: row.basePow
+    },
+    petStatsFromBonusColumns(row)
+  );
+}
+
+function isPetStatId(value: string): value is PetStatId {
+  return Object.prototype.hasOwnProperty.call(PET_STAT_COLUMN_BY_ID, value);
+}
+
+function normalizeClassStat(value: string): PetStatId {
+  if (!isPetStatId(value)) throw new Error(`Invalid pet stat id: ${value}`);
+  return value;
+}
 
 type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -365,7 +454,7 @@ async function findFreePetSlotInTx(
   const occupiedRows = await tx
     .select({ slotIndex: pets.slotIndex })
     .from(pets)
-    .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false)));
+    .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false), eq(pets.status, 'active')));
   const occupied = new Set(
     occupiedRows
       .map((row) => row.slotIndex)
@@ -1043,8 +1132,16 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
         baseGain: pets.baseGain,
         basePow: pets.basePow,
         experience: pets.experience,
+        trainingPoints: pets.trainingPoints,
         level: pets.level,
+        levelBonusHp: pets.levelBonusHp,
+        levelBonusAtk: pets.levelBonusAtk,
+        levelBonusDef: pets.levelBonusDef,
+        levelBonusSpd: pets.levelBonusSpd,
+        levelBonusGain: pets.levelBonusGain,
+        levelBonusPow: pets.levelBonusPow,
         isFavorite: pets.isFavorite,
+        isLocked: pets.isLocked,
         equippedHatId: pets.equippedHatId,
         selectedForEvent: pets.selectedForEvent,
         createdAt: pets.createdAt,
@@ -1056,7 +1153,7 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
       .innerJoin(petClasses, eq(pets.classId, petClasses.id))
       .innerJoin(elements, eq(pets.elementId, elements.id))
       .innerJoin(petAbilities, eq(pets.abilityId, petAbilities.id))
-      .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
+      .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false), eq(pets.status, 'active'))),
     db
       .select({
         id: consumableInventorySlots.id,
@@ -1297,8 +1394,23 @@ async function loadPlayerInventory(userId: string): Promise<PlayerInventory> {
             baseGain: row.baseGain,
             basePow: row.basePow,
             experience: row.experience,
+            trainingPoints: row.trainingPoints,
             level: row.level,
+            levelBonusHp: row.levelBonusHp,
+            levelBonusAtk: row.levelBonusAtk,
+            levelBonusDef: row.levelBonusDef,
+            levelBonusSpd: row.levelBonusSpd,
+            levelBonusGain: row.levelBonusGain,
+            levelBonusPow: row.levelBonusPow,
+            effectiveHp: row.baseHp + row.levelBonusHp,
+            effectiveAtk: row.baseAtk + row.levelBonusAtk,
+            effectiveDef: row.baseDef + row.levelBonusDef,
+            effectiveSpd: row.baseSpd + row.levelBonusSpd,
+            effectiveGain: row.baseGain + row.levelBonusGain,
+            effectivePow: row.basePow + row.levelBonusPow,
+            trainingProgress: trainingProgress(row.trainingPoints, config.PET_TRAINING_MAX_LEVEL),
             isFavorite: row.isFavorite,
+            isLocked: row.isLocked,
             equippedHatId: row.equippedHatId,
             traits: (traitsByPetId.get(row.id) ?? []).map(
               ({ petId: _petId, ...trait }) => trait
@@ -1423,7 +1535,7 @@ async function computeInventoryRevision(userId: string): Promise<string> {
         slotSum: sql<number>`coalesce(sum(${pets.slotIndex}), 0)`
       })
       .from(pets)
-      .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false))),
+      .where(and(eq(pets.ownerUserId, userId), eq(pets.isScrapped, false), eq(pets.status, 'active'))),
     db
       .select({
         count: sql<number>`count(*)`,
@@ -2277,6 +2389,10 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (
       !Object.prototype.hasOwnProperty.call(
         DEFAULT_INVENTORY_GRIDS,
+  addPetStats,
+  calculateLevelStatBonus,
+  consumedPetTrainingValue,
+  diffPetStats,
         requestedKind
       )
     ) {
@@ -2573,6 +2689,207 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     return { inventory };
   });
 
+  app.post('/api/game/pets/:petId/train', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
+
+    const targetPetId = (request.params as { petId: string }).petId;
+    const parsed = trainPetSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ message: 'Invalid training payload' });
+    }
+
+    const consumedPetIds = [...new Set(parsed.data.consumedPetIds)];
+    if (consumedPetIds.includes(targetPetId)) {
+      return reply.code(400).send({ message: 'Das Ziel-Pet kann sich nicht selbst verbrauchen.' });
+    }
+
+    try {
+      const result = await db.transaction(async (tx) => {
+        const [target] = await tx
+          .select({
+            id: pets.id,
+            ownerUserId: pets.ownerUserId,
+            speciesId: pets.speciesId,
+            trainingPoints: pets.trainingPoints,
+            level: pets.level,
+            baseHp: pets.baseHp,
+            baseAtk: pets.baseAtk,
+            baseDef: pets.baseDef,
+            baseSpd: pets.baseSpd,
+            baseGain: pets.baseGain,
+            basePow: pets.basePow,
+            levelBonusHp: pets.levelBonusHp,
+            levelBonusAtk: pets.levelBonusAtk,
+            levelBonusDef: pets.levelBonusDef,
+            levelBonusSpd: pets.levelBonusSpd,
+            levelBonusGain: pets.levelBonusGain,
+            levelBonusPow: pets.levelBonusPow,
+            classMainStat: petClasses.mainStat,
+            classSecondaryStatOne: petClasses.secondaryStatOne,
+            classSecondaryStatTwo: petClasses.secondaryStatTwo,
+            status: pets.status,
+            isScrapped: pets.isScrapped
+          })
+          .from(pets)
+          .innerJoin(petClasses, eq(pets.classId, petClasses.id))
+          .where(and(eq(pets.id, targetPetId), eq(pets.ownerUserId, identity.userId)))
+          .limit(1);
+
+        if (!target || target.isScrapped || target.status !== 'active') {
+          return { kind: 'not_found' as const };
+        }
+
+        const materialRows = await tx
+          .select({
+            id: pets.id,
+            ownerUserId: pets.ownerUserId,
+            speciesId: pets.speciesId,
+            level: pets.level,
+            status: pets.status,
+            isScrapped: pets.isScrapped,
+            isFavorite: pets.isFavorite,
+            isLocked: pets.isLocked,
+            selectedForEvent: pets.selectedForEvent,
+            consumedByPetId: pets.consumedByPetId,
+            slotIndex: pets.slotIndex
+          })
+          .from(pets)
+          .where(inArray(pets.id, consumedPetIds));
+
+        if (materialRows.length !== consumedPetIds.length) {
+          return { kind: 'invalid_materials' as const, message: 'Mindestens ein Duplikat wurde nicht gefunden.' };
+        }
+
+        const unresolvedParticipantRows = await tx
+          .select({ petId: gameEventParticipants.petId })
+          .from(gameEventParticipants)
+          .innerJoin(gameEvents, eq(gameEventParticipants.gameEventId, gameEvents.id))
+          .where(
+            and(
+              inArray(gameEventParticipants.petId, consumedPetIds),
+              isNull(gameEvents.revertedAt),
+              not(eq(gameEvents.status, 'resolved'))
+            )
+          );
+        const unresolvedPetIds = new Set(unresolvedParticipantRows.map((row) => row.petId));
+
+        for (const material of materialRows) {
+          if (material.id === target.id) {
+            return { kind: 'invalid_materials' as const, message: 'Das Ziel-Pet kann sich nicht selbst verbrauchen.' };
+          }
+          if (material.ownerUserId !== identity.userId) {
+            return { kind: 'invalid_materials' as const, message: 'Alle Duplikate müssen dir gehören.' };
+          }
+          if (material.speciesId !== target.speciesId) {
+            return { kind: 'invalid_materials' as const, message: 'Training erlaubt nur Duplikate derselben Art.' };
+          }
+          if (material.isScrapped || material.status !== 'active' || material.consumedByPetId !== null) {
+            return { kind: 'invalid_materials' as const, message: 'Nur aktive, ausgebrütete und nicht verbrauchte Pets können trainieren.' };
+          }
+          if (material.isFavorite || material.isLocked) {
+            return { kind: 'invalid_materials' as const, message: 'Favorisierte oder gesperrte Pets können nicht verbraucht werden.' };
+          }
+          if (material.selectedForEvent) {
+            return { kind: 'invalid_materials' as const, message: 'Ausgewählte Battle-Pets können nicht verbraucht werden.' };
+          }
+          if (unresolvedPetIds.has(material.id)) {
+            return { kind: 'invalid_materials' as const, message: 'Pets in einem offenen Battle-Event können nicht verbraucht werden.' };
+          }
+        }
+
+        const trainingPointsAwarded = materialRows.reduce(
+          (sum, material) => sum + consumedPetTrainingValue(material.level),
+          0
+        );
+        const targetLevelBefore = target.level;
+        const statBonusBefore = petStatsFromBonusColumns(target);
+        const trainingPointsAfter = target.trainingPoints + trainingPointsAwarded;
+        const targetLevelAfter = levelForTrainingPoints(
+          trainingPointsAfter,
+          config.PET_TRAINING_MAX_LEVEL
+        );
+        const statBonusAfter = calculateLevelStatBonus(targetLevelAfter, {
+          mainStat: normalizeClassStat(target.classMainStat),
+          secondaryStatOne: normalizeClassStat(target.classSecondaryStatOne),
+          secondaryStatTwo: normalizeClassStat(target.classSecondaryStatTwo)
+        });
+        const statChanges = diffPetStats(statBonusBefore, statBonusAfter);
+        const now = new Date();
+
+        await tx
+          .update(pets)
+          .set({
+            trainingPoints: trainingPointsAfter,
+            experience: trainingPointsAfter,
+            level: targetLevelAfter,
+            ...petStatsToBonusColumns(statBonusAfter)
+          })
+          .where(eq(pets.id, target.id));
+
+        await tx
+          .update(pets)
+          .set({
+            status: 'consumed',
+            consumedByPetId: target.id,
+            consumedAt: now,
+            selectedForEvent: false,
+            slotIndex: null
+          })
+          .where(inArray(pets.id, consumedPetIds));
+
+        const [ledger] = await tx
+          .insert(economyLedger)
+          .values({
+            userId: identity.userId,
+            actorUserId: identity.userId,
+            eventType: PET_TRAINING_LEDGER_EVENT_TYPE,
+            sourceType: 'player_action',
+            sourceId: target.id,
+            delta: {
+              target_pet_id: target.id,
+              consumed_pet_ids: consumedPetIds,
+              consumed_pet_previous_slots: materialRows.map((material) => ({ id: material.id, slotIndex: material.slotIndex })),
+              training_points_awarded: trainingPointsAwarded,
+              training_points_before: target.trainingPoints,
+              training_points_after: trainingPointsAfter,
+              target_level_before: targetLevelBefore,
+              target_level_after: targetLevelAfter,
+              levels_gained: targetLevelAfter - targetLevelBefore,
+              stat_bonus_before: statBonusBefore,
+              stat_bonus_after: statBonusAfter,
+              stat_changes: statChanges
+            }
+          })
+          .returning({ id: economyLedger.id });
+
+        if (!ledger) throw new Error('Failed to create duplicate pet training ledger entry');
+
+        return {
+          kind: 'ok' as const,
+          targetPetId: target.id,
+          ledgerId: ledger.id,
+          trainingPointsAwarded,
+          targetLevelBefore,
+          targetLevelAfter,
+          levelsGained: targetLevelAfter - targetLevelBefore,
+          statBonusBefore,
+          statBonusAfter,
+          statChanges
+        };
+      });
+
+      if (result.kind === 'not_found') return reply.code(404).send({ message: 'Pet nicht gefunden.' });
+      if (result.kind === 'invalid_materials') return reply.code(400).send({ message: result.message });
+
+      const inventory = await loadPlayerInventory(identity.userId);
+      return { status: 'ok', ...result, inventory };
+    } catch (error) {
+      request.log.error({ err: error }, 'Failed to train duplicate pets');
+      return reply.code(500).send({ message: 'Training konnte nicht gespeichert werden.' });
+    }
+  });
+
   app.post('/api/game/pets/:petId/selection', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) return reply.code(401).send({ message: 'Unauthorized' });
@@ -2593,7 +2910,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.id, petId),
             eq(pets.ownerUserId, identity.userId),
-            eq(pets.isScrapped, false)
+            eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
           )
         )
         .limit(1);
@@ -2610,7 +2928,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
             and(
               eq(pets.ownerUserId, identity.userId),
               eq(pets.selectedForEvent, true),
-              eq(pets.isScrapped, false)
+              eq(pets.isScrapped, false),
+              eq(pets.status, 'active')
             )
           );
       }
@@ -2654,7 +2973,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
         and(
           eq(pets.id, petId),
           eq(pets.ownerUserId, identity.userId),
-          eq(pets.isScrapped, false)
+          eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
         )
       )
       .returning({ id: pets.id, isFavorite: pets.isFavorite });
@@ -2698,7 +3018,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.id, petId),
             eq(pets.ownerUserId, identity.userId),
-            eq(pets.isScrapped, false)
+            eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
           )
         )
         .limit(1);
@@ -3366,7 +3687,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.id, body.petId!),
             eq(pets.ownerUserId, identity.userId),
-            eq(pets.isScrapped, false)
+            eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
           )
         )
         .limit(1);
@@ -3465,7 +3787,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.id, body.petId!),
             eq(pets.ownerUserId, identity.userId),
-            eq(pets.isScrapped, false)
+            eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
           )
         )
         .limit(1);
@@ -3479,6 +3802,7 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.ownerUserId, identity.userId),
             eq(pets.isScrapped, false),
+            eq(pets.status, 'active'),
             eq(pets.slotIndex, toSlotIndex),
             not(eq(pets.id, source.id))
           )
@@ -3609,7 +3933,8 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
           and(
             eq(pets.id, body.petId!),
             eq(pets.ownerUserId, identity.userId),
-            eq(pets.isScrapped, false)
+            eq(pets.isScrapped, false),
+            eq(pets.status, 'active')
           )
         )
         .limit(1);
