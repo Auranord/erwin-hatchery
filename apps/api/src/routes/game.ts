@@ -2389,10 +2389,6 @@ export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
     if (
       !Object.prototype.hasOwnProperty.call(
         DEFAULT_INVENTORY_GRIDS,
-  addPetStats,
-  calculateLevelStatBonus,
-  consumedPetTrainingValue,
-  diffPetStats,
         requestedKind
       )
     ) {
