@@ -989,6 +989,11 @@ export function App(): JSX.Element {
   const [isTrainingSubmitting, setIsTrainingSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const [activePlayerPageIndex, setActivePlayerPageIndex] = useState(0);
+  const [reportCategory, setReportCategory] = useState<'bug' | 'feedback'>('bug');
+  const [reportTitle, setReportTitle] = useState('');
+  const [reportMessage, setReportMessage] = useState('');
+  const [reportStatus, setReportStatus] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
   const appScrollRef = useRef<HTMLElement | null>(null);
   const hasRenderedInitialPlayerPageRef = useRef(false);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -1568,6 +1573,72 @@ export function App(): JSX.Element {
   function showGameMessage(text: string, tone: ToastTone = 'default'): void {
     toastIdRef.current += 1;
     setToastMessage({ id: toastIdRef.current, text, tone });
+  }
+
+  function openReportForm(): void {
+    setActivePlayerPageIndex(1);
+  }
+
+  function buildReportClientContext() {
+    return {
+      currentPath: window.location.pathname,
+      viewport: {
+        width: Math.round(window.innerWidth),
+        height: Math.round(window.innerHeight)
+      },
+      userAgent: navigator.userAgent.slice(0, 300),
+      language: navigator.language,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  async function submitUserReport(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setReportStatus(null);
+
+    if (!me?.authenticated) {
+      setReportStatus({
+        tone: 'error',
+        text: 'Bitte melde dich zuerst mit Twitch an, bevor du eine Meldung sendest.'
+      });
+      return;
+    }
+
+    setIsReportSubmitting(true);
+    try {
+      const response = await fetch('/api/user-reports', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: reportCategory,
+          title: reportTitle,
+          message: reportMessage,
+          currentPath: window.location.pathname,
+          clientContext: buildReportClientContext()
+        })
+      });
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.message ?? 'Deine Meldung konnte nicht gesendet werden.');
+      }
+      setReportTitle('');
+      setReportMessage('');
+      setReportStatus({
+        tone: 'success',
+        text: payload?.message ?? 'Danke! Deine Meldung wurde gespeichert.'
+      });
+    } catch (error) {
+      setReportStatus({
+        tone: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Deine Meldung konnte nicht gesendet werden.'
+      });
+    } finally {
+      setIsReportSubmitting(false);
+    }
   }
 
   function showMysteryEggResult(
@@ -4246,7 +4317,98 @@ export function App(): JSX.Element {
               <p>Schnellzugriff auf Setup, Rewards, Nutzer und Debug-Ansichten.</p>
               <a href="/admin">Zum Adminbereich</a>
             </section>
-          ) : null}
+          ) : (
+            <section className="card beta-notice-card">
+              <h2>Hinweis zur Beta</h2>
+              <p>
+                Erwin Hatchery ist noch in der Beta. Fehler können passieren und
+                Fortschritt oder Wirtschaft können während der Tests angepasst
+                werden. Deine Meldungen helfen, das Spiel zu verbessern.
+              </p>
+              <button type="button" onClick={openReportForm}>
+                Fehler oder Feedback melden
+              </button>
+            </section>
+          )}
+        </div>
+      )
+    },
+    {
+      id: 'report',
+      label: 'Melden',
+      icon: '!',
+      content: (
+        <div className="player-page-content">
+          <section className="card report-card">
+            <h2>Fehler oder Feedback melden</h2>
+            <p>
+              Schick uns Bugs oder Feedback direkt aus dem Spiel. Bitte sende
+              keine Passwörter, Tokens oder privaten Geheimnisse mit.
+            </p>
+            {!me?.authenticated ? (
+              <p className="report-status report-status--error">
+                Bitte melde dich zuerst mit Twitch an, bevor du eine Meldung sendest.
+              </p>
+            ) : null}
+            <form className="report-form" onSubmit={(event) => void submitUserReport(event)}>
+              <fieldset disabled={isReportSubmitting}>
+                <legend>Kategorie</legend>
+                <label className="report-option">
+                  <input
+                    type="radio"
+                    name="report-category"
+                    value="bug"
+                    checked={reportCategory === 'bug'}
+                    onChange={() => setReportCategory('bug')}
+                  />
+                  Fehler
+                </label>
+                <label className="report-option">
+                  <input
+                    type="radio"
+                    name="report-category"
+                    value="feedback"
+                    checked={reportCategory === 'feedback'}
+                    onChange={() => setReportCategory('feedback')}
+                  />
+                  Feedback
+                </label>
+              </fieldset>
+
+              <label>
+                Kurzer Titel
+                <input
+                  value={reportTitle}
+                  maxLength={120}
+                  required
+                  onChange={(event) => setReportTitle(event.target.value)}
+                  placeholder="Kurze Zusammenfassung"
+                />
+              </label>
+
+              <label>
+                Was ist passiert?
+                <textarea
+                  value={reportMessage}
+                  maxLength={4000}
+                  required
+                  rows={7}
+                  onChange={(event) => setReportMessage(event.target.value)}
+                  placeholder="Beschreibe kurz, was du gesehen oder erwartet hast."
+                />
+              </label>
+
+              {reportStatus ? (
+                <p className={`report-status report-status--${reportStatus.tone}`} role="status">
+                  {reportStatus.text}
+                </p>
+              ) : null}
+
+              <button type="submit" disabled={isReportSubmitting || !me?.authenticated}>
+                {isReportSubmitting ? 'Wird gesendet …' : 'Absenden'}
+              </button>
+            </form>
+          </section>
         </div>
       )
     }
