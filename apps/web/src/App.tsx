@@ -963,6 +963,8 @@ export function App(): JSX.Element {
   const [isTrainingSubmitting, setIsTrainingSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const [activePlayerPageIndex, setActivePlayerPageIndex] = useState(0);
+  const appScrollRef = useRef<HTMLElement | null>(null);
+  const hasRenderedInitialPlayerPageRef = useRef(false);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const toastIdRef = useRef(0);
   const isAdminRoute = window.location.pathname.startsWith('/admin');
@@ -1051,6 +1053,15 @@ export function App(): JSX.Element {
 
   useEffect(() => {
     setSelectedPayload(null);
+  }, [activePlayerPageIndex]);
+
+  useLayoutEffect(() => {
+    if (!hasRenderedInitialPlayerPageRef.current) {
+      hasRenderedInitialPlayerPageRef.current = true;
+      return;
+    }
+
+    scrollPlayerPageToTop();
   }, [activePlayerPageIndex]);
 
   useEffect(() => {
@@ -4009,23 +4020,21 @@ export function App(): JSX.Element {
   }
 
   function scrollPlayerPageToTop(): void {
-    window.requestAnimationFrame(() => {
-      const scrollContainer = document.querySelector<HTMLElement>('.app-scroll');
-      if (scrollContainer) {
-        scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+    const scrollContainer =
+      appScrollRef.current ?? document.querySelector<HTMLElement>('.app-scroll');
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    window.scrollTo({ top: 0, behavior: 'auto' });
   }
 
   function setPlayerPageIndex(pageIndex: number, pageCount: number): void {
-    setActivePlayerPageIndex((currentIndex) => {
-      const nextIndex = Math.min(Math.max(pageIndex, 0), pageCount - 1);
-      if (nextIndex !== currentIndex) scrollPlayerPageToTop();
-      return nextIndex;
-    });
+    setActivePlayerPageIndex(Math.min(Math.max(pageIndex, 0), pageCount - 1));
   }
 
   function handlePlayerPageSwipeStart(clientX: number, clientY: number): void {
@@ -4055,7 +4064,6 @@ export function App(): JSX.Element {
         distanceX < 0
           ? Math.min(pageCount - 1, currentIndex + 1)
           : Math.max(0, currentIndex - 1);
-      if (nextIndex !== currentIndex) scrollPlayerPageToTop();
       return nextIndex;
     });
   }
@@ -4229,7 +4237,10 @@ export function App(): JSX.Element {
 
   return (
     <div className="app-shell">
-      <main className="app-scroll container player-page-container">
+      <main
+        ref={appScrollRef}
+        className="app-scroll container player-page-container"
+      >
       {me?.authenticated && playerInventory ? (
         <>
 {pendingPetScrap ? (
