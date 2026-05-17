@@ -914,6 +914,10 @@ export function App(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    setSelectedPayload(null);
+  }, [activePlayerPageIndex]);
+
+  useEffect(() => {
     if (isAdminRoute && me?.authenticated) {
       void loadSetupStatus();
       void loadUsers(query);
