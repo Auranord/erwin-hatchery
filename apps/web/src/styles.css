@@ -1319,6 +1319,7 @@ ul {
   overflow: hidden;
   border-radius: 1rem;
   touch-action: pan-y;
+  transition: height 220ms ease;
 }
 
 .player-page-track {
