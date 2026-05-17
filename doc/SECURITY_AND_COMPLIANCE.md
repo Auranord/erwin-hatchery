@@ -201,3 +201,5 @@ Broadcaster setup OAuth must be performed by `TWITCH_BROADCASTER_ID`; mismatched
 EventSub webhook signatures are validated before processing. Revocations are handled explicitly: authorization-related revocations set `requires_reauth=true`, while delivery-related failures mark EventSub unhealthy and expose repair/resync controls. Twitch has retry/downtime limits and no full historical EventSub replay, so the backfill flow is documented as best effort.
 
 Bits and subscriptions are paid Twitch interactions and therefore only grant fixed transparent Gutscheine (`voucher`). They never grant random eggs or other paid random rewards.
+
+- Duplicate pet training is server-authoritative and transactional. The browser may request target/material IDs only; the backend validates ownership, species, active/hatched state, favorite/lock protection, battle selection, unresolved battle participation, and consumed state before updating pets and writing the immutable ledger row.

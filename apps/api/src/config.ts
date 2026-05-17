@@ -48,7 +48,8 @@ const configSchema = z.object({
   INCUBATION_MAX_MULTIPLIER: z.coerce.number().gt(0).default(3),
   SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
   SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
-  SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT: z.coerce.number().int().min(0).default(5)
+  SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
+  PET_TRAINING_MAX_LEVEL: z.coerce.number().int().min(0).max(50).default(10)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;
