@@ -9,6 +9,7 @@ import { registerAdminRoutes } from './routes/admin.js';
 import { registerGameRoutes } from './routes/game.js';
 import { registerEventSubRoutes } from './routes/eventsub.js';
 import { registerSetupRoutes } from './routes/setup.js';
+import { registerUserReportRoutes } from './routes/user-reports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,6 +45,7 @@ export function buildApp() {
   app.register(registerSetupRoutes);
   app.register(registerAdminRoutes);
   app.register(registerGameRoutes);
+  app.register(registerUserReportRoutes);
   app.register(registerEventSubRoutes);
 
   app.register(fastifyStatic, {

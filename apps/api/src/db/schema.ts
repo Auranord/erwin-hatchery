@@ -71,6 +71,21 @@ export const roles = pgTable(
   })
 );
 
+export const userReports = pgTable('user_reports', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reporterUserId: uuid('reporter_user_id').references(() => users.id),
+  reporterTwitchUserId: text('reporter_twitch_user_id').notNull(),
+  reporterDisplayNameSnapshot: text('reporter_display_name_snapshot'),
+  category: text('category').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  currentPath: text('current_path'),
+  clientContext: jsonb('client_context').notNull().default({}),
+  status: text('status').notNull().default('new'),
+  createdAt: timestamps.createdAt,
+  updatedAt: timestamps.updatedAt
+});
+
 export const adminActionLogs = pgTable('admin_action_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
   actorUserId: uuid('actor_user_id')

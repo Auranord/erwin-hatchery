@@ -83,6 +83,11 @@ The backend owns:
 - audit/ledger/revert logic
 - Server-Sent Events for overlays and live UI updates; alert overlays consume normalized `overlay_alert` events for pet hatches now and future in-game event messages later
 
+
+### User report intake
+
+Phase 1 bug/feedback intake stays internal. Authenticated players submit `POST /api/user-reports` from the React app with a German title/message, category (`bug` or `feedback`), current frontend path, and a minimized safe client context. The Fastify route validates the Twitch session, applies basic per-user rate limiting, strips sensitive browser data, and inserts the report into the private `user_reports` database queue for later admin/operator review. No GitHub issue creation or browser-visible GitHub integration exists in this phase.
+
 ## Frontend responsibilities
 
 The frontend owns:
