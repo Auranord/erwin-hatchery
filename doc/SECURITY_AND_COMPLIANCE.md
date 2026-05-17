@@ -75,6 +75,7 @@ Store only what is needed:
 
 Do not store:
 
+- cookies, OAuth tokens, refresh tokens, raw authorization headers, Twitch access tokens, or secrets in user-submitted bug/feedback reports
 - private messages
 - unnecessary chat logs
 - addresses
@@ -82,6 +83,11 @@ Do not store:
 - sensitive personal details
 
 Users must be able to delete their account/progress.
+
+
+## Bug and feedback report privacy
+
+Phase 1 report intake is internal-only. Authenticated players can submit bug/feedback reports in-app, but reports are stored in the private `user_reports` database queue and are not forwarded to GitHub automatically. The browser receives no GitHub credentials, repository automation details, or future integration secrets. The report endpoint accepts only `bug` and `feedback` categories, rate-limits repeated submissions, and persists a minimized safe client context for debugging.
 
 ## Authentication and authorization
 

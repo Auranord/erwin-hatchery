@@ -40,6 +40,7 @@ Public without Twitch login:
 
 Requires Twitch login:
 
+- In-app bug/feedback reports without needing a GitHub account
 - Inventory, including separate consumable/equipment grids and a cosmetic hat unlock collection
 - Egg identification
 - Incubation

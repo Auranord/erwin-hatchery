@@ -110,6 +110,28 @@ Examples:
 - `admin.grant_test_egg`
 - `admin.revert_battle`
 
+
+### user_reports
+
+Private Phase 1 bug/feedback queue for authenticated in-app reports. Reports are not forwarded to GitHub automatically.
+
+```text
+id uuid primary key
+reporter_user_id uuid nullable references users(id)
+reporter_twitch_user_id text not null
+reporter_display_name_snapshot text nullable
+category text not null -- bug, feedback
+title text not null
+message text not null
+current_path text nullable
+client_context jsonb not null default '{}' -- sanitized user-agent summary, viewport, route, language, client timestamp
+status text not null default 'new' -- new, reviewing, closed
+created_at timestamp
+updated_at timestamp
+```
+
+The API stores only safe context useful for reproducing issues. Cookies, OAuth tokens, refresh tokens, authorization headers, Twitch access tokens, and secrets must never be stored in `client_context`.
+
 ### resources
 
 Stores player resource balances.
