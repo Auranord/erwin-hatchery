@@ -1481,9 +1481,6 @@ ul {
   transform: translateY(-0.08rem);
 }
 
-.player-login-hint {
-  color: #cbd5e1;
-}
 
 @media (min-width: 56rem) {
   .player-page-arrow {
@@ -1583,4 +1580,232 @@ ul {
 .training-preview span,
 .training-progress-summary span {
   color: #cbd5e1;
+}
+
+.landing-banner {
+  position: relative;
+  overflow: hidden;
+  min-height: 9.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(154, 116, 255, 0.28), transparent 34%),
+    linear-gradient(135deg, #2d2349 0%, #201b31 58%, #312544 100%);
+}
+
+.landing-banner h1 {
+  margin-top: 0;
+  font-size: clamp(2rem, 12vw, 4rem);
+  line-height: 0.95;
+  letter-spacing: -0.08em;
+}
+
+.landing-banner p {
+  max-width: 28rem;
+  margin: 0;
+  color: #ded6ff;
+}
+
+.landing-banner-placeholder {
+  width: clamp(5rem, 24vw, 8rem);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(222, 214, 255, 0.38);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 32px rgba(255, 255, 255, 0.05);
+}
+
+.landing-banner-placeholder span {
+  font-size: clamp(2.5rem, 14vw, 4.75rem);
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.32));
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.section-heading-row h2 {
+  margin: 0;
+}
+
+.live-status,
+.compact-status {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.live-status.live {
+  color: #fff;
+  background: #e91916;
+  box-shadow: 0 0 16px rgba(233, 25, 22, 0.34);
+}
+
+.live-status.offline,
+.compact-status {
+  color: #d8d0f7;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.twitch-embed-frame,
+.stream-placeholder {
+  margin-top: 0.85rem;
+  overflow: hidden;
+  border: 1px solid #463b63;
+  border-radius: 12px;
+  background: #15111f;
+}
+
+.twitch-embed-frame {
+  aspect-ratio: 16 / 9;
+}
+
+.twitch-embed-frame iframe {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border: 0;
+}
+
+.stream-placeholder {
+  min-height: 10rem;
+  display: grid;
+  place-items: center;
+  color: #bbb0df;
+}
+
+.stream-meta {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.stream-meta:empty {
+  display: none;
+}
+
+.stream-meta span,
+.compact-leaderboard p,
+.account-login-row p,
+.admin-shortcut-card p {
+  margin: 0;
+  color: #c7bedf;
+}
+
+.account-summary,
+.account-login-row {
+  margin-top: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.account-summary {
+  justify-content: flex-start;
+}
+
+.account-summary img {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 2px solid rgba(145, 112, 220, 0.8);
+}
+
+.account-summary p {
+  margin: 0 0 0.35rem;
+}
+
+.account-login-row a,
+.admin-shortcut-card a {
+  flex: 0 0 auto;
+}
+
+.primary-login-button {
+  display: inline-flex;
+  min-width: 9rem;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #9146ff 0%, #facc15 100%);
+  box-shadow: 0 16px 32px rgba(145, 70, 255, 0.32);
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-login-button:focus-visible,
+.primary-login-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.compact-leaderboard {
+  margin-top: 0.85rem;
+}
+
+.leaderboard-card .compact-leaderboard {
+  margin-top: 0;
+}
+
+.compact-leaderboard ol {
+  margin: 0.35rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.compact-leaderboard li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #e8e2ff;
+}
+
+.compact-leaderboard li span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-leaderboard li span:last-child {
+  flex: 0 0 auto;
+  color: #c7bedf;
+}
+
+.admin-shortcut-card {
+  border-color: rgba(255, 193, 7, 0.45);
+  background: linear-gradient(135deg, rgba(67, 51, 31, 0.98), rgba(38, 32, 58, 0.98));
+}
+
+@media (max-width: 420px) {
+  .landing-banner {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-banner-placeholder {
+    width: 100%;
+    max-height: 6.5rem;
+  }
+
+  .account-login-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primary-login-button {
+    width: 100%;
+  }
 }

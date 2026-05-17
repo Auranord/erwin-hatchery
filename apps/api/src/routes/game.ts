@@ -38,7 +38,8 @@ import { getSessionIdentity } from './session-auth.js';
 import { config } from '../config.js';
 import {
   computeIncubationMultiplier,
-  getCurrentStreamState
+  getCurrentStreamState,
+  getPublicStreamPanel
 } from '../services/streamState.js';
 import {
   DEFAULT_INVENTORY_GRIDS,
@@ -1709,6 +1710,8 @@ async function buildPetHatchedOverlayAlert(row: {
 }
 
 export async function registerGameRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/api/public/stream-panel', async () => ({ streamPanel: await getPublicStreamPanel() }));
+
   app.get('/api/events/overlay/alerts/stream', async (request, reply) => {
     if (!ensureOverlayAccess(request)) {
       return reply.code(401).send({ message: 'Unauthorized' });
