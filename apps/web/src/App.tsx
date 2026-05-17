@@ -2831,6 +2831,13 @@ export function App(): JSX.Element {
     setSelectedPayload(null);
   }
 
+  function startSelectedPetTraining(selectedPet: PetItem | null): void {
+    if (!selectedPet) return;
+
+    setTrainingDialog({ target: selectedPet, selectedIds: [] });
+    setSelectedPayload(null);
+  }
+
   function recycleSelectedPayload(): void {
     if (!selectedPayload) return;
     if (selectedPayload.kind === 'pet') {
@@ -2895,6 +2902,15 @@ export function App(): JSX.Element {
               aria-label={selectedPet?.isFavorite ? 'Favorit entfernen' : 'Als Favorit markieren'}
             >
               ★
+            </button>
+            <button
+              type="button"
+              disabled={!selectedPet}
+              onClick={() => startSelectedPetTraining(selectedPet)}
+              title="Trainieren"
+              aria-label="Trainieren"
+            >
+              🏋
             </button>
             <button
               type="button"
@@ -4413,24 +4429,7 @@ export function App(): JSX.Element {
     id="inventory-stats"
     title={`Werte: ${getInventoryItemLabel(statsPayload)}`}
     className="stats-modal"
-    actions={statsPayload.kind === 'pet' ? [
-      {
-        label: 'Trainieren',
-        onClick: () => {
-          const pet = findInventoryItem(statsPayload) as PetItem | null;
-          if (pet) {
-            setTrainingDialog({ target: pet, selectedIds: [] });
-            setStatsPayload(null);
-          }
-        },
-        variant: 'primary'
-      },
-      {
-        label: 'Schließen',
-        onClick: () => setStatsPayload(null),
-        variant: 'secondary'
-      }
-    ] : [
+    actions={[
       {
         label: 'Schließen',
         onClick: () => setStatsPayload(null),
