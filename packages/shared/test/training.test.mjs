@@ -40,6 +40,14 @@ test('class stat bonuses recalculate from main and secondary stats', () => {
     }),
     { HP: 0, ATK: 4, DEF: 0, SPD: 2, GAIN: 0, POW: 2 }
   );
+  assert.deepEqual(
+    calculateLevelStatBonus(2, {
+      mainStat: 'HP',
+      secondaryStatOne: 'DEF',
+      secondaryStatTwo: 'SPD'
+    }),
+    { HP: 40, ATK: 0, DEF: 2, SPD: 2, GAIN: 0, POW: 0 }
+  );
 });
 
 test('training projection reports levels and stat changes', () => {
@@ -53,7 +61,7 @@ test('training projection reports levels and stat changes', () => {
   assert.equal(projection.levelBefore, 0);
   assert.equal(projection.levelAfter, 1);
   assert.equal(projection.levelsGained, 1);
-  assert.deepEqual(projection.statChanges, { HP: 1, ATK: 0, DEF: 2, SPD: 0, GAIN: 1, POW: 0 });
+  assert.deepEqual(projection.statChanges, { HP: 10, ATK: 0, DEF: 2, SPD: 0, GAIN: 1, POW: 0 });
 });
 
 

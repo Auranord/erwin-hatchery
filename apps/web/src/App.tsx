@@ -745,11 +745,19 @@ function trainingLevelForPoints(points: number, maxLevel: number): number {
   return level;
 }
 
+function petStatPointValue(stat: PetStatId): number {
+  return stat === 'HP' ? 10 : 1;
+}
+
+function addPetStatPointBonus(bonus: Record<PetStatId, number>, stat: PetStatId, points: number): void {
+  bonus[stat] += points * petStatPointValue(stat);
+}
+
 function levelBonusForPet(pet: PetItem, level: number): Record<PetStatId, number> {
   const bonus: Record<PetStatId, number> = { HP: 0, ATK: 0, DEF: 0, SPD: 0, GAIN: 0, POW: 0 };
-  bonus[pet.classMainStat] += level * 2;
-  bonus[pet.classSecondaryStatOne] += level;
-  bonus[pet.classSecondaryStatTwo] += level;
+  addPetStatPointBonus(bonus, pet.classMainStat, level * 2);
+  addPetStatPointBonus(bonus, pet.classSecondaryStatOne, level);
+  addPetStatPointBonus(bonus, pet.classSecondaryStatTwo, level);
   return bonus;
 }
 

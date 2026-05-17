@@ -2,6 +2,7 @@ export const DEFAULT_TRAINING_MAX_LEVEL = 10;
 export const TRAINING_POINTS_PER_DUPLICATE_UNIT = 2;
 
 export const PET_STAT_IDS = ['HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'] as const;
+export const HP_STAT_POINT_VALUE = 10;
 export type PetStatId = (typeof PET_STAT_IDS)[number];
 
 export type PetStats = Record<PetStatId, number>;
@@ -106,15 +107,27 @@ export function emptyPetStats(): PetStats {
   return { HP: 0, ATK: 0, DEF: 0, SPD: 0, GAIN: 0, POW: 0 };
 }
 
+export function petStatPointValue(stat: PetStatId): number {
+  return stat === 'HP' ? HP_STAT_POINT_VALUE : 1;
+}
+
+export function applyPetStatPointBonus(
+  stats: PetStats,
+  stat: PetStatId,
+  points: number
+): void {
+  stats[stat] += points * petStatPointValue(stat);
+}
+
 export function calculateLevelStatBonus(
   level: number,
   classStats: PetTrainingClassStats
 ): PetStats {
   const bonus = emptyPetStats();
   if (level <= 0) return bonus;
-  bonus[classStats.mainStat] += level * 2;
-  bonus[classStats.secondaryStatOne] += level;
-  bonus[classStats.secondaryStatTwo] += level;
+  applyPetStatPointBonus(bonus, classStats.mainStat, level * 2);
+  applyPetStatPointBonus(bonus, classStats.secondaryStatOne, level);
+  applyPetStatPointBonus(bonus, classStats.secondaryStatTwo, level);
   return bonus;
 }
 
