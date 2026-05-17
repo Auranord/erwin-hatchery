@@ -4169,13 +4169,12 @@ export function App(): JSX.Element {
             )}
             <div className="stream-meta">
               {streamPanel?.stream.isLive ? (
-                <>
-                  <strong>{streamPanel.stream.title ?? 'NTKOH ist gerade live.'}</strong>
-                  <span>
-                    {streamPanel.stream.category ? `${streamPanel.stream.category} · ` : ''}
-                    {streamPanel.stream.viewerCount} Zuschauer
-                  </span>
-                </>
+                streamPanel.stream.title || streamPanel.stream.category ? (
+                  <>
+                    {streamPanel.stream.title ? <strong>{streamPanel.stream.title}</strong> : null}
+                    {streamPanel.stream.category ? <span>{streamPanel.stream.category}</span> : null}
+                  </>
+                ) : null
               ) : streamPanel?.nextStream ? (
                 <>
                   <strong>Nächster Stream: {streamPanel.nextStream.title ?? 'NTKOH'}</strong>
@@ -4217,12 +4216,30 @@ export function App(): JSX.Element {
               </div>
             ) : (
               <div className="account-login-row">
-                <p>Mit Twitch einloggen und deinen Fortschritt speichern.</p>
-                <a href="/api/auth/twitch/login">Login</a>
+                <p>Mit Twitch einloggen um neue Eier auszubrüten.</p>
+                <a className="primary-login-button" href="/api/auth/twitch/login">Login</a>
               </div>
             )}
             <div className="compact-leaderboard">
               <strong>Leaderboard</strong>
+              {leaderboardEntries.length > 0 ? (
+                <ol>
+                  {leaderboardEntries.slice(0, 3).map((entry) => (
+                    <li key={entry.userId}>
+                      <span>{entry.rank}. {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}</span>
+                      <span>{entry.score} Punkte</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p>Noch keine Event-Punkte vorhanden.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="card leaderboard-card">
+            <h2>Leaderboard</h2>
+            <div className="compact-leaderboard">
               {leaderboardEntries.length > 0 ? (
                 <ol>
                   {leaderboardEntries.slice(0, 3).map((entry) => (
@@ -4615,11 +4632,6 @@ export function App(): JSX.Element {
         onSwipeStart={handlePlayerPageSwipeStart}
         onSwipeEnd={handlePlayerPageSwipeEnd}
       />
-      {!me?.authenticated ? (
-        <section className="card player-login-hint">
-          <p>Nach dem Login kannst du per Wischgeste zwischen Inkubator, Pets, Verbrauchbarem, Ausrüstung, Profil und Shop wechseln.</p>
-        </section>
-      ) : null}
       {toastMessage ? (
         <div className="toast-viewport" aria-live="polite" aria-atomic="true">
           <p

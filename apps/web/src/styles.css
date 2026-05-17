@@ -1481,9 +1481,6 @@ ul {
   transform: translateY(-0.08rem);
 }
 
-.player-login-hint {
-  color: #cbd5e1;
-}
 
 @media (min-width: 56rem) {
   .player-page-arrow {
@@ -1691,6 +1688,10 @@ ul {
   gap: 0.2rem;
 }
 
+.stream-meta:empty {
+  display: none;
+}
+
 .stream-meta span,
 .compact-leaderboard p,
 .account-login-row p,
@@ -1727,10 +1728,34 @@ ul {
   flex: 0 0 auto;
 }
 
+.primary-login-button {
+  display: inline-flex;
+  min-width: 9rem;
+  min-height: 3.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #9146ff 0%, #facc15 100%);
+  box-shadow: 0 16px 32px rgba(145, 70, 255, 0.32);
+  color: #ffffff;
+  font-size: 1.05rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.primary-login-button:focus-visible,
+.primary-login-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
 .compact-leaderboard {
   margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.leaderboard-card .compact-leaderboard {
+  margin-top: 0;
 }
 
 .compact-leaderboard ol {
@@ -1776,7 +1801,11 @@ ul {
   }
 
   .account-login-row {
-    align-items: flex-start;
+    align-items: stretch;
     flex-direction: column;
+  }
+
+  .primary-login-button {
+    width: 100%;
   }
 }
