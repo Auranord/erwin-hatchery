@@ -3,10 +3,14 @@ WORKDIR /app
 RUN corepack enable
 
 FROM base AS deps
-COPY . .
-RUN pnpm install --no-frozen-lockfile
+COPY package.json pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/web/package.json ./apps/web/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+RUN pnpm install --no-frozen-lockfile --prod=false
 
 FROM deps AS build
+COPY . .
 RUN pnpm -r --filter "./packages/*" --filter "./apps/*" build
 
 FROM build AS deploy
