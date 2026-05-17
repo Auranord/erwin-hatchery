@@ -24,6 +24,15 @@ async function getAppAccessToken(): Promise<string> {
   return payload.access_token;
 }
 
+async function twitchApi<T>(path: string): Promise<T> {
+  const token = await getAppAccessToken();
+  const response = await fetch(`https://api.twitch.tv/helix${path}`, {
+    headers: { 'Client-Id': config.TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error(`Twitch ${path} response ${response.status}`);
+  return await response.json() as T;
+}
+
 export function setManualStreamStateOverride(next: LiveOverride): void {
   manualOverride = next;
 }
@@ -33,6 +42,29 @@ export function getManualStreamStateOverride(): LiveOverride {
 }
 
 type StreamStateSource = 'debug_env' | 'manual_override' | 'twitch_helix' | 'fallback_offline';
+
+type HelixStream = {
+  title?: string;
+  game_name?: string;
+  viewer_count?: number;
+  started_at?: string;
+};
+
+type HelixUser = {
+  id: string;
+  login?: string;
+  display_name?: string;
+  profile_image_url?: string;
+};
+
+type HelixScheduleSegment = {
+  id: string;
+  title?: string;
+  start_time: string;
+  end_time?: string;
+  category?: { name?: string } | null;
+  canceled_until?: string | null;
+};
 
 export async function getCurrentStreamState(): Promise<{ isLive: boolean; viewerCount: number; source: StreamStateSource }> {
   if (config.DEBUG_MODE) {
@@ -44,16 +76,95 @@ export async function getCurrentStreamState(): Promise<{ isLive: boolean; viewer
   }
 
   try {
-    const token = await getAppAccessToken();
-    const response = await fetch(`https://api.twitch.tv/helix/streams?user_id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}`, {
-      headers: { 'Client-Id': config.TWITCH_CLIENT_ID, Authorization: `Bearer ${token}` }
-    });
-    if (!response.ok) throw new Error(`Twitch streams response ${response.status}`);
-    const payload = await response.json() as { data?: Array<{ viewer_count?: number }> };
+    const payload = await twitchApi<{ data?: HelixStream[] }>(`/streams?user_id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}`);
     const stream = payload.data?.[0];
     return { isLive: Boolean(stream), viewerCount: Math.max(0, Number(stream?.viewer_count ?? 0)), source: 'twitch_helix' };
   } catch {
     return { isLive: false, viewerCount: 0, source: 'fallback_offline' };
+  }
+}
+
+export type PublicStreamPanel = {
+  broadcaster: {
+    id: string;
+    login: string | null;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  stream: {
+    isLive: boolean;
+    viewerCount: number;
+    title: string | null;
+    category: string | null;
+    startedAt: string | null;
+    source: StreamStateSource;
+  };
+  nextStream: {
+    id: string;
+    title: string | null;
+    startTime: string;
+    endTime: string | null;
+    category: string | null;
+  } | null;
+};
+
+export async function getPublicStreamPanel(): Promise<PublicStreamPanel> {
+  const fallback: PublicStreamPanel = {
+    broadcaster: {
+      id: config.TWITCH_BROADCASTER_ID,
+      login: null,
+      displayName: null,
+      avatarUrl: null
+    },
+    stream: {
+      isLive: config.DEBUG_MODE || manualOverride === 'live',
+      viewerCount: 0,
+      title: null,
+      category: null,
+      startedAt: null,
+      source: config.DEBUG_MODE ? 'debug_env' : manualOverride ? 'manual_override' : 'fallback_offline'
+    },
+    nextStream: null
+  };
+
+  try {
+    const [usersPayload, streamsPayload, schedulePayload] = await Promise.all([
+      twitchApi<{ data?: HelixUser[] }>(`/users?id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}`),
+      twitchApi<{ data?: HelixStream[] }>(`/streams?user_id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}`),
+      twitchApi<{ data?: { segments?: HelixScheduleSegment[] } }>(`/schedule?broadcaster_id=${encodeURIComponent(config.TWITCH_BROADCASTER_ID)}&first=1&start_time=${encodeURIComponent(new Date().toISOString())}`).catch(() => null)
+    ]);
+
+    const broadcaster = usersPayload.data?.[0];
+    const stream = streamsPayload.data?.[0];
+    const nextSegment = schedulePayload?.data?.segments?.find((segment) => !segment.canceled_until) ?? null;
+
+    return {
+      broadcaster: {
+        id: broadcaster?.id ?? config.TWITCH_BROADCASTER_ID,
+        login: broadcaster?.login ?? null,
+        displayName: broadcaster?.display_name ?? null,
+        avatarUrl: broadcaster?.profile_image_url ?? null
+      },
+      stream: {
+        isLive: Boolean(stream) || fallback.stream.isLive,
+        viewerCount: Math.max(0, Number(stream?.viewer_count ?? 0)),
+        title: stream?.title ?? null,
+        category: stream?.game_name ?? null,
+        startedAt: stream?.started_at ?? null,
+        source: stream ? 'twitch_helix' : fallback.stream.source
+      },
+      nextStream: nextSegment
+        ? {
+            id: nextSegment.id,
+            title: nextSegment.title ?? null,
+            startTime: nextSegment.start_time,
+            endTime: nextSegment.end_time ?? null,
+            category: nextSegment.category?.name ?? null
+          }
+        : null
+    };
+  } catch {
+    return fallback;
   }
 }
 
