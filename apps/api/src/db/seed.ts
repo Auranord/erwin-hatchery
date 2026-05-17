@@ -265,6 +265,10 @@ type SeedConsumable = {
 
 const PET_BASE_STATS = ['hp', 'atk', 'def', 'spd', 'gain', 'pow'] as const satisfies readonly StatId[];
 
+function statModifierAmount(stat: StatId, direction: 1 | -1): number {
+  return stat === 'hp' ? direction * 10 : direction;
+}
+
 const STAT_TRADEOFF_CONSUMABLES = [
   {
     id: 'lebkuchen_herz',
@@ -818,8 +822,8 @@ async function seed(): Promise<void> {
         target: 'pet',
         duration: 'permanent',
         statModifiers: {
-          [consumable.increaseStat]: 1,
-          [consumable.decreaseStat]: -1
+          [consumable.increaseStat]: statModifierAmount(consumable.increaseStat, 1),
+          [consumable.decreaseStat]: statModifierAmount(consumable.decreaseStat, -1)
         }
       },
       resourcePrice: CONSUMABLE_RESOURCE_PRICE,
