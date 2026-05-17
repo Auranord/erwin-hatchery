@@ -95,7 +95,7 @@ async function enforceReportRateLimit(twitchUserId: string): Promise<boolean> {
   return (hourly?.count ?? 0) < MAX_REPORTS_PER_HOUR;
 }
 
-export function registerUserReportRoutes(app: FastifyInstance) {
+export async function registerUserReportRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/user-reports', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity) {
