@@ -4220,21 +4220,6 @@ export function App(): JSX.Element {
                 <a className="primary-login-button" href="/api/auth/twitch/login">Login</a>
               </div>
             )}
-            <div className="compact-leaderboard">
-              <strong>Leaderboard</strong>
-              {leaderboardEntries.length > 0 ? (
-                <ol>
-                  {leaderboardEntries.slice(0, 3).map((entry) => (
-                    <li key={entry.userId}>
-                      <span>{entry.rank}. {entry.displayName ?? entry.login ?? `Spieler ${entry.rank}`}</span>
-                      <span>{entry.score} Punkte</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>Noch keine Event-Punkte vorhanden.</p>
-              )}
-            </div>
           </section>
 
           <section className="card leaderboard-card">
