@@ -882,8 +882,17 @@ ul {
 }
 
 .inventory-slot.selected-source {
-  border-color: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
+  border-color: #facc15;
+  background: radial-gradient(
+    circle at top left,
+    rgba(250, 204, 21, 0.48),
+    rgba(34, 197, 94, 0.34) 48%,
+    rgba(15, 23, 42, 0.92)
+  );
+  box-shadow:
+    0 0 0 3px rgba(250, 204, 21, 0.32),
+    0 0 1.1rem rgba(34, 197, 94, 0.28),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 
 .stats-modal {
