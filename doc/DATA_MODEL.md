@@ -688,3 +688,22 @@ The player UI includes a mobile-first `Shop` box that lists deterministic weekly
 Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy at most the item type's `stock` amount per weekly offer. The server enforces this by counting non-reverted `shop_item_purchased` economy ledger rows for the player, week key, item kind, and item type before inserting the new inventory slot and debit ledger entry in one transaction.
 
 Duplicate pet training adds server-authoritative pet progression columns: `training_points`, `level_bonus_hp`, `level_bonus_atk`, `level_bonus_def`, `level_bonus_spd`, `level_bonus_gain`, `level_bonus_pow`, `is_locked`, `status`, `consumed_by_pet_id`, and `consumed_at`. Training stat points are persisted as concrete stat deltas: HP stat points are worth 10 HP, so +1/+2 HP training increases become +10/+20 HP. Active collection queries use `status = active`; consumed pets remain immutable audit/material history rows. Each training action writes one `economy_ledger` row with target, consumed pet IDs, awarded points, before/after level, stat bonuses, and stat changes.
+
+## Gateway webhook idempotency storage
+
+`gateway_webhook_events` stores observed `erwin-gateway` deliveries before any future side effects. It is intentionally separate from `twitch_events` so Hatchery can run direct Twitch ingestion and gateway observe-only ingestion side by side during migration.
+
+Columns:
+
+- `id`: internal UUID primary key.
+- `delivery_id`: gateway delivery id from `X-Erwin-Gateway-Delivery-Id`; unique.
+- `event_id`: gateway event id from the payload or `X-Erwin-Gateway-Event-Id`; unique.
+- `event_type`: gateway event type such as `twitch.channel_points.custom_reward_redemption.add`.
+- `twitch_redemption_id`: Twitch redemption id when present; unique only when non-null.
+- `twitch_message_id`: Twitch message id when present.
+- `raw_payload`: verified JSON payload for audit/debugging.
+- `processing_status`: `observed` in observe-only mode, or `received` for future active processing.
+- `error`: reserved for future processing failures.
+- `created_at` / `processed_at`: durable receipt and processing timestamps.
+
+Uniqueness is enforced for gateway delivery id, gateway event id, and non-null Twitch redemption id so gateway retries or duplicate Twitch redemptions cannot create duplicate Hatchery processing records.

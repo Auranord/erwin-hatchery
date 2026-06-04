@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   AnyPgColumn,
   boolean,
@@ -115,6 +116,31 @@ export const twitchEvents = pgTable('twitch_events', {
 });
 
 
+
+
+export const gatewayWebhookEvents = pgTable(
+  'gateway_webhook_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    deliveryId: text('delivery_id').notNull(),
+    eventId: text('event_id').notNull(),
+    eventType: text('event_type').notNull(),
+    twitchRedemptionId: text('twitch_redemption_id'),
+    twitchMessageId: text('twitch_message_id'),
+    rawPayload: jsonb('raw_payload').notNull(),
+    processingStatus: text('processing_status').notNull().default('received'),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true })
+  },
+  (table) => ({
+    deliveryIdUnique: uniqueIndex('gateway_webhook_events_delivery_id_idx').on(table.deliveryId),
+    eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId),
+    twitchRedemptionIdUnique: uniqueIndex('gateway_webhook_events_twitch_redemption_id_idx')
+      .on(table.twitchRedemptionId)
+      .where(sql`${table.twitchRedemptionId} is not null`)
+  })
+);
 
 export const twitchIntegrationState = pgTable('twitch_integration_state', {
   id: text('id').primaryKey().default('default'),

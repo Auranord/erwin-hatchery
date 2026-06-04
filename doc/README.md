@@ -161,3 +161,7 @@ A fresh deployment starts in a Twitch setup/repair state until the configured br
 Subscriptions, gift subs, and Bits grant fixed **Gutscheine** (`voucher`) only. Channel Points remain the only random egg source; paid support events never grant random rewards. Twitch does not provide complete historical EventSub replay. The setup backfill imports currently visible subscriptions and Bits leaderboard baselines best-effort only.
 
 - Duplicate pet training is server-authoritative: players choose one active hatched pet as target and consume active, same-species duplicate pets that are not favorited/locked, selected for battle, already consumed, scrapped, or in an unresolved battle. Consumed pets remain as audit rows with `status = consumed`, `consumed_by_pet_id`, and `consumed_at`; they leave the active collection. Training uses integer points, carries excess points, defaults to max level 10, and recalculates class main/secondary level bonuses without overwriting original rolled base stats.
+
+## erwin-gateway foundation note
+
+Hatchery now includes a disabled-by-default, observe-only foundation for `erwin-gateway`. It can smoke-check the gateway app identity and receive signed gateway webhooks at `/erwin-gateway/webhook`, but this phase does not grant rewards, mutate economy state, or fulfill/cancel Channel Point redemptions.
