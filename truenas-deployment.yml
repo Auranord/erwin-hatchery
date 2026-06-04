@@ -31,12 +31,11 @@ services:
       TWITCH_CLIENT_ID: ""
       TWITCH_CLIENT_SECRET: ""
       TWITCH_BROADCASTER_ID: ""
-      TWITCH_CHANNEL_POINT_REWARD_ID: ""
       TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
       SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
       OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
 
-    command: ["sh", "-c", "pnpm --filter @erwin/api db:migrate:runtime && pnpm --filter @erwin/api db:seed"]
+    command: ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js"]
 
     networks:
       - erwin_internal_BRANCH
@@ -70,7 +69,6 @@ services:
       TWITCH_CLIENT_ID: ""
       TWITCH_CLIENT_SECRET: ""
       TWITCH_BROADCASTER_ID: ""
-      TWITCH_CHANNEL_POINT_REWARD_ID: ""
       TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
       SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
       OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"

@@ -3,15 +3,15 @@ WORKDIR /app
 RUN corepack enable
 
 FROM base AS deps
-COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY package.json pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --prod=false
 
 FROM deps AS build
 COPY . .
-RUN pnpm build
+RUN pnpm -r --filter "./packages/*" --filter "./apps/*" build
 
 FROM build AS deploy
 RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
@@ -19,7 +19,6 @@ RUN pnpm --filter @erwin/api deploy --legacy --prod /app/deploy
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
 RUN addgroup -g 1001 -S nodejs && adduser -S appuser -u 1001
 COPY --from=deploy /app/deploy ./
 COPY --from=build /app/apps/web/dist ./apps/web/dist

@@ -1,0 +1,1 @@
+ALTER TABLE pets DROP COLUMN IF EXISTS hatched_at;

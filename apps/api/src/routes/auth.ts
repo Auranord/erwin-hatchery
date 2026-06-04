@@ -35,7 +35,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     authUrl.searchParams.set('client_id', config.TWITCH_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', getOAuthRedirectUri());
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'user:read:email channel:read:redemptions');
+    authUrl.searchParams.set('scope', 'user:read:email channel:read:redemptions channel:manage:redemptions channel:read:subscriptions');
     authUrl.searchParams.set('state', state);
     return reply.redirect(authUrl.toString());
   });
@@ -96,7 +96,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       } else {
         const insertedRows = await tx
           .insert(users)
-          .values({ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now })
+          .values([{ twitchUserId: twitchUser.id, twitchLogin: twitchUser.login, displayName: twitchUser.display_name, avatarUrl: twitchUser.profile_image_url, isProvisional: false, lastLoginAt: now }])
           .returning();
         currentUser = insertedRows[0];
       }

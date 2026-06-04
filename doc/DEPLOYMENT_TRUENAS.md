@@ -96,7 +96,6 @@ Values below are already documented in `.env.example` but are only required once
 TWITCH_CLIENT_ID=...
 TWITCH_CLIENT_SECRET=...
 TWITCH_BROADCASTER_ID=...
-TWITCH_CHANNEL_POINT_REWARD_ID=...
 TWITCH_EVENTSUB_SECRET=...
 SESSION_SECRET=...
 OVERLAY_SECRET=...
@@ -136,11 +135,13 @@ MVP deployment is manual:
 
 API container startup order is enforced in-container:
 
-1. `pnpm db:migrate`
-2. `pnpm db:seed`
-3. `pnpm start`
+1. `node dist/db/migrate.js`
+2. `node dist/db/seed.js`
+3. `node dist/server.js`
 
-The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+The production image runs the compiled JavaScript files directly instead of invoking `pnpm` at runtime. This keeps startup independent from Corepack/package-manager cache writes in the read-only `/app` deployment tree. The startup script logs each step with a `[startup]` prefix and exits immediately on migrate/seed failure, so the server will not boot with a partially prepared database.
+
+The MVP database is currently treated as redeployable from scratch: Drizzle migrations are consolidated into the single base schema migration, and legacy incremental migration support has been removed. Preserve or export production data before replacing a mounted Postgres dataset.
 
 Seeding is idempotent: baseline records are upserted, and the mystery egg loot table is rebuilt deterministically on each run so repeated restarts converge on the same state.
 
@@ -229,5 +230,11 @@ Troubleshooting:
 3. Verify callback URL reachability and Twitch app credentials.
 
 
-- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions`.
+- EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
+
+## First-run Twitch setup on TrueNAS
+
+Set `TWITCH_BITS_PER_VOUCHER` and the Twitch OAuth/EventSub variables before first boot. After migrations run, open the web app and complete the German setup screen with the configured broadcaster account. The app will persist setup state, sync EventSub subscriptions against `PUBLIC_APP_URL/api/twitch/eventsub`, run active-subscription backfill, and import the Bits leaderboard baseline.
+
+If OAuth scopes are revoked or EventSub is revoked/unhealthy, the UI enters repair state. Use the admin/setup buttons to re-run health checks, resync EventSub, continue backfill, or reauthenticate the broadcaster. No automatic production deployment is added by this milestone.

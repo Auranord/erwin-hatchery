@@ -29,7 +29,7 @@ Bits/subs:
 
 - Bits/subs must not create random eggs or mystery rewards.
 - Bits may later trigger fixed effects such as a known hatch speed boost or known overlay animation.
-- Subs may grant a fixed perk, such as one extra incubator while subbed.
+- Subs grant fixed Gutschein resources only; they do not grant random eggs, random pets, or extra incubators.
 - Avoid any paid action that determines a random reward.
 
 Giveaways:
@@ -75,6 +75,7 @@ Store only what is needed:
 
 Do not store:
 
+- cookies, OAuth tokens, refresh tokens, raw authorization headers, Twitch access tokens, or secrets in user-submitted bug/feedback reports
 - private messages
 - unnecessary chat logs
 - addresses
@@ -82,6 +83,11 @@ Do not store:
 - sensitive personal details
 
 Users must be able to delete their account/progress.
+
+
+## Bug and feedback report privacy
+
+Phase 1 report intake is internal-only. Authenticated players can submit bug/feedback reports in-app, but reports are stored in the private `user_reports` database queue and are not forwarded to GitHub automatically. The browser receives no GitHub credentials, repository automation details, or future integration secrets. The report endpoint accepts only `bug` and `feedback` categories, rate-limits repeated submissions, and persists a minimized safe client context for debugging.
 
 ## Authentication and authorization
 
@@ -108,8 +114,8 @@ Server must own the economy.
 Never allow the frontend to directly set:
 
 - egg contents
-- pet type
-- pet stats
+- pet species
+- pet instance base stats, generated server-side from species defaults plus hatch variance
 - resource balances
 - leaderboard score
 - battle winners
@@ -137,6 +143,8 @@ Admin actions should include:
 - timestamp
 - revert link if reversible
 
+Debug mystery-egg grants from the admin panel must remain role-protected, idempotent by admin `request_id`, and ledgered once per affected player. Single-player debug grants and each per-player row from bulk all-player grants are reversible through the ledger flow; bulk all-player grants are also auditable through a bulk admin action log.
+
 Battle resolution must be revertible in MVP.
 
 ## Anti-exploit checklist
@@ -152,6 +160,14 @@ Battle resolution must be revertible in MVP.
 - Database backups.
 - No secret values in logs.
 
+
+## Pet RPG fairness guardrails
+
+- Rarity must not be used as a hidden stat multiplier. It may define rank, display/economy metadata, combine progression, and recycle value only.
+- Cosmetic hats must not affect combat stats, AP gain, ability effects, or boss-event stack values.
+- Gems are out of scope for this pass and must not be exposed as paid or random combat equipment.
+- Future boss-event AP, current HP, attacks made, effective stats, class stacks, and element stacks are runtime event state, not permanent pet state.
+
 ## References for implementation research
 
 Use official/current Twitch docs when implementing:
@@ -161,8 +177,35 @@ Use official/current Twitch docs when implementing:
 - Twitch Channel Points Acceptable Use Policy
 - Twitch Extensions monetization / Bits-in-Extensions docs if Bits are ever used inside an Extension
 
-
 ### Milestone 3 controls implemented
+
 - EventSub HMAC verification is enforced before request processing.
 - Channel Point webhook notifications are idempotent by Twitch event ID and redemption ID.
 - Economy mutations for eligible redemptions run inside a transaction and always create a ledger event.
+
+## Slotted RPG Inventory MVP Update
+
+- Unidentified mystery eggs remain unlimited counted balances in `mystery_egg_inventory`; they are not slotted and Twitch Channel Point grants cannot fail because of inventory capacity.
+- Egg resources such as `cracked_eggs` remain unlimited counted balances in `resources`; resource grants are not capacity checked.
+- Capacity applies to slotted inventories and the incubator queue: unhatched eggs, pets, consumables, equipment, and incubator queue slots. Hats are one-time cosmetic unlocks, not capacity-limited items. Incubators remain fixed egg drop targets, not rearrangeable inventory slots.
+- Each user has per-kind grid dimensions with columns, base rows, bonus rows, derived capacity, and upgrade references for later row expansion, including incubator queue rows.
+- Standard grid dimensions are 1 column × 1 base row for incubator queue slots, 8 columns × 3 base rows for unhatched eggs, 4 columns × 4 base rows for pets, and separate 8 columns × 3 base row grids for consumables and equipment. The hat view is a fixed tiled catalog showing locked and unlocked hats.
+- Incubators are shown directly above the unhatched egg grid as fixed drop targets backed by a row-upgradeable queue. Starting incubation requires the chosen unhatched egg and an available queue slot.
+- Event-Pet selection uses a fixed drop target above the pet inventory. Selection only marks an owned pet as selected for events and must not create an extra pet inventory slot or remove the pet from capacity checks.
+- Starting incubation validates ownership and availability, frees the unhatched egg inventory slot, occupies the incubator, creates a queued or running incubation job, and writes a ledger row.
+- Queue sync records a ledgered completion when a running job reaches its required progress, leaving the result claimable while allowing the next queued job to start.
+- Finishing incubation first requires free pet inventory space. If the pet inventory is full, the completed egg stays redeemable, no pet is created, and later queued jobs are not blocked by the unclaimed result.
+- Identifying a mystery egg into an unhatched egg serializes the user's inventory mutation, requires free unhatched egg inventory space before consuming the counted mystery egg, and leaves the counted mystery egg unchanged when full.
+- Identifying a mystery egg into egg resources does not need slotted inventory space.
+- Consumables and equipment are represented as separate nonstackable slotted inventories with server-side move, swap, and discard validation. Cosmetic hats are immutable per-user unlock rows and cannot be duplicated, moved, or discarded. Unhatched eggs, consumables, and equipment expose a fixed `Verwerfen` slot that permanently deletes the item after confirmation and grants no resources. Pet inventory deliberately has no rewardless `Verwerfen` slot; pets can only be removed through the `Verwerten` slot that grants cracked eggs based on rarity recycle metadata. Automatic sorting is intentionally out of scope.
+- Every placement mutation is server-authoritative, transactional, and recorded in `economy_ledger`.
+
+## Twitch OAuth, EventSub, and paid reward compliance
+
+Broadcaster setup OAuth must be performed by `TWITCH_BROADCASTER_ID`; mismatched accounts are rejected. Required scopes are `channel:read:subscriptions`, `channel:read:redemptions`, `channel:manage:redemptions`, and `bits:read`. Tokens continue to use `twitch_user_tokens`; access tokens, refresh tokens, webhook secrets, and raw authorization headers must never be logged.
+
+EventSub webhook signatures are validated before processing. Revocations are handled explicitly: authorization-related revocations set `requires_reauth=true`, while delivery-related failures mark EventSub unhealthy and expose repair/resync controls. Twitch has retry/downtime limits and no full historical EventSub replay, so the backfill flow is documented as best effort.
+
+Bits and subscriptions are paid Twitch interactions and therefore only grant fixed transparent Gutscheine (`voucher`). They never grant random eggs or other paid random rewards.
+
+- Duplicate pet training is server-authoritative and transactional. The browser may request target/material IDs only; the backend validates ownership, species, active/hatched state, favorite/lock protection, battle selection, unresolved battle participation, and consumed state before updating pets and writing the immutable ledger row.

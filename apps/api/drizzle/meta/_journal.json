@@ -12,29 +12,106 @@
     {
       "idx": 1,
       "version": "7",
-      "when": 1761000000000,
-      "tag": "0001_auth_sessions",
+      "when": 1778500000000,
+      "tag": "0001_clear_inactive_unhatched_egg_slots",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1762000000000,
-      "tag": "0002_admin_panel_foundation",
+      "when": 1778500001000,
+      "tag": "0002_equipment_sets",
       "breakpoints": true
     },
     {
       "idx": 3,
       "version": "7",
-      "when": 1770000000000,
-      "tag": "0003_mystery_egg_inventory",
+      "when": 1778500002000,
+      "tag": "0003_pet_progression",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "7",
-      "when": 1780000000000,
-      "tag": "0004_twitch_authorization_tokens",
+      "when": 1778500003000,
+      "tag": "0004_species_instance_dimensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778500004000,
+      "tag": "0005_remove_pet_hatched_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1778500005000,
+      "tag": "0006_twitch_reward_ingestion",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1778500006000,
+      "tag": "0007_shop_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778500007000,
+      "tag": "0008_shop_purchase_eligibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778500008000,
+      "tag": "0009_remove_consumable_equipment_set_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778500009000,
+      "tag": "0010_pet_hat_shop_eligibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1778500010000,
+      "tag": "0011_persisted_subscriber_shop",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1778500011000,
+      "tag": "0012_hat_unlock_progression",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1778500012000,
+      "tag": "0013_pet_class_training_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1778500013000,
+      "tag": "0014_duplicate_pet_training",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1778500014000,
+      "tag": "0015_user_reports",
       "breakpoints": true
     }
   ]

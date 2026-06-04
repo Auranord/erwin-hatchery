@@ -3,9 +3,8 @@ import { z } from 'zod';
 
 dotenv.config();
 
-const booleanFromEnv = z
-  .union([z.boolean(), z.string()])
-  .transform((value) => {
+function booleanFromEnv(name: string) {
+  return z.union([z.boolean(), z.string()]).transform((value) => {
     if (typeof value === 'boolean') {
       return value;
     }
@@ -15,12 +14,15 @@ const booleanFromEnv = z
       return true;
     }
 
-    if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    if (['0', 'false', 'flase', 'no', 'off'].includes(normalized)) {
       return false;
     }
 
-    throw new Error(`Invalid boolean value: ${value}`);
+    throw new Error(
+      `Invalid boolean value for ${name}: ${value}. Expected true/false, 1/0, yes/no, or on/off.`
+    );
   });
+}
 
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -32,11 +34,24 @@ const configSchema = z.object({
   TWITCH_CLIENT_SECRET: z.string().min(1),
   TWITCH_BROADCASTER_ID: z.string().min(1),
   TWITCH_EVENTSUB_SECRET: z.string().min(1),
-  TWITCH_CHANNEL_POINT_REWARD_ID: z.string().min(1),
-  TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv.default(true),
+  TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv('TWITCH_EVENTSUB_AUTO_SYNC').default(true),
+  TWITCH_SUBSCRIPTION_RENEWAL_DAYS: z.coerce.number().int().min(1).max(90).default(31),
+  TWITCH_BITS_PER_VOUCHER: z.coerce.number().int().min(1).default(500),
+  FEATURE_BITS_EFFECTS: booleanFromEnv('FEATURE_BITS_EFFECTS').default(true),
   SESSION_SECRET: z.string().min(32),
+  OVERLAY_SECRET: z.string().min(16).optional(),
   OAUTH_CALLBACK_PATH: z.string().default('/api/auth/twitch/callback'),
-  LOG_HEALTHCHECK_REQUESTS: booleanFromEnv.default(false)
+  LOG_HEALTHCHECK_REQUESTS: booleanFromEnv('LOG_HEALTHCHECK_REQUESTS').default(false),
+  DEBUG_MODE: booleanFromEnv('DEBUG_MODE').default(false),
+  DEBUG_EGG_RESOURCE_MULTIPLIER: z.coerce.number().int().min(1).default(1),
+  INCUBATION_OFFLINE_MULTIPLIER: z.coerce.number().gt(0).default(1),
+  INCUBATION_LIVE_BASE_MULTIPLIER: z.coerce.number().gt(0).default(2),
+  INCUBATION_VIEWER_MULTIPLIER_PER_VIEWER: z.coerce.number().min(0).default(0.01),
+  INCUBATION_MAX_MULTIPLIER: z.coerce.number().gt(0).default(3),
+  SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
+  SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
+  SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
+  PET_TRAINING_MAX_LEVEL: z.coerce.number().int().min(0).max(50).default(10)
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

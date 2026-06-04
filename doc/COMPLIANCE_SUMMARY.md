@@ -9,7 +9,7 @@ This concept is intended to stay on the safer side of Twitch and German legal ri
 - Pets/resources/upgrades/cosmetics exist only inside Erwin Hatchery.
 - Users cannot sell, trade, transfer, or cash out anything.
 - Battle results give leaderboard points only.
-- Subs can get a fixed extra incubator while subbed.
+- Subs grant fixed Gutschein resources; they do not grant incubators or random rewards.
 - Bits can only trigger fixed, clearly described effects or boosts.
 
 ## Not allowed / avoid
