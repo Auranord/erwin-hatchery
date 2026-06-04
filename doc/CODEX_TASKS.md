@@ -238,3 +238,11 @@ Acceptance:
 Implemented persisted Twitch setup state, broadcaster setup OAuth, EventSub sync/status persistence, subscription/gift-sub/Bits voucher handling, subscription and Bits backfill tables, setup/admin observability, revocation repair state, and documentation of Twitch historical replay limitations. Follow-up test work should add a real API test harness when the project introduces one; package scripts currently only contain placeholder tests.
 
 - Duplicate pet training implemented: active same-species duplicate materials can be consumed into one target, training points/levels/stat bonuses are calculated server-side, ledgered transactionally, and reversible by admins when no newer dependent training event exists.
+
+## erwin-gateway migration follow-ups
+
+- Keep the current gateway path observe-only until production/staging delivery counts match the old direct Twitch path.
+- Add active gateway redemption processing only after explicitly requested; it must ledger every economy mutation and remain idempotent by gateway event id and Twitch redemption id.
+- Add gateway redemption fulfill/cancel calls only in a later PR after reward grants are durable and retry-safe.
+- Replace direct stream/profile/schedule reads with gateway `GET /api/v1/streams/current` and related APIs after smoke checks are stable.
+- Remove direct Twitch EventSub/reward/token ownership only after the gateway cutover has rollback coverage.

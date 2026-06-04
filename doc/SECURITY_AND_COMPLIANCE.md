@@ -209,3 +209,11 @@ EventSub webhook signatures are validated before processing. Revocations are han
 Bits and subscriptions are paid Twitch interactions and therefore only grant fixed transparent Gutscheine (`voucher`). They never grant random eggs or other paid random rewards.
 
 - Duplicate pet training is server-authoritative and transactional. The browser may request target/material IDs only; the backend validates ownership, species, active/hatched state, favorite/lock protection, battle selection, unresolved battle participation, and consumed state before updating pets and writing the immutable ledger row.
+
+## erwin-gateway security controls
+
+The gateway integration is disabled and observe-only by default. `ERWIN_GATEWAY_APP_API_KEY` is used only as a bearer token for app-facing gateway APIs and must never be logged; the typed client reports HTTP status and retryability without including the key. `ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET` is used only to verify gateway webhook signatures.
+
+Gateway webhooks are accepted only after validating `X-Erwin-Gateway-Delivery-Id`, `X-Erwin-Gateway-Timestamp`, and `X-Erwin-Gateway-Signature` against the exact raw request body with HMAC-SHA256 and timing-safe comparison. Stale timestamps are rejected to reduce replay risk. JSON payloads are trusted only after signature verification, then persisted in `gateway_webhook_events` before any future side effects.
+
+This foundation PR intentionally performs no active reward granting and does not fulfill or cancel Channel Point redemptions through Twitch or the gateway. Observe-only gateway delivery records create no economy ledger rows and do not mutate inventories, resources, pets, users, or redemption status.

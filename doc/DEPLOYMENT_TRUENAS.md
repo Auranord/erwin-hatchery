@@ -238,3 +238,21 @@ Troubleshooting:
 Set `TWITCH_BITS_PER_VOUCHER` and the Twitch OAuth/EventSub variables before first boot. After migrations run, open the web app and complete the German setup screen with the configured broadcaster account. The app will persist setup state, sync EventSub subscriptions against `PUBLIC_APP_URL/api/twitch/eventsub`, run active-subscription backfill, and import the Bits leaderboard baseline.
 
 If OAuth scopes are revoked or EventSub is revoked/unhealthy, the UI enters repair state. Use the admin/setup buttons to re-run health checks, resync EventSub, continue backfill, or reauthenticate the broadcaster. No automatic production deployment is added by this milestone.
+
+## erwin-gateway foundation deployment variables
+
+Gateway integration is safe to deploy disabled or observe-only while Hatchery still uses its direct Twitch path:
+
+```env
+ERWIN_GATEWAY_ENABLED=false
+ERWIN_GATEWAY_OBSERVE_ONLY=true
+ERWIN_GATEWAY_REQUIRED=false
+ERWIN_GATEWAY_URL=https://gateway.example.com
+ERWIN_GATEWAY_APP_API_KEY=<secret app key>
+ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET=<secret webhook signing key>
+ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS=300
+```
+
+For staging observe-only tests, set `ERWIN_GATEWAY_ENABLED=true`, keep `ERWIN_GATEWAY_OBSERVE_ONLY=true`, and leave `ERWIN_GATEWAY_REQUIRED=false` until gateway availability and credentials are proven. Configure the gateway app webhook URL to `https://<hatchery-host>/erwin-gateway/webhook`. Do not enable active reward granting or redemption fulfill/cancel during this foundation phase.
+
+After deployment, validate `GET /api/health`, then `GET /api/erwin-gateway/smoke`, then send a signed test webhook from the gateway Admin UI and confirm a `2xx` response plus a `gateway_webhook_events` row.

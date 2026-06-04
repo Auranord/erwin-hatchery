@@ -24,6 +24,25 @@ function booleanFromEnv(name: string) {
   });
 }
 
+
+function optionalStringFromEnv() {
+  return z.preprocess((value) => {
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined;
+    }
+    return value;
+  }, z.string().min(1).optional());
+}
+
+function optionalUrlFromEnv() {
+  return z.preprocess((value) => {
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined;
+    }
+    return value;
+  }, z.string().url().optional());
+}
+
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
@@ -51,7 +70,30 @@ const configSchema = z.object({
   SHOP_WEEKLY_EQUIPMENT_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
   SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
   SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
-  PET_TRAINING_MAX_LEVEL: z.coerce.number().int().min(0).max(50).default(10)
+  PET_TRAINING_MAX_LEVEL: z.coerce.number().int().min(0).max(50).default(10),
+  ERWIN_GATEWAY_ENABLED: booleanFromEnv('ERWIN_GATEWAY_ENABLED').default(false),
+  ERWIN_GATEWAY_OBSERVE_ONLY: booleanFromEnv('ERWIN_GATEWAY_OBSERVE_ONLY').default(true),
+  ERWIN_GATEWAY_REQUIRED: booleanFromEnv('ERWIN_GATEWAY_REQUIRED').default(false),
+  ERWIN_GATEWAY_URL: optionalUrlFromEnv(),
+  ERWIN_GATEWAY_APP_API_KEY: optionalStringFromEnv(),
+  ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: optionalStringFromEnv(),
+  ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: z.coerce.number().int().min(1).default(300)
+}).superRefine((value, ctx) => {
+  if ((value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) && !value.ERWIN_GATEWAY_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ERWIN_GATEWAY_URL'],
+      message: 'ERWIN_GATEWAY_URL is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
+    });
+  }
+
+  if ((value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) && !value.ERWIN_GATEWAY_APP_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ERWIN_GATEWAY_APP_API_KEY'],
+      message: 'ERWIN_GATEWAY_APP_API_KEY is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

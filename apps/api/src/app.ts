@@ -10,6 +10,7 @@ import { registerGameRoutes } from './routes/game.js';
 import { registerEventSubRoutes } from './routes/eventsub.js';
 import { registerSetupRoutes } from './routes/setup.js';
 import { registerUserReportRoutes } from './routes/user-reports.js';
+import { registerErwinGatewayRoutes } from './routes/erwin-gateway.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,10 +23,12 @@ export function buildApp() {
 
   app.addContentTypeParser(
     'application/json',
-    { parseAs: 'string' },
+    { parseAs: 'buffer' },
     (request, body, done) => {
-      const rawBody = typeof body === 'string' ? body : body.toString('utf8');
-      (request as typeof request & { rawBody?: string }).rawBody = rawBody;
+      const rawBodyBuffer = Buffer.isBuffer(body) ? body : Buffer.from(body);
+      const rawBody = rawBodyBuffer.toString('utf8');
+      (request as typeof request & { rawBody?: string; rawBodyBuffer?: Buffer }).rawBody = rawBody;
+      (request as typeof request & { rawBodyBuffer?: Buffer }).rawBodyBuffer = rawBodyBuffer;
 
       if (rawBody.trim() === '') {
         done(null, {});
@@ -47,6 +50,7 @@ export function buildApp() {
   app.register(registerGameRoutes);
   app.register(registerUserReportRoutes);
   app.register(registerEventSubRoutes);
+  app.register(registerErwinGatewayRoutes);
 
   app.register(fastifyStatic, {
     root: webDist,

@@ -283,3 +283,13 @@ Purchases are server-authoritative and cost `cracked_eggs`. Each player can buy 
 The player UI also includes a separate `Subscriber-Shop` box. It snapshots deterministic monthly pairings from `pet_species.is_shop_purchasable = true` and `hats.is_shop_purchasable = true`, each with stock 1 and a fixed 1-`voucher` cost. Purchases debit Gutscheine, create an owned pet with the selected cosmetic hat equipped, and unlock that hat once via `user_hat_unlocks` in one ledgered transaction. If the user already unlocked that hat, the purchase is rejected instead of creating a duplicate hat unlock.
 
 Duplicate pet training lives in the game API as a transaction that marks material pets consumed, applies integer training points to the target, recalculates class-based level bonuses, and writes a single economy ledger entry. Admin ledger revert restores consumed pets and removes the awarded training points only when no later training event depends on the target state.
+
+## erwin-gateway foundation integration
+
+Hatchery now has a disabled-by-default foundation for `erwin-gateway`, the central Twitch transport service. The gateway path is controlled by `ERWIN_GATEWAY_ENABLED`, `ERWIN_GATEWAY_OBSERVE_ONLY`, and `ERWIN_GATEWAY_REQUIRED`. When enabled or required, Hatchery requires `ERWIN_GATEWAY_URL` and `ERWIN_GATEWAY_APP_API_KEY` and uses a typed client for `GET /api/v1/me` and `GET /api/v1/streams/current` with `Authorization: Bearer <app-api-key>`.
+
+The startup smoke check calls `gateway.me()` only when gateway integration is enabled or required. A failed smoke check is logged and startup continues unless `ERWIN_GATEWAY_REQUIRED=true`, in which case startup fails before serving traffic. Operators can also call `GET /api/erwin-gateway/smoke` to validate gateway app identity without exposing the API key.
+
+Hatchery exposes `POST /erwin-gateway/webhook` as the downstream app receiver for gateway deliveries. The receiver verifies `X-Erwin-Gateway-Signature` over `delivery_id + timestamp + raw_body` using HMAC-SHA256 and `ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET`, rejects stale timestamps using `ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS`, parses JSON only after validation, and persists the delivery/event idempotency row before returning success. This PR is observe-only: accepted gateway events are recorded with no egg, voucher, redemption-status, or other economy side effects.
+
+The previous direct Twitch OAuth, EventSub, reward, subscription, Bits, and stream-state code remains in place for the current MVP path. Future migration work should progressively replace direct Twitch transport with gateway APIs after observe-only count comparisons pass.
