@@ -1,0 +1,53 @@
+# Current Tasks and Milestone State
+
+This file should stay short. Move old milestone history into archived notes if needed.
+
+## Current high-priority direction
+
+1. Finish erwin-gateway migration for Hatchery Channel Point rewards/redemptions.
+2. Ensure old direct Twitch EventSub redemption processing cannot duplicate active gateway grants.
+3. Keep Hatchery authoritative for game/economy meaning of rewards.
+4. Keep gateway authoritative for Twitch transport.
+5. After Hatchery stabilizes, migrate erwin-music chat receive/send and static commands.
+
+## Current Hatchery gateway status
+
+Implemented:
+
+- Gateway config flags.
+- Gateway API client and `/api/erwin-gateway/smoke`.
+- Signed raw-body gateway webhook receiver at `/erwin-gateway/webhook`.
+- Durable gateway webhook idempotency storage.
+- Gateway reward sync/list/create/update/adopt integration.
+- Hatchery-authored egg reward mapping from `egg_types`.
+- Observe-only redemption ingestion.
+- Active grant path under feature flags.
+
+Known focus areas:
+
+- Fulfillment after successful local grant must call gateway redemption status after local commit.
+- If webhook payload lacks `gatewayRewardId`, fulfillment should use the mapped `gateway_reward_mappings.gatewayRewardId`.
+- Do not silently skip fulfillment. Record visible pending/failed fulfillment state.
+- Old direct Twitch EventSub processing should be disabled or no-op for gateway-owned rewards before active gateway grants are trusted.
+
+## Active grant acceptance
+
+A successful Channel Point redemption in active mode must:
+
+1. verify gateway webhook signature
+2. dedupe delivery/event/redemption IDs
+3. find active reward mapping
+4. create/update provisional user
+5. increment mystery egg balance
+6. write economy ledger
+7. commit DB transaction
+8. call gateway fulfillment only after commit
+9. record fulfillment success/failure
+10. never grant twice on retry
+
+## Pending broader milestones
+
+- Admin lifecycle controls: freeze/reset/delete progress and fuller role lifecycle.
+- Bits/cheer fixed-effect ingestion if needed.
+- Deployment hardening: rate limiting, strict CORS, backup/restore automation.
+- erwin-music gateway migration.
