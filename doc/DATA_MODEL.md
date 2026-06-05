@@ -149,7 +149,7 @@ primary key(user_id, resource_type)
 Config table for egg types.
 
 ```text
-id text primary key -- beta_egg, starter_egg
+id text primary key -- beta_egg and starter_egg in the MVP seed; more egg types can be added later
 display_name text not null
 base_incubation_seconds integer not null
 is_active boolean not null default true
@@ -623,8 +623,8 @@ Seed `pet_rarities`, `pet_classes`, `elements`, the shared MVP baseline `pet_abi
 ### Egg type
 
 ```text
-beta_egg    | 1x Beta Ei    | seeded active, Twitch reward synced
-starter_egg | 1x Starter Ei | seeded inactive, granted once by default, not Twitch reward synced
+beta_egg    | 1x Beta Ei    | seeded active, gateway reward synced
+starter_egg | 1x Starter Ei | seeded inactive, granted once by default, gateway reward disabled
 ```
 
 ### Beta egg loot table weights
@@ -712,7 +712,7 @@ Uniqueness is enforced for gateway delivery id, gateway event id, and non-null T
 
 Hatchery now receives Channel Point custom reward redemption transport from `erwin-gateway`; the gateway owns Twitch EventSub delivery, webhook signing, and app API transport, while Hatchery owns reward mapping and all economy decisions. `ERWIN_GATEWAY_OBSERVE_ONLY=true` remains the default so real redemption webhooks are verified, deduped, stored, and mapped without granting Mystery Eggs, writing egg-grant ledger entries, or calling gateway fulfill/cancel.
 
-Reward mappings are created at runtime from the admin panel's erwin-gateway reward sync. Admins choose the gateway reward and local Hatchery reward type; Hatchery persists the gateway reward ID and Twitch reward ID plus enabled state, last sync time, and metadata. Unknown rewards are stored with `mapping_status='unknown'` for diagnostics and are ignored safely rather than crashing or mutating inventory.
+Egg reward mappings are created from Hatchery-owned `egg_types` via `POST /api/admin/erwin-gateway/egg-rewards/sync`. The sync creates or updates one gateway custom reward per egg type, persists `gateway_reward_mappings.local_reward_type = 'egg_type:<egg_type_id>'`, mirrors `egg_types.is_active` into both the mapping and gateway reward enabled state, and stores the gateway/Twitch reward IDs. The MVP seed creates active `beta_egg` plus inactive `starter_egg`; other old non-MVP egg types are deactivated or removed when unreferenced by migration `0018_beta_egg_authority`.
 
 Duplicate gateway deliveries are safe: Hatchery dedupes by gateway delivery ID and gateway event ID before processing. The Channel Point redemption cache is also upserted by Twitch redemption ID so add/update events and retries cannot create duplicate redemption rows or repeated economy effects. Database wipes are acceptable during development, but this idempotency model is still required for the production path.
 
@@ -720,4 +720,4 @@ Inspection endpoints:
 
 - `GET /api/erwin-gateway/smoke` checks gateway app authentication.
 - `GET /api/erwin-gateway/diagnostics` returns observe-only status, reward mappings, recent gateway redemption events, recent cached Channel Point redemptions, unmapped rewards, and ignored events.
-- Admins use `GET /api/admin/erwin-gateway/rewards` and `POST /api/admin/erwin-gateway/rewards/sync` from the admin panel to sync gateway rewards and create local Hatchery reward mappings at runtime.
+- Admins use `GET /api/admin/erwin-gateway/egg-rewards` and `POST /api/admin/erwin-gateway/egg-rewards/sync` from the admin panel to let Hatchery create/update one gateway custom reward per database egg type and mirror active/inactive state.

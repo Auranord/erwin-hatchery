@@ -127,6 +127,13 @@
       "when": 1780613110000,
       "tag": "0017_gateway_redemption_observe",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1780613111000,
+      "tag": "0018_beta_egg_authority",
+      "breakpoints": true
     }
   ]
 }

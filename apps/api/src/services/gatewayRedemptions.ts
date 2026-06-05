@@ -36,6 +36,8 @@ export type GatewayRedemptionProcessingResult =
   | { processed: true; ignored: false; mappingStatus: 'mapped' | 'unknown'; userCreatedOrUpdated: boolean }
   | { processed: true; ignored: true; reason: string };
 
+export type GatewayMappedRedemptionResult = { status: 'granted' | 'canceled'; reason?: string };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -153,6 +155,7 @@ export type GatewayRedemptionStore = {
     mappingStatus: 'mapped' | 'unknown';
   }): Promise<void>;
   observeOnly: boolean;
+  processMappedRedemption?(input: { redemption: NormalizedGatewayRedemption; userId: string | null; mapping: GatewayRewardMapping }): Promise<GatewayMappedRedemptionResult>;
   fulfillRedemption?(redemption: NormalizedGatewayRedemption): Promise<void>;
   cancelRedemption?(redemption: NormalizedGatewayRedemption, reason: string): Promise<void>;
 };
@@ -179,7 +182,19 @@ export async function processGatewayRedemptionObserveOnly(
   await store.upsertChannelPointRedemption({ redemption, userId, mapping, mappingStatus });
 
   if (!store.observeOnly) {
-    return { processed: true, ignored: true, reason: 'active_redemption_processing_not_implemented' };
+    if (!mapping) {
+      await store.cancelRedemption?.(redemption, 'No active Hatchery reward mapping exists for this Channel Point reward.');
+      return { processed: true, ignored: true, reason: 'unknown_reward_mapping' };
+    }
+    if (!store.processMappedRedemption) {
+      return { processed: true, ignored: true, reason: 'active_redemption_processing_not_configured' };
+    }
+    const mappedResult = await store.processMappedRedemption({ redemption, userId, mapping });
+    if (mappedResult.status === 'canceled') {
+      await store.cancelRedemption?.(redemption, mappedResult.reason ?? 'Reward could not be processed.');
+      return { processed: true, ignored: true, reason: mappedResult.reason ?? 'mapped_redemption_canceled' };
+    }
+    await store.fulfillRedemption?.(redemption);
   }
 
   return { processed: true, ignored: false, mappingStatus, userCreatedOrUpdated };
