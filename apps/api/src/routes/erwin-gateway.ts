@@ -29,6 +29,33 @@ function nonEmptyString(value: string | null | undefined): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
+function recordValue(record: Record<string, unknown> | null, key: string): unknown {
+  return record?.[key];
+}
+
+function nestedRecord(...values: unknown[]): Record<string, unknown> | null {
+  for (const value of values) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function rawRewardIdLogFields(payload: Record<string, unknown>) {
+  const data = nestedRecord(payload.data);
+  const event = nestedRecord(recordValue(data, 'event'), payload.event, data);
+  const reward = nestedRecord(payload.reward, recordValue(data, 'reward'), recordValue(event, 'reward'));
+  return {
+    rawRewardId: stringValue(recordValue(reward, 'id')),
+    rawRewardTwitchRewardId: stringValue(recordValue(reward, 'twitch_reward_id')),
+    rawRewardTwitchRewardIdCamel: stringValue(recordValue(reward, 'twitchRewardId')),
+    rawEventRewardId: stringValue(recordValue(event, 'reward_id'))
+  };
+}
+
 function gatewayStatusLogFields(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping | null; gatewayRewardId: string | null }) {
   return {
     twitchRedemptionId: input.redemption.twitchRedemptionId,
@@ -75,7 +102,21 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
         .from(gatewayRewardMappings)
         .where(and(filters, eq(gatewayRewardMappings.isActive, true)))
         .limit(1);
-      return rows[0] ?? null;
+      const mapping = rows[0] ?? null;
+      if (!mapping) {
+        log.warn(
+          {
+            twitchRedemptionId: redemption.twitchRedemptionId,
+            twitchRewardId: redemption.twitchRewardId,
+            gatewayRewardId: redemption.gatewayRewardId,
+            mappingId: null,
+            localRewardType: null,
+            ...rawRewardIdLogFields(redemption.rawPayload)
+          },
+          'No active Hatchery reward mapping exists for Gateway Channel Point redemption'
+        );
+      }
+      return mapping;
     },
     async upsertProvisionalUser(input: { twitchUserId: string; twitchLogin: string | null; displayName: string | null }) {
       const inserted = await tx
