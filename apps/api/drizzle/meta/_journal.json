@@ -141,6 +141,13 @@
       "when": 1780613112000,
       "tag": "0019_gateway_reward_adoption",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1780613113000,
+      "tag": "0020_gateway_sub_bits_events",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import {
   twitchUserTokens,
   users
 } from '../db/schema.js';
+import { createErwinGatewayClient } from './erwinGatewayClient.js';
 import {
   REQUIRED_EVENTSUB_SUBSCRIPTIONS,
   checkEventSubHealth,
@@ -310,12 +311,41 @@ async function createBackfillRun(type: string, source: string) {
   return run;
 }
 
+async function runGatewaySubscriptionBackfill(): Promise<boolean> {
+  if (!config.ERWIN_GATEWAY_ENABLED) return false;
+  const client = createErwinGatewayClient();
+  if (!client) return false;
+  const run = await createBackfillRun('subscriptions', 'erwin-gateway/subscriptions/backfill');
+  try {
+    const result = await client.runSubscriptionBackfill();
+    const now = new Date();
+    await db.update(twitchBackfillRuns).set({ status: 'completed', completedAt: now }).where(eq(twitchBackfillRuns.id, run.id));
+    await ensureState({ subscriptionBackfillCompletedAt: now, lastError: null });
+    await finalizeSetupIfReady();
+    await db.insert(twitchEvents).values({
+      twitchEventId: `gateway_subscription_backfill:${run.id}`,
+      type: 'gateway_subscription_backfill',
+      source: 'erwin_gateway',
+      rawPayload: result,
+      processedAt: now,
+      processingStatus: 'processed'
+    }).onConflictDoNothing();
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown_error';
+    await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
+    await ensureState({ lastError: message });
+    throw error;
+  }
+}
+
 export async function runSubscriptionBackfill(): Promise<void> {
   const already = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
   if (already[0]?.subscriptionBackfillCompletedAt) {
     await finalizeSetupIfReady();
     return;
   }
+  if (await runGatewaySubscriptionBackfill()) return;
   const run = await createBackfillRun('subscriptions', 'helix/subscriptions');
   try {
     const token = await getBroadcasterToken();
@@ -354,12 +384,41 @@ export async function runSubscriptionBackfill(): Promise<void> {
   }
 }
 
+async function runGatewayBitsBackfill(): Promise<boolean> {
+  if (!config.ERWIN_GATEWAY_ENABLED) return false;
+  const client = createErwinGatewayClient();
+  if (!client) return false;
+  const run = await createBackfillRun('bits', 'erwin-gateway/bits/backfill');
+  try {
+    const result = await client.runBitsBackfill();
+    const now = new Date();
+    await db.update(twitchBackfillRuns).set({ status: 'completed', completedAt: now }).where(eq(twitchBackfillRuns.id, run.id));
+    await ensureState({ bitsBackfillCompletedAt: now, lastError: null });
+    await finalizeSetupIfReady();
+    await db.insert(twitchEvents).values({
+      twitchEventId: `gateway_bits_backfill:${run.id}`,
+      type: 'gateway_bits_backfill',
+      source: 'erwin_gateway',
+      rawPayload: result,
+      processedAt: now,
+      processingStatus: 'processed'
+    }).onConflictDoNothing();
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown_error';
+    await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
+    await ensureState({ lastError: message });
+    throw error;
+  }
+}
+
 export async function runBitsBackfill(): Promise<void> {
   const already = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
   if (already[0]?.bitsBackfillCompletedAt) {
     await finalizeSetupIfReady();
     return;
   }
+  if (await runGatewayBitsBackfill()) return;
   const run = await createBackfillRun('bits', 'helix/bits/leaderboard');
   try {
     const token = await getBroadcasterToken();

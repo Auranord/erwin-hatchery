@@ -222,6 +222,48 @@ processed_at
 raw_payload jsonb
 ```
 
+
+## Subscription and Bits ingestion
+
+Gateway-owned Twitch transport now covers these paid event webhooks:
+
+```text
+twitch.channel.subscribe
+twitch.channel.subscription.end
+twitch.channel.subscription.message
+twitch.channel.subscription.gift
+twitch.channel.cheer
+```
+
+Hatchery behavior:
+
+- Store each delivery/event idempotently with gateway delivery ID, gateway event ID, Twitch EventSub message ID when present, Twitch user identity when present, raw payload, status, and error/reason.
+- Apply only fixed Gutschein effects in active mode.
+- `twitch.channel.subscribe` grants +1 Gutschein to the identifiable subscriber.
+- `twitch.channel.subscription.message` grants +1 Gutschein to the identifiable resubscriber, matching the current MVP direct EventSub behavior.
+- `twitch.channel.subscription.gift` preserves the MVP fixed gift behavior: identifiable gifters receive fixed Gutscheine based on the gift count, identifiable recipients receive a fixed recipient Gutschein when present, and anonymous gifters are not credited.
+- `twitch.channel.subscription.end` updates local subscriber status only; it does not grant resources.
+- `twitch.channel.cheer` uses the existing Bits threshold Gutschein counter. Anonymous cheers are audited without voucher credit.
+- No sub/Bits path grants random eggs, random pets, mystery rewards, prize entries, giveaway chances, trading value, cash-out, or betting effects.
+
+When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route acknowledges migrated sub/Bits notifications but does not mutate economy for them.
+
+Admin diagnostics:
+
+```text
+GET /api/admin/erwin-gateway/sub-bits-diagnostics
+GET /api/erwin-gateway/diagnostics
+```
+
+Gateway client methods used for paid-event operations:
+
+```text
+GET  /api/v1/subscriptions
+POST /api/v1/subscriptions/backfill
+GET  /api/v1/bits/leaderboard
+POST /api/v1/bits/backfill
+```
+
 ## Channel Point reward management
 
 ### Sync

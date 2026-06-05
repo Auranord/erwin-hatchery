@@ -1,8 +1,8 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
-import { channelPointRedemptions, economyLedger, eggTypes, gatewayRewardMappings, gatewayWebhookEvents, mysteryEggInventory, users } from '../db/schema.js';
+import { channelPointRedemptions, economyLedger, eggTypes, gatewayRewardMappings, gatewayWebhookEvents, mysteryEggInventory, twitchBackfillRuns, users } from '../db/schema.js';
 import { createErwinGatewayClient, ErwinGatewayError, smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
 import { handleErwinGatewayWebhook, type GatewayWebhookRecord, type GatewayWebhookStore } from '../services/erwinGatewayWebhook.js';
 import {
@@ -11,6 +11,7 @@ import {
   type GatewayRewardMapping,
   type NormalizedGatewayRedemption
 } from '../services/gatewayRedemptions.js';
+import { normalizeGatewayTwitchEventPayload, processGatewayTwitchEventInTx } from '../services/gatewayTwitchEvents.js';
 
 function headerValueToString(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -370,6 +371,9 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
             eventType: record.eventType,
             twitchRedemptionId: record.twitchRedemptionId,
             twitchMessageId: record.twitchMessageId,
+            twitchUserId: record.twitchUserId,
+            twitchUserLogin: record.twitchUserLogin,
+            twitchUserDisplayName: record.twitchUserDisplayName,
             rawPayload: record.rawPayload,
             processingStatus: record.processingStatus,
             processedAt: new Date()
@@ -378,10 +382,15 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
           .returning({ id: gatewayWebhookEvents.id });
 
         if (!eventRow) {
+          const duplicateFilters = [
+            eq(gatewayWebhookEvents.deliveryId, record.deliveryId),
+            eq(gatewayWebhookEvents.eventId, record.eventId),
+            ...(record.twitchMessageId ? [eq(gatewayWebhookEvents.twitchMessageId, record.twitchMessageId)] : [])
+          ];
           const existing = await tx
             .select({ processingStatus: gatewayWebhookEvents.processingStatus })
             .from(gatewayWebhookEvents)
-            .where(or(eq(gatewayWebhookEvents.deliveryId, record.deliveryId), eq(gatewayWebhookEvents.eventId, record.eventId)))
+            .where(or(...duplicateFilters))
             .limit(1);
           return { inserted: false as const, status: existing[0]?.processingStatus ?? 'duplicate' };
         }
@@ -403,6 +412,25 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
               processedAt: new Date()
             })
             .where(eq(gatewayWebhookEvents.id, eventRow.id));
+        } else {
+          const twitchEvent = normalizeGatewayTwitchEventPayload({
+            deliveryId: record.deliveryId,
+            eventId: record.eventId,
+            eventType: record.eventType,
+            twitchMessageId: record.twitchMessageId,
+            payload: rawPayloadRecord(record.rawPayload)
+          });
+          if (twitchEvent) {
+            const result = await processGatewayTwitchEventInTx(tx, twitchEvent, eventRow.id);
+            await tx
+              .update(gatewayWebhookEvents)
+              .set({
+                processingStatus: result.ignored ? 'ignored' : observeOnly ? 'observed' : 'processed',
+                error: result.reason,
+                processedAt: new Date()
+              })
+              .where(eq(gatewayWebhookEvents.id, eventRow.id));
+          }
         }
 
         return { inserted: true as const };
@@ -438,6 +466,10 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
           eventId: gatewayWebhookEvents.eventId,
           eventType: gatewayWebhookEvents.eventType,
           twitchRedemptionId: gatewayWebhookEvents.twitchRedemptionId,
+          twitchMessageId: gatewayWebhookEvents.twitchMessageId,
+          twitchUserId: gatewayWebhookEvents.twitchUserId,
+          twitchUserLogin: gatewayWebhookEvents.twitchUserLogin,
+          twitchUserDisplayName: gatewayWebhookEvents.twitchUserDisplayName,
           processingStatus: gatewayWebhookEvents.processingStatus,
           error: gatewayWebhookEvents.error,
           createdAt: gatewayWebhookEvents.createdAt,
@@ -478,6 +510,50 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
         .limit(50)
     ]);
 
+    const subBitsTypes = [
+      'twitch.channel.subscribe',
+      'twitch.channel.subscription.end',
+      'twitch.channel.subscription.message',
+      'twitch.channel.subscription.gift',
+      'twitch.channel.cheer'
+    ];
+    const [recentGatewaySubBitsEvents, gatewayVoucherGrants, gatewayBackfillRuns] = await Promise.all([
+      db
+        .select({
+          id: gatewayWebhookEvents.id,
+          deliveryId: gatewayWebhookEvents.deliveryId,
+          eventId: gatewayWebhookEvents.eventId,
+          eventType: gatewayWebhookEvents.eventType,
+          twitchMessageId: gatewayWebhookEvents.twitchMessageId,
+          twitchUserId: gatewayWebhookEvents.twitchUserId,
+          twitchUserLogin: gatewayWebhookEvents.twitchUserLogin,
+          twitchUserDisplayName: gatewayWebhookEvents.twitchUserDisplayName,
+          processingStatus: gatewayWebhookEvents.processingStatus,
+          error: gatewayWebhookEvents.error,
+          createdAt: gatewayWebhookEvents.createdAt,
+          processedAt: gatewayWebhookEvents.processedAt
+        })
+        .from(gatewayWebhookEvents)
+        .where(inArray(gatewayWebhookEvents.eventType, subBitsTypes))
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(50),
+      db
+        .select({
+          id: economyLedger.id,
+          userId: economyLedger.userId,
+          eventType: economyLedger.eventType,
+          sourceType: economyLedger.sourceType,
+          sourceId: economyLedger.sourceId,
+          delta: economyLedger.delta,
+          createdAt: economyLedger.createdAt
+        })
+        .from(economyLedger)
+        .where(eq(economyLedger.sourceType, 'gateway_twitch_event'))
+        .orderBy(desc(economyLedger.createdAt))
+        .limit(50),
+      db.select().from(twitchBackfillRuns).orderBy(desc(twitchBackfillRuns.startedAt)).limit(10)
+    ]);
+
     return {
       observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
       enabled: config.ERWIN_GATEWAY_ENABLED,
@@ -485,7 +561,10 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       recentGatewayRedemptionEvents: events,
       recentChannelPointRedemptions: redemptions,
       unmappedRewards,
-      unknownOrIgnoredRedemptionEvents: ignoredEvents
+      unknownOrIgnoredRedemptionEvents: ignoredEvents,
+      recentGatewaySubBitsEvents,
+      gatewayVoucherGrants,
+      gatewayBackfillRuns
     };
   });
 

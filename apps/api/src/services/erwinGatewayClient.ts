@@ -104,6 +104,10 @@ export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption
 
 export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
 
+export type GatewaySubscriptionList = { subscriptions: Record<string, unknown>[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
+export type GatewayBackfillRunResult = { status?: string; runId?: string; started?: boolean; completed?: boolean; diagnostics?: Record<string, unknown> } & Record<string, unknown>;
+export type GatewayBitsLeaderboard = { entries?: Record<string, unknown>[]; data?: Record<string, unknown>[]; leaderboard?: Record<string, unknown>[]; diagnostics?: Record<string, unknown> };
+
 export type GatewayRewardMutationPayload = Record<string, unknown>;
 
 export type GatewayRewardAdoptionPayload = {
@@ -198,6 +202,22 @@ export class ErwinGatewayClient {
     const reward = result.reward ?? result.rewards?.[0];
     if (!reward) throw new Error('erwin-gateway update reward response did not include a reward');
     return reward;
+  }
+
+  async listSubscriptions(): Promise<GatewaySubscriptionList> {
+    return this.request<GatewaySubscriptionList>('/api/v1/subscriptions');
+  }
+
+  async runSubscriptionBackfill(): Promise<GatewayBackfillRunResult> {
+    return this.request<GatewayBackfillRunResult>('/api/v1/subscriptions/backfill', { method: 'POST' });
+  }
+
+  async getBitsLeaderboard(): Promise<GatewayBitsLeaderboard> {
+    return this.request<GatewayBitsLeaderboard>('/api/v1/bits/leaderboard');
+  }
+
+  async runBitsBackfill(): Promise<GatewayBackfillRunResult> {
+    return this.request<GatewayBackfillRunResult>('/api/v1/bits/backfill', { method: 'POST' });
   }
 
   async updateRedemptionStatus(input: { rewardId: string; redemptionId: string; status: 'FULFILLED' | 'CANCELED'; reason: string }): Promise<Record<string, unknown>> {
