@@ -472,13 +472,37 @@ export async function registerEventSubRoutes(
         payload.subscription.type === 'channel.subscription.message' ||
         payload.subscription.type === 'channel.subscription.gift'
       ) {
-        outcome = await processSubscriberStatus(
-          payload,
-          eventRow.id,
-          request.log
-        );
+        if (config.ERWIN_GATEWAY_ENABLED) {
+          outcome = 'direct_twitch_sub_bits_ignored_gateway_enabled';
+          request.log.info(
+            {
+              twitchEventSubMessageId: messageId,
+              eventType: payload.subscription.type,
+              twitchUserId: payload.event.user_id ?? null
+            },
+            'Direct Twitch subscription EventSub ignored because erwin-gateway mode is enabled'
+          );
+        } else {
+          outcome = await processSubscriberStatus(
+            payload,
+            eventRow.id,
+            request.log
+          );
+        }
       } else if (payload.subscription.type === 'channel.cheer') {
-        outcome = await processBitsEvent(payload, eventRow.id, request.log);
+        if (config.ERWIN_GATEWAY_ENABLED) {
+          outcome = 'direct_twitch_sub_bits_ignored_gateway_enabled';
+          request.log.info(
+            {
+              twitchEventSubMessageId: messageId,
+              eventType: payload.subscription.type,
+              twitchUserId: payload.event.user_id ?? null
+            },
+            'Direct Twitch Bits EventSub ignored because erwin-gateway mode is enabled'
+          );
+        } else {
+          outcome = await processBitsEvent(payload, eventRow.id, request.log);
+        }
       }
       const nonErrorOutcomes = new Set([
         'granted',
@@ -487,7 +511,8 @@ export async function registerEventSubRoutes(
         'ignored',
         'bits_counted',
         'anonymous_bits_ignored',
-        'direct_twitch_redemption_ignored_gateway_enabled'
+        'direct_twitch_redemption_ignored_gateway_enabled',
+        'direct_twitch_sub_bits_ignored_gateway_enabled'
       ]);
       await db
         .update(twitchEvents)

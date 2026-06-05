@@ -9,7 +9,9 @@ export type GatewayWebhookPayload = {
   twitch?: {
     redemption?: { id?: string };
     message_id?: string;
+    user?: { id?: string; login?: string; display_name?: string; user_id?: string; user_login?: string; user_name?: string };
   };
+  user?: { id?: string; login?: string; display_name?: string; user_id?: string; user_login?: string; user_name?: string };
   redemption?: { id?: string };
   message?: { id?: string };
 };
@@ -20,6 +22,9 @@ export type GatewayWebhookRecord = {
   eventType: string;
   twitchRedemptionId: string | null;
   twitchMessageId: string | null;
+  twitchUserId: string | null;
+  twitchUserLogin: string | null;
+  twitchUserDisplayName: string | null;
   rawPayload: GatewayWebhookPayload;
   processingStatus: 'observed' | 'received';
 };
@@ -77,6 +82,31 @@ function extractNestedRecord(value: unknown, key: string): Record<string, unknow
   return nested as Record<string, unknown>;
 }
 
+
+function pickUserField(...values: unknown[]): string | null {
+  for (const value of values) {
+    const extracted = extractString(value);
+    if (extracted) return extracted;
+  }
+  return null;
+}
+
+function extractUserRecord(payload: GatewayWebhookPayload): Record<string, unknown> | null {
+  const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? (payload.data as Record<string, unknown>)
+    : null;
+  return (payload.user as Record<string, unknown> | undefined) ?? (payload.twitch?.user as Record<string, unknown> | undefined) ?? extractNestedRecord(data, 'user') ?? extractNestedRecord(data, 'event');
+}
+
+export function extractTwitchUser(payload: GatewayWebhookPayload): { twitchUserId: string | null; twitchUserLogin: string | null; twitchUserDisplayName: string | null } {
+  const user = extractUserRecord(payload);
+  return {
+    twitchUserId: pickUserField(user?.id, user?.user_id, user?.userId),
+    twitchUserLogin: pickUserField(user?.login, user?.user_login, user?.userLogin),
+    twitchUserDisplayName: pickUserField(user?.display_name, user?.displayName, user?.user_name, user?.userName)
+  };
+}
+
 export function extractTwitchRedemptionId(payload: GatewayWebhookPayload): string | null {
   const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
     ? (payload.data as Record<string, unknown>)
@@ -89,7 +119,7 @@ export function extractTwitchMessageId(payload: GatewayWebhookPayload): string |
   const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
     ? (payload.data as Record<string, unknown>)
     : null;
-  return extractString(payload.twitch?.message_id) ?? extractString(payload.message?.id) ?? extractString(data?.message_id);
+  return extractString(payload.twitch?.message_id) ?? extractString(payload.message?.id) ?? extractString(data?.message_id) ?? extractString(data?.eventsub_message_id) ?? extractString(data?.eventsubMessageId);
 }
 
 export async function handleErwinGatewayWebhook(input: {
@@ -135,12 +165,17 @@ export async function handleErwinGatewayWebhook(input: {
     return { ok: false, statusCode: 400, message: 'Missing erwin-gateway event id or type' };
   }
 
+  const twitchUser = extractTwitchUser(payload);
+
   const stored = await input.store.insertEvent({
     deliveryId: input.deliveryId,
     eventId,
     eventType,
     twitchRedemptionId: extractTwitchRedemptionId(payload),
     twitchMessageId: extractTwitchMessageId(payload),
+    twitchUserId: twitchUser.twitchUserId,
+    twitchUserLogin: twitchUser.twitchUserLogin,
+    twitchUserDisplayName: twitchUser.twitchUserDisplayName,
     rawPayload: { ...payload, delivery_id: input.deliveryId },
     processingStatus: input.observeOnly ? 'observed' : 'received'
   });

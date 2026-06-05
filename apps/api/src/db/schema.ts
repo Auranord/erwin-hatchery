@@ -127,6 +127,9 @@ export const gatewayWebhookEvents = pgTable(
     eventType: text('event_type').notNull(),
     twitchRedemptionId: text('twitch_redemption_id'),
     twitchMessageId: text('twitch_message_id'),
+    twitchUserId: text('twitch_user_id'),
+    twitchUserLogin: text('twitch_user_login'),
+    twitchUserDisplayName: text('twitch_user_display_name'),
     rawPayload: jsonb('raw_payload').notNull(),
     processingStatus: text('processing_status').notNull().default('received'),
     error: text('error'),
@@ -135,7 +138,10 @@ export const gatewayWebhookEvents = pgTable(
   },
   (table) => ({
     deliveryIdUnique: uniqueIndex('gateway_webhook_events_delivery_id_idx').on(table.deliveryId),
-    eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId)
+    eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId),
+    twitchMessageIdUnique: uniqueIndex('gateway_webhook_events_twitch_message_id_idx')
+      .on(table.twitchMessageId)
+      .where(sql`${table.twitchMessageId} is not null`)
   })
 );
 

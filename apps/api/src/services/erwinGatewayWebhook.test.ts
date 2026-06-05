@@ -16,7 +16,8 @@ function memoryStore(): GatewayWebhookStore & { records: GatewayWebhookRecord[] 
         (existing) =>
           existing.deliveryId === record.deliveryId ||
           existing.eventId === record.eventId ||
-          (record.twitchRedemptionId !== null && existing.twitchRedemptionId === record.twitchRedemptionId)
+          (record.twitchRedemptionId !== null && existing.twitchRedemptionId === record.twitchRedemptionId) ||
+          (record.twitchMessageId !== null && existing.twitchMessageId === record.twitchMessageId)
       );
       if (duplicate) return { inserted: false, status: duplicate.processingStatus };
       records.push(record);
@@ -136,4 +137,33 @@ test('duplicate Twitch redemption id does not duplicate processing', async () =>
   assert.equal(result.statusCode, 200);
   assert.equal('duplicate' in result && result.duplicate, true);
   assert.equal(store.records.length, 1);
+});
+
+
+test('duplicate Twitch message id does not duplicate processing', async () => {
+  const store = memoryStore();
+  const first = signedInput({
+    event_id: 'event-1',
+    type: 'twitch.channel.subscribe',
+    twitch: { message_id: 'msg-1' },
+    user: { id: 'user-1', login: 'viewer', display_name: 'Viewer' }
+  });
+  const second = signedInput(
+    {
+      event_id: 'event-2',
+      type: 'twitch.channel.subscribe',
+      twitch: { message_id: 'msg-1' },
+      user: { id: 'user-1', login: 'viewer', display_name: 'Viewer' }
+    },
+    { deliveryId: 'delivery-2', eventId: 'event-2' }
+  );
+
+  await handleErwinGatewayWebhook({ ...first, store });
+  const result = await handleErwinGatewayWebhook({ ...second, store });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.statusCode, 200);
+  assert.equal('duplicate' in result && result.duplicate, true);
+  assert.equal(store.records.length, 1);
+  assert.equal(store.records[0]?.twitchUserId, 'user-1');
 });

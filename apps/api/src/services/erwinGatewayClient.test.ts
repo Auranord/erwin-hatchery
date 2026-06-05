@@ -110,3 +110,27 @@ test('gateway client exposes Channel Point reward and redemption helpers', async
   assert.equal(calls[2], 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1/adopt');
   assert.equal(calls[3], 'https://gateway.example.test/api/v1/channel-points/redemptions?status=UNFULFILLED&limit=10');
 });
+
+test('gateway client exposes subscription and Bits helpers', async () => {
+  const calls: Array<{ url: string; method: string }> = [];
+  const client = new ErwinGatewayClient({
+    baseUrl: 'https://gateway.example.test',
+    apiKey: 'secret-api-key',
+    fetchImpl: async (url: URL | RequestInfo, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET' });
+      return Response.json({ subscriptions: [], entries: [], status: 'ok' });
+    }
+  });
+
+  await client.listSubscriptions();
+  await client.runSubscriptionBackfill();
+  await client.getBitsLeaderboard();
+  await client.runBitsBackfill();
+
+  assert.deepEqual(calls, [
+    { url: 'https://gateway.example.test/api/v1/subscriptions', method: 'GET' },
+    { url: 'https://gateway.example.test/api/v1/subscriptions/backfill', method: 'POST' },
+    { url: 'https://gateway.example.test/api/v1/bits/leaderboard', method: 'GET' },
+    { url: 'https://gateway.example.test/api/v1/bits/backfill', method: 'POST' }
+  ]);
+});

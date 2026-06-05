@@ -21,8 +21,10 @@ import {
   twitchEvents,
   users,
   gameEvents,
+  gatewayWebhookEvents,
   gameEventParticipants,
-  leaderboardScores
+  leaderboardScores,
+  twitchBackfillRuns
 } from '../db/schema.js';
 import { getSessionIdentity } from './session-auth.js';
 import {
@@ -487,6 +489,81 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       request.log.warn(gatewayAdminLogPayload(error), 'Failed to sync erwin-gateway rewards');
       return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway reward sync failed'));
     }
+  });
+
+
+  app.get('/api/admin/erwin-gateway/sub-bits-diagnostics', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const subBitsTypes = [
+      'twitch.channel.subscribe',
+      'twitch.channel.subscription.end',
+      'twitch.channel.subscription.message',
+      'twitch.channel.subscription.gift',
+      'twitch.channel.cheer'
+    ];
+
+    const [recentEvents, voucherGrants, ignoredOrFailedEvents, backfillRuns] = await Promise.all([
+      db
+        .select({
+          id: gatewayWebhookEvents.id,
+          deliveryId: gatewayWebhookEvents.deliveryId,
+          eventId: gatewayWebhookEvents.eventId,
+          eventType: gatewayWebhookEvents.eventType,
+          twitchMessageId: gatewayWebhookEvents.twitchMessageId,
+          twitchUserId: gatewayWebhookEvents.twitchUserId,
+          twitchUserLogin: gatewayWebhookEvents.twitchUserLogin,
+          twitchUserDisplayName: gatewayWebhookEvents.twitchUserDisplayName,
+          processingStatus: gatewayWebhookEvents.processingStatus,
+          error: gatewayWebhookEvents.error,
+          createdAt: gatewayWebhookEvents.createdAt,
+          processedAt: gatewayWebhookEvents.processedAt
+        })
+        .from(gatewayWebhookEvents)
+        .where(inArray(gatewayWebhookEvents.eventType, subBitsTypes))
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(50),
+      db
+        .select({
+          id: economyLedger.id,
+          userId: economyLedger.userId,
+          eventType: economyLedger.eventType,
+          sourceId: economyLedger.sourceId,
+          delta: economyLedger.delta,
+          createdAt: economyLedger.createdAt
+        })
+        .from(economyLedger)
+        .where(eq(economyLedger.sourceType, 'gateway_twitch_event'))
+        .orderBy(desc(economyLedger.createdAt))
+        .limit(50),
+      db
+        .select({
+          id: gatewayWebhookEvents.id,
+          deliveryId: gatewayWebhookEvents.deliveryId,
+          eventId: gatewayWebhookEvents.eventId,
+          eventType: gatewayWebhookEvents.eventType,
+          processingStatus: gatewayWebhookEvents.processingStatus,
+          error: gatewayWebhookEvents.error,
+          createdAt: gatewayWebhookEvents.createdAt,
+          processedAt: gatewayWebhookEvents.processedAt
+        })
+        .from(gatewayWebhookEvents)
+        .where(and(inArray(gatewayWebhookEvents.eventType, subBitsTypes), inArray(gatewayWebhookEvents.processingStatus, ['ignored', 'failed'])))
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(50),
+      db.select().from(twitchBackfillRuns).where(inArray(twitchBackfillRuns.source, ['erwin-gateway/subscriptions/backfill', 'erwin-gateway/bits/backfill'])).orderBy(desc(twitchBackfillRuns.startedAt)).limit(10)
+    ]);
+
+    return {
+      enabled: config.ERWIN_GATEWAY_ENABLED,
+      observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
+      recentEvents,
+      voucherGrants,
+      ignoredOrFailedEvents,
+      backfillRuns
+    };
   });
 
   app.get('/api/admin/debug/eventsub-subscription', async (request, reply) => {

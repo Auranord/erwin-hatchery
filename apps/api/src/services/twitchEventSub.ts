@@ -11,10 +11,13 @@ export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.subscription.gift',
   'channel.cheer'
 ] as const;
+
+const GATEWAY_MIGRATED_EVENTSUB_TYPES = new Set<string>(REQUIRED_EVENTSUB_SUBSCRIPTIONS);
+
 function getTargetSubscriptionTypes(): readonly string[] {
   if (!config.ERWIN_GATEWAY_ENABLED) return REQUIRED_EVENTSUB_SUBSCRIPTIONS;
   return REQUIRED_EVENTSUB_SUBSCRIPTIONS.filter(
-    (type) => type !== 'channel.channel_points_custom_reward_redemption.add'
+    (type) => !GATEWAY_MIGRATED_EVENTSUB_TYPES.has(type)
   );
 }
 const TARGET_SUBSCRIPTION_VERSION = '1';
@@ -353,27 +356,29 @@ export async function syncChannelPointRedemptionEventSub(log: {
       await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: first.id, status: first.status, callbackUrl: first.transport.callback, error: null });
     }
     if (config.ERWIN_GATEWAY_ENABLED) {
-      const directRedemptionSubscription = list.data.find(
+      const migratedSubscriptions = list.data.filter(
         (subscription) =>
-          subscription.type === 'channel.channel_points_custom_reward_redemption.add' &&
+          GATEWAY_MIGRATED_EVENTSUB_TYPES.has(subscription.type) &&
           subscription.transport.callback === getEventSubCallbackUrl()
       );
-      if (directRedemptionSubscription) {
+      for (const migratedSubscription of migratedSubscriptions) {
         await twitchApi(
-          `/eventsub/subscriptions?id=${encodeURIComponent(directRedemptionSubscription.id)}`,
+          `/eventsub/subscriptions?id=${encodeURIComponent(migratedSubscription.id)}`,
           token,
           { method: 'DELETE' }
         );
         await persistEventSubStatus({
-          eventType: 'channel.channel_points_custom_reward_redemption.add',
+          eventType: migratedSubscription.type,
           subscriptionId: null,
           status: 'missing',
           callbackUrl: getEventSubCallbackUrl(),
           error: 'Disabled because ERWIN_GATEWAY_ENABLED=true'
         });
+      }
+      if (migratedSubscriptions.length > 0) {
         log.info(
-          { subscriptionId: directRedemptionSubscription.id },
-          'Direct Twitch Channel Point redemption EventSub subscription disabled because erwin-gateway mode is enabled'
+          { subscriptionIds: migratedSubscriptions.map((subscription) => subscription.id), eventTypes: migratedSubscriptions.map((subscription) => subscription.type) },
+          'Direct Twitch EventSub subscriptions disabled because erwin-gateway mode is enabled'
         );
       }
     }
@@ -385,7 +390,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
       (subscription) =>
         subscription.status === 'webhook_callback_verification_pending'
     );
-    const first = ensured[0]!;
+    const first = ensured[0];
 
     eventSubSyncState = {
       enabled: allEnabled,
@@ -396,8 +401,8 @@ export async function syncChannelPointRedemptionEventSub(log: {
           : 'error',
       subscriptionId: ensured.map((subscription) => subscription.id).join(','),
       type: getTargetSubscriptionTypes().join(','),
-      callback: first.transport.callback,
-      createdAt: first.created_at,
+      callback: first?.transport.callback ?? getEventSubCallbackUrl(),
+      createdAt: first?.created_at ?? checkedAt,
       lastCheckedAt: checkedAt,
       error:
         duplicateCleanupCount > 0
