@@ -33,6 +33,26 @@ export function gatewayRewardDisplayName(reward: GatewayChannelPointReward): str
   return stringOrNull(reward.title) ?? stringOrNull(reward.display_name) ?? gatewayRewardId(reward);
 }
 
+function booleanOrDefault(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function gatewayRewardAppOwnershipKey(reward: GatewayChannelPointReward): string | null {
+  return stringOrNull(reward.appOwnershipKey) ?? stringOrNull(reward.app_ownership_key);
+}
+
+function gatewayRewardOwnershipStatus(reward: GatewayChannelPointReward): string {
+  return stringOrNull(reward.ownershipStatus) ?? stringOrNull(reward.ownership_status) ?? 'unknown';
+}
+
+function gatewayRewardCanAdopt(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.canAdopt ?? reward.can_adopt, false);
+}
+
+function gatewayRewardCanMutate(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.canMutate ?? reward.can_mutate, gatewayRewardOwnershipStatus(reward) === 'owned_by_you');
+}
+
 function findSyncedReward(rewards: GatewayChannelPointReward[], mapping: GatewayRewardMappingRequest): GatewayChannelPointReward | null {
   const requestedGatewayRewardId = stringOrNull(mapping.gatewayRewardId);
   const requestedTwitchRewardId = stringOrNull(mapping.twitchRewardId);
@@ -87,6 +107,11 @@ export async function syncGatewayRewardsForAdmin(mappings: GatewayRewardMappingR
         gatewayRewardId: resolvedGatewayRewardId,
         twitchRewardId: resolvedTwitchRewardId,
         isActive: mapping.isActive ?? true,
+        appOwnershipKey: reward ? gatewayRewardAppOwnershipKey(reward) : null,
+        ownershipStatus: reward ? gatewayRewardOwnershipStatus(reward) : 'unknown',
+        manageable: reward ? booleanOrDefault(reward.manageable, false) : false,
+        canAdopt: reward ? gatewayRewardCanAdopt(reward) : false,
+        canMutate: reward ? gatewayRewardCanMutate(reward) : false,
         lastSyncedAt: new Date(),
         metadata: {
           ...(mapping.metadata ?? {}),
@@ -101,6 +126,11 @@ export async function syncGatewayRewardsForAdmin(mappings: GatewayRewardMappingR
           gatewayRewardId: resolvedGatewayRewardId,
           twitchRewardId: resolvedTwitchRewardId,
           isActive: mapping.isActive ?? true,
+          appOwnershipKey: reward ? gatewayRewardAppOwnershipKey(reward) : null,
+          ownershipStatus: reward ? gatewayRewardOwnershipStatus(reward) : 'unknown',
+          manageable: reward ? booleanOrDefault(reward.manageable, false) : false,
+          canAdopt: reward ? gatewayRewardCanAdopt(reward) : false,
+          canMutate: reward ? gatewayRewardCanMutate(reward) : false,
           lastSyncedAt: new Date(),
           metadata: {
             ...(mapping.metadata ?? {}),

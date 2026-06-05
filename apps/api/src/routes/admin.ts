@@ -38,6 +38,7 @@ import {
   syncGatewayRewardsForAdmin,
   type GatewayRewardMappingRequest
 } from '../services/gatewayRewardMappings.js';
+import { ErwinGatewayError } from '../services/erwinGatewayClient.js';
 import {
   getCurrentStreamState,
   getManualStreamStateOverride,
@@ -83,6 +84,36 @@ function petStatsToBonusColumns(stats: PetStats) {
     levelBonusGain: stats.GAIN,
     levelBonusPow: stats.POW
   };
+}
+
+
+function gatewayAdminErrorPayload(error: unknown, fallbackMessage: string) {
+  if (error instanceof ErwinGatewayError) {
+    return {
+      message: fallbackMessage,
+      gatewayStatus: error.status,
+      gatewayCode: error.code,
+      gatewayError: error.message,
+      gatewayDetails: error.details,
+      twitchStatus: error.twitchStatus,
+      twitchErrorExcerpt: error.twitchErrorExcerpt
+    };
+  }
+  return { message: fallbackMessage };
+}
+
+function gatewayAdminLogPayload(error: unknown) {
+  if (error instanceof ErwinGatewayError) {
+    return {
+      status: error.status,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      twitchStatus: error.twitchStatus,
+      twitchErrorExcerpt: error.twitchErrorExcerpt
+    };
+  }
+  return { error: error instanceof Error ? error.message : 'unknown' };
 }
 
 function hasAdminAccess(roleNames: string[]): boolean {
@@ -374,8 +405,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     try {
       return await listEggTypeGatewayRewardStatusForAdmin();
     } catch (error) {
-      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to list Hatchery egg gateway rewards');
-      return reply.code(502).send({ message: 'Gateway-Ei-Rewards konnten nicht geladen werden.' });
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to list Hatchery egg gateway rewards');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'Gateway-Ei-Rewards konnten nicht geladen werden.'));
     }
   });
 
@@ -406,8 +437,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
       return { status: 'ok', idempotent: false, ...result };
     } catch (error) {
-      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to sync Hatchery egg gateway rewards');
-      return reply.code(502).send({ message: 'Gateway-Ei-Reward-Sync fehlgeschlagen.' });
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to sync Hatchery egg gateway rewards');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'Gateway-Ei-Reward-Sync fehlgeschlagen.'));
     }
   });
 
@@ -419,8 +450,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     try {
       return await listGatewayRewardsForAdmin();
     } catch (error) {
-      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to list erwin-gateway rewards');
-      return reply.code(502).send({ message: 'erwin-gateway rewards could not be loaded' });
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to list erwin-gateway rewards');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway rewards could not be loaded'));
     }
   });
 
@@ -451,8 +482,8 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
 
       return { status: 'ok', idempotent: false, ...result };
     } catch (error) {
-      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to sync erwin-gateway rewards');
-      return reply.code(502).send({ message: 'erwin-gateway reward sync failed' });
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to sync erwin-gateway rewards');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway reward sync failed'));
     }
   });
 

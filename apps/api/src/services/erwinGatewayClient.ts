@@ -1,18 +1,35 @@
 import { config } from '../config.js';
 
-export type GatewayErrorStatus = 401 | 403 | 404 | 409 | 429 | 500 | 502 | 503 | 504;
+export type GatewayErrorStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 503 | 504;
 
 export class ErwinGatewayError extends Error {
   public readonly status: GatewayErrorStatus | number;
   public readonly retryable: boolean;
   public readonly responseBody: string | null;
+  public readonly code: string | null;
+  public readonly details: unknown;
+  public readonly twitchStatus: number | null;
+  public readonly twitchErrorExcerpt: string | null;
 
-  constructor(input: { status: number; message: string; retryable: boolean; responseBody: string | null }) {
+  constructor(input: {
+    status: number;
+    message: string;
+    retryable: boolean;
+    responseBody: string | null;
+    code?: string | null;
+    details?: unknown;
+    twitchStatus?: number | null;
+    twitchErrorExcerpt?: string | null;
+  }) {
     super(input.message);
     this.name = 'ErwinGatewayError';
     this.status = input.status;
     this.retryable = input.retryable;
     this.responseBody = input.responseBody;
+    this.code = input.code ?? null;
+    this.details = input.details;
+    this.twitchStatus = input.twitchStatus ?? null;
+    this.twitchErrorExcerpt = input.twitchErrorExcerpt ?? null;
   }
 }
 
@@ -53,6 +70,17 @@ export type GatewayChannelPointReward = {
   max_per_user_per_stream?: number | null;
   enabled?: boolean;
   is_enabled?: boolean;
+  manageable?: boolean;
+  owningAppId?: string | null;
+  owning_app_id?: string | null;
+  appOwnershipKey?: string | null;
+  app_ownership_key?: string | null;
+  ownershipStatus?: 'unowned' | 'owned_by_you' | 'owned_by_other' | string | null;
+  ownership_status?: 'unowned' | 'owned_by_you' | 'owned_by_other' | string | null;
+  canAdopt?: boolean;
+  can_adopt?: boolean;
+  canMutate?: boolean;
+  can_mutate?: boolean;
   metadata?: Record<string, unknown>;
 };
 
@@ -74,6 +102,39 @@ export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption
 export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
 
 export type GatewayRewardMutationPayload = Record<string, unknown>;
+
+export type GatewayRewardAdoptionPayload = {
+  app_ownership_key: string;
+  expected_twitch_reward_id?: string;
+  local_reward_type: string;
+};
+
+type GatewayErrorBody = {
+  error?: unknown;
+  message?: unknown;
+  code?: unknown;
+  details?: unknown;
+  twitchStatus?: unknown;
+  twitchErrorExcerpt?: unknown;
+};
+
+function parseGatewayErrorBody(responseBody: string | null): GatewayErrorBody | null {
+  if (!responseBody) return null;
+  try {
+    const parsed = JSON.parse(responseBody) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as GatewayErrorBody) : null;
+  } catch {
+    return null;
+  }
+}
+
+function stringField(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function numberField(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 
 
 export class ErwinGatewayClient {
@@ -112,6 +173,16 @@ export class ErwinGatewayClient {
     const reward = result.reward ?? result.rewards?.[0];
     if (!reward) throw new Error('erwin-gateway create reward response did not include a reward');
     return reward;
+  }
+
+  async adoptReward(rewardId: string, payload: GatewayRewardAdoptionPayload): Promise<GatewayChannelPointReward> {
+    const result = await this.request<{ reward?: GatewayChannelPointReward } | GatewayChannelPointReward>(
+      `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}/adopt`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+    if ('id' in result) return result;
+    if (!result.reward) throw new Error('erwin-gateway adopt reward response did not include a reward');
+    return result.reward;
   }
 
   async updateReward(rewardId: string, payload: GatewayRewardMutationPayload): Promise<GatewayChannelPointReward> {
@@ -156,11 +227,25 @@ export class ErwinGatewayClient {
 
     if (!response.ok) {
       const responseBody = await response.text().catch(() => null);
+      const safeResponseBody = responseBody ? responseBody.slice(0, 1000) : null;
+      const parsed = parseGatewayErrorBody(safeResponseBody);
+      const errorText = stringField(parsed?.error) ?? stringField(parsed?.message);
+      const code = stringField(parsed?.code);
+      const twitchStatus = numberField(parsed?.twitchStatus);
+      const twitchErrorExcerpt = stringField(parsed?.twitchErrorExcerpt);
       throw new ErwinGatewayError({
         status: response.status,
-        message: `erwin-gateway request failed with HTTP ${response.status}`,
+        message: [
+          `erwin-gateway request failed with HTTP ${response.status}`,
+          code ? `code=${code}` : null,
+          errorText ? `error=${errorText.slice(0, 200)}` : null
+        ].filter(Boolean).join(' '),
         retryable: response.status === 429 || response.status >= 500,
-        responseBody: responseBody ? responseBody.slice(0, 500) : null
+        responseBody: safeResponseBody,
+        code,
+        details: parsed?.details,
+        twitchStatus,
+        twitchErrorExcerpt
       });
     }
 

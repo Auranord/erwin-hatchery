@@ -346,7 +346,21 @@ type GatewayRewardMapping = {
   gatewayRewardId: string;
   twitchRewardId: string;
   isActive: boolean;
+  appOwnershipKey?: string | null;
+  ownershipStatus?: 'unowned' | 'owned_by_you' | 'owned_by_other' | 'unknown' | string;
+  manageable?: boolean;
+  canAdopt?: boolean;
+  canMutate?: boolean;
 };
+
+
+function gatewayOwnershipLabel(mapping: GatewayRewardMapping | null | undefined): string {
+  if (!mapping) return 'noch nicht synchronisiert';
+  if (mapping.ownershipStatus === 'owned_by_you') return 'von Hatchery adoptiert';
+  if (mapping.ownershipStatus === 'owned_by_other') return 'von anderer App belegt';
+  if (mapping.ownershipStatus === 'unowned') return 'synchronisiert, nicht adoptiert';
+  return mapping.ownershipStatus ?? 'unbekannt';
+}
 
 type AdminEggType = {
   id: string;
@@ -1965,13 +1979,27 @@ export function App(): JSX.Element {
       updated?: number;
       skipped?: number;
       total?: number;
+      adopted?: number;
+      discovered?: number;
+      blocked?: number;
+      gatewayStatus?: number;
+      gatewayCode?: string | null;
+      gatewayError?: string;
+      gatewayDetails?: unknown;
     } | null;
     if (!response.ok) {
-      window.alert(payload?.message ?? 'Gateway-Ei-Reward-Sync fehlgeschlagen.');
+      const details = [
+        payload?.message ?? 'Gateway-Ei-Reward-Sync fehlgeschlagen.',
+        payload?.gatewayStatus ? `HTTP ${payload.gatewayStatus}` : null,
+        payload?.gatewayCode ? `Code: ${payload.gatewayCode}` : null,
+        payload?.gatewayError ? `Gateway: ${payload.gatewayError}` : null,
+        payload?.gatewayDetails ? `Details: ${JSON.stringify(payload.gatewayDetails)}` : null
+      ].filter(Boolean).join('\n');
+      window.alert(details);
       return;
     }
     window.alert(
-      `Gateway-Ei-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, unverändert: ${payload?.skipped ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`
+      `Gateway-Ei-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, adoptiert: ${payload?.adopted ?? 0}, aktualisiert: ${payload?.updated ?? 0}, entdeckt: ${payload?.discovered ?? 0}, blockiert: ${payload?.blocked ?? 0}, unverändert: ${payload?.skipped ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`
     );
     await loadGatewayEggRewards();
   }
@@ -2513,6 +2541,11 @@ export function App(): JSX.Element {
                   <div>Lokaler Reward-Typ: {status.plan.localRewardType}</div>
                   <div>Gateway Reward ID: {status.mapping?.gatewayRewardId ?? 'noch nicht synchronisiert'}</div>
                   <div>Twitch Reward ID: {status.mapping?.twitchRewardId ?? status.eggType.twitchRewardId ?? '—'}</div>
+                  <div>Ownership: {gatewayOwnershipLabel(status.mapping)}</div>
+                  <div>App-Key: {status.mapping?.appOwnershipKey ?? '—'}</div>
+                  <div>Manageable: {status.mapping?.manageable ? 'ja' : 'nein'}</div>
+                  <div>Aktionen: {status.mapping?.canMutate ? 'Update/Delete möglich' : status.mapping?.canAdopt ? 'Adoption möglich' : 'gesperrt bis Adoption möglich ist'}</div>
+                  <div>Gemappt auf: {status.mapping?.localRewardType ?? status.plan.localRewardType}</div>
                 </li>
               ))}
             </ul>
@@ -2530,6 +2563,10 @@ export function App(): JSX.Element {
                     <div>Gateway Reward ID: {mapping.gatewayRewardId}</div>
                     <div>Twitch Reward ID: {mapping.twitchRewardId}</div>
                     <div>Status: {mapping.isActive ? 'aktiv' : 'inaktiv'}</div>
+                    <div>Ownership: {gatewayOwnershipLabel(mapping)}</div>
+                    <div>App-Key: {mapping.appOwnershipKey ?? '—'}</div>
+                    <div>Manageable: {mapping.manageable ? 'ja' : 'nein'}</div>
+                    <div>Mutation erlaubt: {mapping.canMutate ? 'ja' : 'nein'}</div>
                   </li>
                 ))}
               </ul>
