@@ -96,7 +96,8 @@ function gatewayAdminErrorPayload(error: unknown, fallbackMessage: string) {
       gatewayError: error.message,
       gatewayDetails: error.details,
       twitchStatus: error.twitchStatus,
-      twitchErrorExcerpt: error.twitchErrorExcerpt
+      twitchErrorExcerpt: error.twitchErrorExcerpt,
+      gatewayIssues: error.issues
     };
   }
   return { message: fallbackMessage };
@@ -110,7 +111,8 @@ function gatewayAdminLogPayload(error: unknown) {
       message: error.message,
       details: error.details,
       twitchStatus: error.twitchStatus,
-      twitchErrorExcerpt: error.twitchErrorExcerpt
+      twitchErrorExcerpt: error.twitchErrorExcerpt,
+      gatewayIssues: error.issues
     };
   }
   return { error: error instanceof Error ? error.message : 'unknown' };

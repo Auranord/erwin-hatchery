@@ -1986,6 +1986,7 @@ export function App(): JSX.Element {
       gatewayCode?: string | null;
       gatewayError?: string;
       gatewayDetails?: unknown;
+      gatewayIssues?: unknown;
     } | null;
     if (!response.ok) {
       const details = [
@@ -1993,7 +1994,8 @@ export function App(): JSX.Element {
         payload?.gatewayStatus ? `HTTP ${payload.gatewayStatus}` : null,
         payload?.gatewayCode ? `Code: ${payload.gatewayCode}` : null,
         payload?.gatewayError ? `Gateway: ${payload.gatewayError}` : null,
-        payload?.gatewayDetails ? `Details: ${JSON.stringify(payload.gatewayDetails)}` : null
+        payload?.gatewayDetails ? `Details: ${JSON.stringify(payload.gatewayDetails)}` : null,
+        payload?.gatewayIssues ? `Issues: ${JSON.stringify(payload.gatewayIssues)}` : null
       ].filter(Boolean).join('\n');
       window.alert(details);
       return;

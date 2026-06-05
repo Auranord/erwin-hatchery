@@ -10,6 +10,7 @@ export class ErwinGatewayError extends Error {
   public readonly details: unknown;
   public readonly twitchStatus: number | null;
   public readonly twitchErrorExcerpt: string | null;
+  public readonly issues: unknown;
 
   constructor(input: {
     status: number;
@@ -20,6 +21,7 @@ export class ErwinGatewayError extends Error {
     details?: unknown;
     twitchStatus?: number | null;
     twitchErrorExcerpt?: string | null;
+    issues?: unknown;
   }) {
     super(input.message);
     this.name = 'ErwinGatewayError';
@@ -30,6 +32,7 @@ export class ErwinGatewayError extends Error {
     this.details = input.details;
     this.twitchStatus = input.twitchStatus ?? null;
     this.twitchErrorExcerpt = input.twitchErrorExcerpt ?? null;
+    this.issues = input.issues;
   }
 }
 
@@ -116,6 +119,7 @@ type GatewayErrorBody = {
   details?: unknown;
   twitchStatus?: unknown;
   twitchErrorExcerpt?: unknown;
+  issues?: unknown;
 };
 
 function parseGatewayErrorBody(responseBody: string | null): GatewayErrorBody | null {
@@ -245,7 +249,8 @@ export class ErwinGatewayClient {
         code,
         details: parsed?.details,
         twitchStatus,
-        twitchErrorExcerpt
+        twitchErrorExcerpt,
+        issues: parsed?.issues
       });
     }
 
