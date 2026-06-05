@@ -39,15 +39,15 @@ function memoryStore(mapping: GatewayRewardMapping | null = {
 }): GatewayRedemptionStore & {
   users: string[];
   redemptions: NormalizedGatewayRedemption[];
-  fulfillCalls: number;
-  cancelCalls: number;
+  fulfillCalls: Array<{ redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping }>;
+  cancelCalls: Array<{ redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping | null; reason: string }>;
 } {
   return {
     observeOnly: true,
     users: [],
     redemptions: [],
-    fulfillCalls: 0,
-    cancelCalls: 0,
+    fulfillCalls: [],
+    cancelCalls: [],
     async findRewardMapping() {
       return mapping;
     },
@@ -58,11 +58,11 @@ function memoryStore(mapping: GatewayRewardMapping | null = {
     async upsertChannelPointRedemption(input) {
       this.redemptions.push(input.redemption);
     },
-    async fulfillRedemption() {
-      this.fulfillCalls += 1;
+    async fulfillRedemption(input) {
+      this.fulfillCalls.push(input);
     },
-    async cancelRedemption() {
-      this.cancelCalls += 1;
+    async cancelRedemption(input) {
+      this.cancelCalls.push(input);
     }
   };
 }
@@ -99,8 +99,8 @@ test('observe-only redemption does not call gateway fulfill/cancel', async () =>
   const store = memoryStore();
   await processGatewayRedemptionObserveOnly(redemption(), store);
 
-  assert.equal(store.fulfillCalls, 0);
-  assert.equal(store.cancelCalls, 0);
+  assert.equal(store.fulfillCalls.length, 0);
+  assert.equal(store.cancelCalls.length, 0);
 });
 
 test('unknown reward is ignored safely and stored for diagnostics', async () => {
@@ -121,6 +121,34 @@ test('redemption update updates stored status/cache without economy effects', as
 
   assert.equal(result.processed, true);
   assert.equal(store.redemptions[0]?.status, 'FULFILLED');
-  assert.equal(store.fulfillCalls, 0);
-  assert.equal(store.cancelCalls, 0);
+  assert.equal(store.fulfillCalls.length, 0);
+  assert.equal(store.cancelCalls.length, 0);
+});
+
+test('active grant passes mapping to fulfillment for gateway reward id fallback', async () => {
+  const store = memoryStore();
+  store.observeOnly = false;
+  store.processMappedRedemption = async () => ({ status: 'granted' });
+
+  const result = await processGatewayRedemptionObserveOnly(redemption({ gatewayRewardId: null }), store);
+
+  assert.equal(result.processed, true);
+  assert.equal(store.fulfillCalls.length, 1);
+  assert.equal(store.fulfillCalls[0]?.redemption.gatewayRewardId, null);
+  assert.equal(store.fulfillCalls[0]?.mapping.gatewayRewardId, 'gateway-reward-1');
+});
+
+test('mapped cancellation passes mapping to cancel for gateway reward id fallback', async () => {
+  const store = memoryStore();
+  store.observeOnly = false;
+  store.processMappedRedemption = async () => ({ status: 'canceled', reason: 'test cancellation' });
+
+  const result = await processGatewayRedemptionObserveOnly(redemption({ gatewayRewardId: null }), store);
+
+  assert.equal(result.processed, true);
+  assert.equal(result.ignored, true);
+  assert.equal(store.cancelCalls.length, 1);
+  assert.equal(store.cancelCalls[0]?.redemption.gatewayRewardId, null);
+  assert.equal(store.cancelCalls[0]?.mapping?.gatewayRewardId, 'gateway-reward-1');
+  assert.equal(store.cancelCalls[0]?.reason, 'test cancellation');
 });

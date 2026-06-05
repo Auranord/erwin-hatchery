@@ -156,8 +156,8 @@ export type GatewayRedemptionStore = {
   }): Promise<void>;
   observeOnly: boolean;
   processMappedRedemption?(input: { redemption: NormalizedGatewayRedemption; userId: string | null; mapping: GatewayRewardMapping }): Promise<GatewayMappedRedemptionResult>;
-  fulfillRedemption?(redemption: NormalizedGatewayRedemption): Promise<void>;
-  cancelRedemption?(redemption: NormalizedGatewayRedemption, reason: string): Promise<void>;
+  fulfillRedemption?(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping }): Promise<void>;
+  cancelRedemption?(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping | null; reason: string }): Promise<void>;
 };
 
 export async function processGatewayRedemptionObserveOnly(
@@ -183,7 +183,11 @@ export async function processGatewayRedemptionObserveOnly(
 
   if (!store.observeOnly) {
     if (!mapping) {
-      await store.cancelRedemption?.(redemption, 'No active Hatchery reward mapping exists for this Channel Point reward.');
+      await store.cancelRedemption?.({
+        redemption,
+        mapping: null,
+        reason: 'No active Hatchery reward mapping exists for this Channel Point reward.'
+      });
       return { processed: true, ignored: true, reason: 'unknown_reward_mapping' };
     }
     if (!store.processMappedRedemption) {
@@ -191,10 +195,14 @@ export async function processGatewayRedemptionObserveOnly(
     }
     const mappedResult = await store.processMappedRedemption({ redemption, userId, mapping });
     if (mappedResult.status === 'canceled') {
-      await store.cancelRedemption?.(redemption, mappedResult.reason ?? 'Reward could not be processed.');
+      await store.cancelRedemption?.({
+        redemption,
+        mapping,
+        reason: mappedResult.reason ?? 'Reward could not be processed.'
+      });
       return { processed: true, ignored: true, reason: mappedResult.reason ?? 'mapped_redemption_canceled' };
     }
-    await store.fulfillRedemption?.(redemption);
+    await store.fulfillRedemption?.({ redemption, mapping });
   }
 
   return { processed: true, ignored: false, mappingStatus, userCreatedOrUpdated };
