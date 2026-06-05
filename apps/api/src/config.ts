@@ -74,6 +74,7 @@ const configSchema = z.object({
   ERWIN_GATEWAY_ENABLED: booleanFromEnv('ERWIN_GATEWAY_ENABLED').default(false),
   ERWIN_GATEWAY_OBSERVE_ONLY: booleanFromEnv('ERWIN_GATEWAY_OBSERVE_ONLY').default(true),
   ERWIN_GATEWAY_REQUIRED: booleanFromEnv('ERWIN_GATEWAY_REQUIRED').default(false),
+  ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: booleanFromEnv('ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS').default(false),
   ERWIN_GATEWAY_URL: optionalUrlFromEnv(),
   ERWIN_GATEWAY_APP_API_KEY: optionalStringFromEnv(),
   ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: optionalStringFromEnv(),

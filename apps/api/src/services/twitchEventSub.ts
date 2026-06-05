@@ -11,7 +11,12 @@ export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.subscription.gift',
   'channel.cheer'
 ] as const;
-const TARGET_SUBSCRIPTION_TYPES = REQUIRED_EVENTSUB_SUBSCRIPTIONS;
+function getTargetSubscriptionTypes(): readonly string[] {
+  if (!config.ERWIN_GATEWAY_ENABLED) return REQUIRED_EVENTSUB_SUBSCRIPTIONS;
+  return REQUIRED_EVENTSUB_SUBSCRIPTIONS.filter(
+    (type) => type !== 'channel.channel_points_custom_reward_redemption.add'
+  );
+}
 const TARGET_SUBSCRIPTION_VERSION = '1';
 
 type TwitchEventSubTransport = {
@@ -81,7 +86,7 @@ let eventSubSyncState: EventSubSyncState = {
   enabled: false,
   status: 'missing',
   subscriptionId: null,
-  type: TARGET_SUBSCRIPTION_TYPES.join(','),
+  type: getTargetSubscriptionTypes().join(','),
   callback: getEventSubCallbackUrl(),
   createdAt: null,
   lastCheckedAt: new Date(0).toISOString(),
@@ -230,7 +235,7 @@ async function persistEventSubStatus(input: {
 export async function checkEventSubHealth(): Promise<EventSubSyncState & { subscriptions: Array<{ eventType: string; status: string; subscriptionId: string | null; callbackUrl: string; lastError: string | null }> }> {
   const rows = await db.select().from(twitchEventSubSubscriptions);
   const byType = new Map(rows.map((row) => [row.eventType, row]));
-  const subscriptions = TARGET_SUBSCRIPTION_TYPES.map((eventType) => {
+  const subscriptions = getTargetSubscriptionTypes().map((eventType) => {
     const row = byType.get(eventType);
     return {
       eventType,
@@ -252,7 +257,7 @@ export async function checkEventSubHealth(): Promise<EventSubSyncState & { subsc
     enabled,
     status: enabled ? 'enabled' : anyPending ? 'pending_verification' : 'missing',
     subscriptionId: subscriptions.map((subscription) => subscription.subscriptionId).filter(Boolean).join(',') || null,
-    type: TARGET_SUBSCRIPTION_TYPES.join(','),
+    type: getTargetSubscriptionTypes().join(','),
     callback: getEventSubCallbackUrl(),
     createdAt: null,
     lastCheckedAt: new Date().toISOString(),
@@ -296,7 +301,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
     );
     const ensured: TwitchEventSubSubscription[] = [];
     let duplicateCleanupCount = 0;
-    for (const subscriptionType of TARGET_SUBSCRIPTION_TYPES) {
+    for (const subscriptionType of getTargetSubscriptionTypes()) {
       const matching = list.data.filter(
         (subscription) =>
           subscription.type === subscriptionType &&
@@ -347,6 +352,32 @@ export async function syncChannelPointRedemptionEventSub(log: {
       ensured.push(first);
       await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: first.id, status: first.status, callbackUrl: first.transport.callback, error: null });
     }
+    if (config.ERWIN_GATEWAY_ENABLED) {
+      const directRedemptionSubscription = list.data.find(
+        (subscription) =>
+          subscription.type === 'channel.channel_points_custom_reward_redemption.add' &&
+          subscription.transport.callback === getEventSubCallbackUrl()
+      );
+      if (directRedemptionSubscription) {
+        await twitchApi(
+          `/eventsub/subscriptions?id=${encodeURIComponent(directRedemptionSubscription.id)}`,
+          token,
+          { method: 'DELETE' }
+        );
+        await persistEventSubStatus({
+          eventType: 'channel.channel_points_custom_reward_redemption.add',
+          subscriptionId: null,
+          status: 'missing',
+          callbackUrl: getEventSubCallbackUrl(),
+          error: 'Disabled because ERWIN_GATEWAY_ENABLED=true'
+        });
+        log.info(
+          { subscriptionId: directRedemptionSubscription.id },
+          'Direct Twitch Channel Point redemption EventSub subscription disabled because erwin-gateway mode is enabled'
+        );
+      }
+    }
+
     const allEnabled = ensured.every(
       (subscription) => subscription.status === 'enabled'
     );
@@ -364,7 +395,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
           ? 'pending_verification'
           : 'error',
       subscriptionId: ensured.map((subscription) => subscription.id).join(','),
-      type: TARGET_SUBSCRIPTION_TYPES.join(','),
+      type: getTargetSubscriptionTypes().join(','),
       callback: first.transport.callback,
       createdAt: first.created_at,
       lastCheckedAt: checkedAt,
@@ -392,7 +423,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
       lastCheckedAt: checkedAt,
       error: `EventSub sync failed: ${message}`
     };
-    for (const subscriptionType of TARGET_SUBSCRIPTION_TYPES) {
+    for (const subscriptionType of getTargetSubscriptionTypes()) {
       await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: null, status: 'error', callbackUrl: getEventSubCallbackUrl(), error: message });
     }
     await db.update(twitchIntegrationState).set({ eventsubHealthy: false, lastError: `EventSub sync failed: ${message}`, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));

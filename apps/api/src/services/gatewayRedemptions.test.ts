@@ -173,3 +173,18 @@ test('mapped cancellation passes mapping to cancel for gateway reward id fallbac
   assert.equal(store.cancelCalls[0]?.mapping?.gatewayRewardId, 'gateway-reward-1');
   assert.equal(store.cancelCalls[0]?.reason, 'test cancellation');
 });
+
+
+test('active duplicate redemption does not call gateway fulfill again', async () => {
+  const store = memoryStore();
+  store.observeOnly = false;
+  store.processMappedRedemption = async () => ({ status: 'already_granted', reason: 'duplicate_twitch_redemption_id' });
+
+  const result = await processGatewayRedemptionObserveOnly(redemption(), store);
+
+  assert.equal(result.processed, true);
+  assert.equal(result.ignored, true);
+  if (result.ignored) assert.equal(result.reason, 'duplicate_twitch_redemption_id');
+  assert.equal(store.fulfillCalls.length, 0);
+  assert.equal(store.cancelCalls.length, 0);
+});

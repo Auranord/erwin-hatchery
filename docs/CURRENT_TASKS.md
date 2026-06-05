@@ -22,13 +22,13 @@ Implemented:
 - Hatchery-authored egg reward mapping from `egg_types`.
 - Observe-only redemption ingestion.
 - Active grant path under feature flags.
+- Direct Twitch Channel Point redemption processing is guarded off when `ERWIN_GATEWAY_ENABLED=true`; the old EventSub route acknowledges retries but does not grant eggs.
+- Gateway redemption fulfillment state is recorded as fulfilled, pending manual fulfill, fulfillment failed, canceled, or ignored/duplicate.
 
 Known focus areas:
 
-- Fulfillment after successful local grant must call gateway redemption status after local commit.
-- If webhook payload lacks `gatewayRewardId`, fulfillment should use the mapped `gateway_reward_mappings.gatewayRewardId`.
-- Do not silently skip fulfillment. Record visible pending/failed fulfillment state.
-- Old direct Twitch EventSub processing should be disabled or no-op for gateway-owned rewards before active gateway grants are trusted.
+- Monitor active gateway redemptions in `/api/erwin-gateway/diagnostics` for duplicate/ignored reasons and fulfillment failures.
+- Keep `ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS=false` unless the gateway status API is verified in the target environment.
 
 ## Active grant acceptance
 

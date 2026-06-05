@@ -169,7 +169,9 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
         .from(economyLedger)
         .where(and(eq(economyLedger.sourceType, 'channel_point_redemption'), eq(economyLedger.sourceId, redemptionRow.id)))
         .limit(1);
-      if (existingLedger) return { status: 'granted' as const };
+      if (existingLedger) {
+        return { status: 'already_granted' as const, reason: 'duplicate_twitch_redemption_id' };
+      }
 
       await tx
         .insert(mysteryEggInventory)
@@ -193,6 +195,15 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
       const gatewayRewardId = nonEmptyString(redemption.gatewayRewardId ?? mapping.gatewayRewardId);
       const logFields = gatewayStatusLogFields({ redemption, mapping, gatewayRewardId });
       log.info(logFields, 'Gateway Channel Point redemption local grant completed');
+      if (!config.ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS) {
+        await tx
+          .update(channelPointRedemptions)
+          .set({ status: 'locally_granted_pending_manual_fulfill', updatedAt: new Date() })
+          .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+        log.info(logFields, 'Gateway Channel Point redemption auto fulfill disabled; pending manual fulfill');
+        return;
+      }
+
       if (!gatewayRewardId) {
         await tx
           .update(channelPointRedemptions)
@@ -235,6 +246,15 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
       const { redemption, mapping, reason } = input;
       const gatewayRewardId = nonEmptyString(redemption.gatewayRewardId ?? mapping?.gatewayRewardId);
       const logFields = gatewayStatusLogFields({ redemption, mapping, gatewayRewardId });
+      if (!config.ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS) {
+        await tx
+          .update(channelPointRedemptions)
+          .set({ status: 'cancel_pending_manual_fulfill', updatedAt: new Date() })
+          .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+        log.info(logFields, 'Gateway Channel Point redemption auto cancel disabled; pending manual action');
+        return;
+      }
+
       if (!gatewayRewardId) {
         await tx
           .update(channelPointRedemptions)
@@ -320,7 +340,11 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
             cost: redemption.rewardCost,
             rewardTitle: redemption.rewardTitle,
             rewardPrompt: redemption.rewardPrompt,
-            status: redemption.status,
+            status: sql<string>`case
+              when ${redemption.status} in ('FULFILLED', 'CANCELED') then ${redemption.status}
+              when ${channelPointRedemptions.status} in ('FULFILLED', 'CANCELED', 'locally_granted_pending_gateway_fulfill', 'locally_granted_pending_manual_fulfill', 'locally_granted_fulfillment_failed', 'cancel_pending_gateway', 'cancel_pending_manual_fulfill', 'cancel_failed') then ${channelPointRedemptions.status}
+              else ${redemption.status}
+            end`,
             userInput: redemption.userInput,
             lastGatewayDeliveryId: redemption.gatewayDeliveryId,
             lastGatewayEventId: redemption.gatewayEventId,
@@ -422,7 +446,24 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
         .from(gatewayWebhookEvents)
         .orderBy(desc(gatewayWebhookEvents.createdAt))
         .limit(50),
-      db.select().from(channelPointRedemptions).orderBy(desc(channelPointRedemptions.updatedAt)).limit(50),
+      db
+        .select({
+          id: channelPointRedemptions.id,
+          twitchRedemptionId: channelPointRedemptions.twitchRedemptionId,
+          mappingStatus: channelPointRedemptions.mappingStatus,
+          localRewardType: channelPointRedemptions.localRewardType,
+          gatewayRewardId: channelPointRedemptions.gatewayRewardId,
+          twitchRewardId: channelPointRedemptions.twitchRewardId,
+          rewardTitle: channelPointRedemptions.rewardTitle,
+          status: channelPointRedemptions.status,
+          lastGatewayDeliveryId: channelPointRedemptions.lastGatewayDeliveryId,
+          lastGatewayEventId: channelPointRedemptions.lastGatewayEventId,
+          processedAt: channelPointRedemptions.processedAt,
+          updatedAt: channelPointRedemptions.updatedAt
+        })
+        .from(channelPointRedemptions)
+        .orderBy(desc(channelPointRedemptions.updatedAt))
+        .limit(50),
       db
         .select({ twitchRewardId: channelPointRedemptions.twitchRewardId, gatewayRewardId: channelPointRedemptions.gatewayRewardId, rewardTitle: channelPointRedemptions.rewardTitle })
         .from(channelPointRedemptions)
