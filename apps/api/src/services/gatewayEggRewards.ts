@@ -4,6 +4,8 @@ import { eggTypes, gatewayRewardMappings } from '../db/schema.js';
 import { createErwinGatewayClient, type GatewayChannelPointReward } from './erwinGatewayClient.js';
 
 const REWARD_PREFIX = '[Erwin Hatchery]';
+const BASIC_MYSTERY_EGG_TYPE_ID = 'beta_egg';
+const BASIC_MYSTERY_EGG_GATEWAY_TYPE = 'basic_mystery_egg';
 
 export type EggTypeRewardConfig = {
   id: string;
@@ -32,7 +34,7 @@ export type EggTypeGatewayRewardPlan = {
   maxPerStream: number;
   isMaxPerUserPerStreamEnabled: boolean;
   maxPerUserPerStream: number;
-  metadata: { source: 'erwin-hatchery'; rewardKind: 'egg_type'; eggTypeId: string };
+  metadata: { source: 'erwin-hatchery'; rewardKind: 'egg_type'; eggTypeId: string; appOwnershipKey: string; gatewayLocalRewardType: string };
 };
 
 export type GatewayEggRewardSyncResult = {
@@ -47,7 +49,17 @@ export type GatewayEggRewardSyncResult = {
     twitchRewardId: string;
     title: string;
     isEnabled: boolean;
+    ownershipStatus: string;
+    manageable: boolean;
+    canAdopt: boolean;
+    canMutate: boolean;
+    appOwnershipKey: string;
+    action: 'created' | 'updated' | 'adopted' | 'discovered' | 'skipped';
+    error?: string;
   }>;
+  adopted: number;
+  discovered: number;
+  blocked: number;
 };
 
 function stringOrNull(value: unknown): string | null {
@@ -56,6 +68,14 @@ function stringOrNull(value: unknown): string | null {
 
 export function localRewardTypeForEggType(eggTypeId: string): string {
   return `egg_type:${eggTypeId}`;
+}
+
+export function gatewayLocalRewardTypeForEggType(eggTypeId: string): string {
+  return eggTypeId === BASIC_MYSTERY_EGG_TYPE_ID ? BASIC_MYSTERY_EGG_GATEWAY_TYPE : localRewardTypeForEggType(eggTypeId);
+}
+
+export function appOwnershipKeyForEggType(eggTypeId: string): string {
+  return eggTypeId === BASIC_MYSTERY_EGG_TYPE_ID ? 'hatchery:basic_mystery_egg' : `hatchery:egg_type:${eggTypeId}`;
 }
 
 function rewardTitleForEgg(displayName: string): string {
@@ -89,12 +109,50 @@ export function gatewayRewardPlanForEggType(eggType: EggTypeRewardConfig): EggTy
     maxPerStream,
     isMaxPerUserPerStreamEnabled: maxPerUserPerStream > 0,
     maxPerUserPerStream,
-    metadata: { source: 'erwin-hatchery', rewardKind: 'egg_type', eggTypeId: eggType.id }
+    metadata: {
+      source: 'erwin-hatchery',
+      rewardKind: 'egg_type',
+      eggTypeId: eggType.id,
+      appOwnershipKey: appOwnershipKeyForEggType(eggType.id),
+      gatewayLocalRewardType: gatewayLocalRewardTypeForEggType(eggType.id)
+    }
   };
 }
 
 function gatewayRewardTwitchId(reward: GatewayChannelPointReward): string | null {
   return stringOrNull(reward.twitch_reward_id) ?? stringOrNull(reward.twitchRewardId);
+}
+
+function booleanOrDefault(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function gatewayRewardAppOwnershipKey(reward: GatewayChannelPointReward): string | null {
+  return stringOrNull(reward.appOwnershipKey) ?? stringOrNull(reward.app_ownership_key);
+}
+
+function gatewayRewardOwnershipStatus(reward: GatewayChannelPointReward): string {
+  return stringOrNull(reward.ownershipStatus) ?? stringOrNull(reward.ownership_status) ?? 'unknown';
+}
+
+function gatewayRewardManageable(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.manageable, false);
+}
+
+function gatewayRewardCanAdopt(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.canAdopt ?? reward.can_adopt, false);
+}
+
+function gatewayRewardCanMutate(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.canMutate ?? reward.can_mutate, gatewayRewardOwnershipStatus(reward) === 'owned_by_you');
+}
+
+function gatewayRewardEnabled(reward: GatewayChannelPointReward): boolean {
+  return booleanOrDefault(reward.enabled ?? reward.is_enabled, false);
+}
+
+function isSameOwnershipKey(reward: GatewayChannelPointReward, appOwnershipKey: string): boolean {
+  return gatewayRewardAppOwnershipKey(reward) === appOwnershipKey;
 }
 
 function hasSameRewardConfig(reward: GatewayChannelPointReward, plan: EggTypeGatewayRewardPlan): boolean {
@@ -163,6 +221,82 @@ export async function listEggTypeGatewayRewardStatusForAdmin() {
   };
 }
 
+
+async function storeGatewayEggRewardMapping(input: {
+  eggTypeId: string;
+  plan: EggTypeGatewayRewardPlan;
+  reward: GatewayChannelPointReward;
+  twitchRewardId: string;
+  isActive: boolean;
+  appOwnershipKey: string;
+}) {
+  const { eggTypeId, plan, reward, twitchRewardId, isActive, appOwnershipKey } = input;
+  await db.transaction(async (tx) => {
+    if (isActive) {
+      await tx.update(eggTypes).set({ twitchRewardId }).where(eq(eggTypes.id, eggTypeId));
+    }
+    await tx
+      .insert(gatewayRewardMappings)
+      .values({
+        localRewardType: plan.localRewardType,
+        displayName: reward.title ?? plan.title,
+        gatewayRewardId: reward.id,
+        twitchRewardId,
+        isActive,
+        appOwnershipKey,
+        ownershipStatus: gatewayRewardOwnershipStatus(reward),
+        manageable: gatewayRewardManageable(reward),
+        canAdopt: gatewayRewardCanAdopt(reward),
+        canMutate: gatewayRewardCanMutate(reward),
+        lastSyncedAt: new Date(),
+        metadata: {
+          plan,
+          gatewayReward: reward,
+          gatewayLocalRewardType: gatewayLocalRewardTypeForEggType(eggTypeId),
+          adoptionRequired: !isActive
+        },
+        updatedAt: new Date()
+      })
+      .onConflictDoUpdate({
+        target: gatewayRewardMappings.localRewardType,
+        set: {
+          displayName: reward.title ?? plan.title,
+          gatewayRewardId: reward.id,
+          twitchRewardId,
+          isActive,
+          appOwnershipKey,
+          ownershipStatus: gatewayRewardOwnershipStatus(reward),
+          manageable: gatewayRewardManageable(reward),
+          canAdopt: gatewayRewardCanAdopt(reward),
+          canMutate: gatewayRewardCanMutate(reward),
+          lastSyncedAt: new Date(),
+          metadata: {
+            plan,
+            gatewayReward: reward,
+            gatewayLocalRewardType: gatewayLocalRewardTypeForEggType(eggTypeId),
+            adoptionRequired: !isActive
+          },
+          updatedAt: new Date()
+        }
+      });
+  });
+}
+
+function findCandidateReward(rewards: GatewayChannelPointReward[], eggType: EggTypeRewardConfig, plan: EggTypeGatewayRewardPlan, appOwnershipKey: string): GatewayChannelPointReward | null {
+  return rewards.find((reward) => {
+    const metadata = reward.metadata ?? {};
+    return (
+      reward.id === eggType.twitchRewardId ||
+      gatewayRewardTwitchId(reward) === eggType.twitchRewardId ||
+      isSameOwnershipKey(reward, appOwnershipKey) ||
+      metadata.eggTypeId === eggType.id ||
+      metadata.egg_type_id === eggType.id ||
+      metadata.appOwnershipKey === appOwnershipKey ||
+      reward.title === plan.title
+    );
+  }) ?? null;
+}
+
 export async function syncEggTypeGatewayRewardsForAdmin(): Promise<GatewayEggRewardSyncResult> {
   const client = createErwinGatewayClient();
   if (!client) throw new Error('erwin-gateway is not configured or enabled');
@@ -184,67 +318,79 @@ export async function syncEggTypeGatewayRewardsForAdmin(): Promise<GatewayEggRew
     .from(eggTypes)
     .orderBy(eggTypes.id);
 
-  const gatewayRewards = await client.listRewards();
+  await client.syncRewards();
+  const listedRewards = await client.listRewards();
+  let gatewayRewards = Array.isArray(listedRewards.rewards) ? listedRewards.rewards : [];
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  let adopted = 0;
+  let discovered = 0;
+  let blocked = 0;
   const rewards: GatewayEggRewardSyncResult['rewards'] = [];
 
   for (const eggType of eggTypeRows) {
     const plan = gatewayRewardPlanForEggType(eggType);
-    const current = gatewayRewards.rewards.find((reward) => {
-      const metadata = reward.metadata ?? {};
-      return (
-        reward.id === eggType.twitchRewardId ||
-        gatewayRewardTwitchId(reward) === eggType.twitchRewardId ||
-        metadata.eggTypeId === eggType.id ||
-        metadata.egg_type_id === eggType.id ||
-        reward.title === plan.title
-      );
-    });
+    const appOwnershipKey = appOwnershipKeyForEggType(eggType.id);
+    const current = findCandidateReward(gatewayRewards, eggType, plan, appOwnershipKey);
+    let reward = current;
+    let action: GatewayEggRewardSyncResult['rewards'][number]['action'] = 'skipped';
+    let error: string | undefined;
 
-    const reward = current
-      ? await (hasSameRewardConfig(current, plan)
-          ? Promise.resolve(current)
-          : client.updateReward(current.id, rewardPayload(plan)))
-      : await client.createReward(rewardPayload(plan));
+    if (reward) {
+      const ownershipStatus = gatewayRewardOwnershipStatus(reward);
+      const needsAdoption = ownershipStatus === 'unowned' || (ownershipStatus === 'unknown' && gatewayRewardAppOwnershipKey(reward) !== appOwnershipKey);
+      if (needsAdoption && gatewayRewardCanAdopt(reward)) {
+        reward = await client.adoptReward(reward.id, {
+          app_ownership_key: appOwnershipKey,
+          expected_twitch_reward_id: gatewayRewardTwitchId(reward) ?? undefined,
+          local_reward_type: gatewayLocalRewardTypeForEggType(eggType.id)
+        });
+        adopted += 1;
+        action = 'adopted';
+        gatewayRewards = gatewayRewards.map((candidate) => (candidate.id === reward?.id ? reward : candidate));
+      } else if (needsAdoption) {
+        discovered += 1;
+        action = 'discovered';
+        error = gatewayRewardManageable(reward)
+          ? 'Reward is not yet adoptable by erwin-gateway.'
+          : 'Reward is not manageable by the Twitch client.';
+      } else if (ownershipStatus === 'owned_by_other') {
+        blocked += 1;
+        action = 'discovered';
+        error = 'Reward is owned by another gateway app.';
+      }
+    }
 
-    if (current) {
-      if (hasSameRewardConfig(current, plan)) skipped += 1;
-      else updated += 1;
-    } else {
+    if (!reward) {
+      reward = await client.createReward(rewardPayload(plan));
       created += 1;
+      action = 'created';
+    } else if (gatewayRewardCanMutate(reward)) {
+      if (hasSameRewardConfig(reward, plan)) {
+        if (action === 'skipped') skipped += 1;
+      } else {
+        reward = await client.updateReward(reward.id, rewardPayload(plan));
+        updated += 1;
+        action = action === 'adopted' ? 'adopted' : 'updated';
+      }
+    } else if (action === 'skipped') {
+      discovered += 1;
+      action = 'discovered';
+      error = 'Reward is not adopted by Hatchery, so update/delete actions are disabled.';
     }
 
     const twitchRewardId = gatewayRewardTwitchId(reward);
     if (!twitchRewardId) throw new Error(`Gateway reward ${reward.id} is missing a Twitch reward id`);
 
-    await db.transaction(async (tx) => {
-      await tx.update(eggTypes).set({ twitchRewardId }).where(eq(eggTypes.id, eggType.id));
-      await tx
-        .insert(gatewayRewardMappings)
-        .values({
-          localRewardType: plan.localRewardType,
-          displayName: plan.title,
-          gatewayRewardId: reward.id,
-          twitchRewardId,
-          isActive: plan.isEnabled,
-          lastSyncedAt: new Date(),
-          metadata: { plan, gatewayReward: reward },
-          updatedAt: new Date()
-        })
-        .onConflictDoUpdate({
-          target: gatewayRewardMappings.localRewardType,
-          set: {
-            displayName: plan.title,
-            gatewayRewardId: reward.id,
-            twitchRewardId,
-            isActive: plan.isEnabled,
-            lastSyncedAt: new Date(),
-            metadata: { plan, gatewayReward: reward },
-            updatedAt: new Date()
-          }
-        });
+    const canMutate = gatewayRewardCanMutate(reward);
+    await storeGatewayEggRewardMapping({
+      eggTypeId: eggType.id,
+      plan,
+      reward,
+      twitchRewardId,
+      isActive: canMutate && plan.isEnabled,
+      appOwnershipKey
     });
 
     rewards.push({
@@ -252,10 +398,17 @@ export async function syncEggTypeGatewayRewardsForAdmin(): Promise<GatewayEggRew
       localRewardType: plan.localRewardType,
       gatewayRewardId: reward.id,
       twitchRewardId,
-      title: plan.title,
-      isEnabled: plan.isEnabled
+      title: reward.title ?? plan.title,
+      isEnabled: gatewayRewardEnabled(reward),
+      ownershipStatus: gatewayRewardOwnershipStatus(reward),
+      manageable: gatewayRewardManageable(reward),
+      canAdopt: gatewayRewardCanAdopt(reward),
+      canMutate,
+      appOwnershipKey,
+      action,
+      ...(error ? { error } : {})
     });
   }
 
-  return { created, updated, skipped, total: eggTypeRows.length, rewards };
+  return { created, updated, skipped, adopted, discovered, blocked, total: eggTypeRows.length, rewards };
 }

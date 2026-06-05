@@ -149,7 +149,7 @@ pnpm build
 - On API startup, subscriber status is first synchronized from Twitch Helix `Get Broadcaster Subscriptions` and cached onto `users.is_subscriber` / `users.subscriber_ends_at`.
 - If Twitch subscription sync fails (for example token/scope issues), startup falls back to replaying stored `twitch_events` (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) within the last `TWITCH_SUBSCRIPTION_RENEWAL_DAYS`.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
-- Admin gateway egg reward sync endpoint: `POST /api/admin/erwin-gateway/egg-rewards/sync` creates/updates one erwin-gateway Channel Point reward per database egg type and enables/disables each reward from `egg_types.is_active`.
+- Admin gateway egg reward sync endpoint: `POST /api/admin/erwin-gateway/egg-rewards/sync` treats erwin-gateway sync as discovery, adopts selected existing unowned/manageable rewards (for the MVP beta egg using `hatchery:basic_mystery_egg` / `basic_mystery_egg`), and only creates/updates Channel Point rewards when erwin-gateway reports that Hatchery can mutate them. Unowned, non-manageable, or other-app-owned rewards are stored as inactive discovered mappings with ownership diagnostics.
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.

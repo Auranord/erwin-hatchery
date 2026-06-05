@@ -20,7 +20,7 @@ Default cost: 1000
 Effect: Adds one Beta Ei to the viewer's Erwin Hatchery account.
 ```
 
-Hatchery is authoritative for which egg rewards exist. The MVP seed creates active `beta_egg` and inactive `starter_egg`; `POST /api/admin/erwin-gateway/egg-rewards/sync` creates or updates gateway-owned Channel Point rewards and mirrors `egg_types.is_active` to each reward enabled state.
+Hatchery is authoritative for the game meaning of egg rewards while erwin-gateway remains the Twitch transport owner. The MVP seed creates active `beta_egg` and inactive `starter_egg`; `POST /api/admin/erwin-gateway/egg-rewards/sync` first runs gateway reward discovery, lists gateway rewards, adopts matching unowned/manageable rewards with `appOwnershipKey='hatchery:basic_mystery_egg'` for the beta egg, and only creates or mutates rewards after Hatchery owns them. Synced but unowned, non-manageable, or other-app-owned rewards are stored as inactive discovered mappings and are not updated/deleted by Hatchery.
 
 ## Current MVP implementation status
 
