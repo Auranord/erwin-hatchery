@@ -141,7 +141,7 @@ export async function handleErwinGatewayWebhook(input: {
     eventType,
     twitchRedemptionId: extractTwitchRedemptionId(payload),
     twitchMessageId: extractTwitchMessageId(payload),
-    rawPayload: payload,
+    rawPayload: { ...payload, delivery_id: input.deliveryId },
     processingStatus: input.observeOnly ? 'observed' : 'received'
   });
 

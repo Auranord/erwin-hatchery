@@ -256,3 +256,17 @@ ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS=300
 For staging observe-only tests, set `ERWIN_GATEWAY_ENABLED=true`, keep `ERWIN_GATEWAY_OBSERVE_ONLY=true`, and leave `ERWIN_GATEWAY_REQUIRED=false` until gateway availability and credentials are proven. Configure the gateway app webhook URL to `https://<hatchery-host>/erwin-gateway/webhook`. Do not enable active reward granting or redemption fulfill/cancel during this foundation phase.
 
 After deployment, validate `GET /api/health`, then `GET /api/erwin-gateway/smoke`, then send a signed test webhook from the gateway Admin UI and confirm a `2xx` response plus a `gateway_webhook_events` row.
+
+## Erwin Gateway Channel Point observe-only ingestion
+
+Hatchery now receives Channel Point custom reward redemption transport from `erwin-gateway`; the gateway owns Twitch EventSub delivery, webhook signing, and app API transport, while Hatchery owns reward mapping and all economy decisions. `ERWIN_GATEWAY_OBSERVE_ONLY=true` remains the default so real redemption webhooks are verified, deduped, stored, and mapped without granting Mystery Eggs, writing egg-grant ledger entries, or calling gateway fulfill/cancel.
+
+Reward mappings are created at runtime from the admin panel's erwin-gateway reward sync. Admins choose the gateway reward and local Hatchery reward type; Hatchery persists the gateway reward ID and Twitch reward ID plus enabled state, last sync time, and metadata. Unknown rewards are stored with `mapping_status='unknown'` for diagnostics and are ignored safely rather than crashing or mutating inventory.
+
+Duplicate gateway deliveries are safe: Hatchery dedupes by gateway delivery ID and gateway event ID before processing. The Channel Point redemption cache is also upserted by Twitch redemption ID so add/update events and retries cannot create duplicate redemption rows or repeated economy effects. Database wipes are acceptable during development, but this idempotency model is still required for the production path.
+
+Inspection endpoints:
+
+- `GET /api/erwin-gateway/smoke` checks gateway app authentication.
+- `GET /api/erwin-gateway/diagnostics` returns observe-only status, reward mappings, recent gateway redemption events, recent cached Channel Point redemptions, unmapped rewards, and ignored events.
+- Admins use `GET /api/admin/erwin-gateway/rewards` and `POST /api/admin/erwin-gateway/rewards/sync` from the admin panel to sync gateway rewards and create local Hatchery reward mappings at runtime.

@@ -135,10 +135,28 @@ export const gatewayWebhookEvents = pgTable(
   },
   (table) => ({
     deliveryIdUnique: uniqueIndex('gateway_webhook_events_delivery_id_idx').on(table.deliveryId),
-    eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId),
-    twitchRedemptionIdUnique: uniqueIndex('gateway_webhook_events_twitch_redemption_id_idx')
-      .on(table.twitchRedemptionId)
-      .where(sql`${table.twitchRedemptionId} is not null`)
+    eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId)
+  })
+);
+
+export const gatewayRewardMappings = pgTable(
+  'gateway_reward_mappings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    localRewardType: text('local_reward_type').notNull(),
+    displayName: text('display_name').notNull(),
+    gatewayRewardId: text('gateway_reward_id').notNull(),
+    twitchRewardId: text('twitch_reward_id').notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamps.createdAt,
+    updatedAt: timestamps.updatedAt
+  },
+  (table) => ({
+    gatewayRewardIdUnique: uniqueIndex('gateway_reward_mappings_gateway_reward_id_idx').on(table.gatewayRewardId),
+    twitchRewardIdUnique: uniqueIndex('gateway_reward_mappings_twitch_reward_id_idx').on(table.twitchRewardId),
+    localRewardTypeUnique: uniqueIndex('gateway_reward_mappings_local_reward_type_idx').on(table.localRewardType)
   })
 );
 
@@ -219,11 +237,26 @@ export const channelPointRedemptions = pgTable('channel_point_redemptions', {
   id: uuid('id').defaultRandom().primaryKey(),
   twitchRedemptionId: text('twitch_redemption_id').notNull().unique(),
   twitchRewardId: text('twitch_reward_id').notNull(),
+  gatewayRewardId: text('gateway_reward_id'),
+  rewardMappingId: uuid('reward_mapping_id').references(() => gatewayRewardMappings.id),
+  localRewardType: text('local_reward_type'),
+  mappingStatus: text('mapping_status').notNull().default('unknown'),
   userId: uuid('user_id').references(() => users.id),
-  cost: integer('cost').notNull(),
+  twitchUserId: text('twitch_user_id'),
+  twitchUserLogin: text('twitch_user_login'),
+  twitchUserDisplayName: text('twitch_user_display_name'),
+  cost: integer('cost').notNull().default(0),
+  rewardTitle: text('reward_title'),
+  rewardPrompt: text('reward_prompt'),
   status: text('status').notNull(),
+  userInput: text('user_input'),
+  lastGatewayDeliveryId: text('last_gateway_delivery_id'),
+  lastGatewayEventId: text('last_gateway_event_id'),
   rawPayload: jsonb('raw_payload').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
   processedAt: timestamp('processed_at', { withTimezone: true })

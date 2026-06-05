@@ -246,3 +246,12 @@ Implemented persisted Twitch setup state, broadcaster setup OAuth, EventSub sync
 - Add gateway redemption fulfill/cancel calls only in a later PR after reward grants are durable and retry-safe.
 - Replace direct stream/profile/schedule reads with gateway `GET /api/v1/streams/current` and related APIs after smoke checks are stable.
 - Remove direct Twitch EventSub/reward/token ownership only after the gateway cutover has rollback coverage.
+
+## PR 2 completed: gateway redemption observe-only ingestion
+
+- [x] Added runtime-admin-synced gateway reward mappings for local Hatchery reward types.
+- [x] Extended the erwin-gateway app client with reward sync/list and redemption list helpers.
+- [x] Normalized signed gateway Channel Point redemption add/update webhooks into Hatchery redemption cache rows.
+- [x] Kept observe-only as the default: no Mystery Egg grants, no egg-grant ledger entries, and no gateway fulfill/cancel calls.
+- [x] Stored unknown rewards for diagnostics and made duplicate delivery/event/redemption processing safe.
+- [ ] Implement active post-observe redemption economy effects in a later PR.
