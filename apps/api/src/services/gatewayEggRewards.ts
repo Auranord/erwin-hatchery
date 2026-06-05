@@ -171,21 +171,23 @@ function hasSameRewardConfig(reward: GatewayChannelPointReward, plan: EggTypeGat
   );
 }
 
-function rewardPayload(plan: EggTypeGatewayRewardPlan): Record<string, unknown> {
+export function rewardPayload(plan: EggTypeGatewayRewardPlan): Record<string, unknown> {
   return {
     title: plan.title,
     prompt: plan.prompt,
     cost: plan.cost,
     background_color: plan.backgroundColor,
     is_enabled: plan.isEnabled,
-    enabled: plan.isEnabled,
     is_global_cooldown_enabled: plan.isGlobalCooldownEnabled,
-    global_cooldown_seconds: plan.globalCooldownSeconds,
+    ...(plan.isGlobalCooldownEnabled && plan.globalCooldownSeconds > 0
+      ? { global_cooldown_seconds: plan.globalCooldownSeconds }
+      : {}),
     is_max_per_stream_enabled: plan.isMaxPerStreamEnabled,
-    max_per_stream: plan.maxPerStream,
+    ...(plan.isMaxPerStreamEnabled && plan.maxPerStream > 0 ? { max_per_stream: plan.maxPerStream } : {}),
     is_max_per_user_per_stream_enabled: plan.isMaxPerUserPerStreamEnabled,
-    max_per_user_per_stream: plan.maxPerUserPerStream,
-    metadata: plan.metadata
+    ...(plan.isMaxPerUserPerStreamEnabled && plan.maxPerUserPerStream > 0
+      ? { max_per_user_per_stream: plan.maxPerUserPerStream }
+      : {})
   };
 }
 
