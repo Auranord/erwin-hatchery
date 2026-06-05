@@ -30,9 +30,9 @@ import {
   syncChannelPointRedemptionEventSub
 } from '../services/twitchEventSub.js';
 import {
-  listManagedCustomRewards,
-  syncEggTypeCustomRewards
-} from '../services/twitchRewards.js';
+  listEggTypeGatewayRewardStatusForAdmin,
+  syncEggTypeGatewayRewardsForAdmin
+} from '../services/gatewayEggRewards.js';
 import {
   listGatewayRewardsForAdmin,
   syncGatewayRewardsForAdmin,
@@ -366,23 +366,20 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/api/admin/twitch/custom-rewards', async (request, reply) => {
+  app.get('/api/admin/erwin-gateway/egg-rewards', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles))
       return reply.code(403).send({ message: 'Forbidden' });
 
-    const rewards = await listManagedCustomRewards();
-    return {
-      rewards: rewards.map((reward) => ({
-        id: reward.id,
-        name: reward.title,
-        description: reward.prompt,
-        cost: reward.cost
-      }))
-    };
+    try {
+      return await listEggTypeGatewayRewardStatusForAdmin();
+    } catch (error) {
+      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to list Hatchery egg gateway rewards');
+      return reply.code(502).send({ message: 'Gateway-Ei-Rewards konnten nicht geladen werden.' });
+    }
   });
 
-  app.post('/api/admin/twitch/custom-rewards/sync', async (request, reply) => {
+  app.post('/api/admin/erwin-gateway/egg-rewards/sync', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles))
       return reply.code(403).send({ message: 'Forbidden' });
@@ -397,16 +394,21 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (duplicate.length > 0)
       return reply.code(200).send({ status: 'ok', idempotent: true });
 
-    const result = await syncEggTypeCustomRewards();
+    try {
+      const result = await syncEggTypeGatewayRewardsForAdmin();
 
-    await db.insert(adminActionLogs).values({
-      actorUserId: identity.userId,
-      actionType: 'twitch_custom_rewards_sync',
-      requestId,
-      payload: result
-    });
+      await db.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'erwin_gateway_egg_rewards_sync',
+        requestId,
+        payload: result
+      });
 
-    return { status: 'ok', idempotent: false, ...result };
+      return { status: 'ok', idempotent: false, ...result };
+    } catch (error) {
+      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to sync Hatchery egg gateway rewards');
+      return reply.code(502).send({ message: 'Gateway-Ei-Reward-Sync fehlgeschlagen.' });
+    }
   });
 
   app.get('/api/admin/erwin-gateway/rewards', async (request, reply) => {

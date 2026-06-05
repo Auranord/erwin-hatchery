@@ -222,7 +222,7 @@ This foundation PR intentionally performs no active reward granting and does not
 
 Hatchery now receives Channel Point custom reward redemption transport from `erwin-gateway`; the gateway owns Twitch EventSub delivery, webhook signing, and app API transport, while Hatchery owns reward mapping and all economy decisions. `ERWIN_GATEWAY_OBSERVE_ONLY=true` remains the default so real redemption webhooks are verified, deduped, stored, and mapped without granting Mystery Eggs, writing egg-grant ledger entries, or calling gateway fulfill/cancel.
 
-Reward mappings are created at runtime from the admin panel's erwin-gateway reward sync. Admins choose the gateway reward and local Hatchery reward type; Hatchery persists the gateway reward ID and Twitch reward ID plus enabled state, last sync time, and metadata. Unknown rewards are stored with `mapping_status='unknown'` for diagnostics and are ignored safely rather than crashing or mutating inventory.
+Hatchery, not Twitch or erwin-gateway, is authoritative for which egg rewards exist. The admin gateway egg sync creates/updates one app-owned gateway custom reward per `egg_types` row and mirrors `egg_types.is_active` to the reward enabled state. Gateway redemptions are mapped through `egg_type:<egg_type_id>`, processed idempotently against the stored Twitch redemption ID, and only active egg types can grant inventory/ledger mutations; inactive or unknown mappings are canceled or ignored safely.
 
 Duplicate gateway deliveries are safe: Hatchery dedupes by gateway delivery ID and gateway event ID before processing. The Channel Point redemption cache is also upserted by Twitch redemption ID so add/update events and retries cannot create duplicate redemption rows or repeated economy effects. Database wipes are acceptable during development, but this idempotency model is still required for the production path.
 
@@ -230,4 +230,4 @@ Inspection endpoints:
 
 - `GET /api/erwin-gateway/smoke` checks gateway app authentication.
 - `GET /api/erwin-gateway/diagnostics` returns observe-only status, reward mappings, recent gateway redemption events, recent cached Channel Point redemptions, unmapped rewards, and ignored events.
-- Admins use `GET /api/admin/erwin-gateway/rewards` and `POST /api/admin/erwin-gateway/rewards/sync` from the admin panel to sync gateway rewards and create local Hatchery reward mappings at runtime.
+- Admins use `GET /api/admin/erwin-gateway/egg-rewards` and `POST /api/admin/erwin-gateway/egg-rewards/sync` from the admin panel to let Hatchery create/update one gateway custom reward per database egg type and mirror active/inactive state.

@@ -8,9 +8,9 @@ The MVP is designed for a small Twitch Affiliate channel, self-hosted on TrueNAS
 
 ## Core MVP loop
 
-1. Viewer redeems Twitch Channel Point reward: `1x Mystery Ei` for 500 channel points.
-2. Backend receives the EventSub redemption and creates one mystery egg for that Twitch user.
-3. Viewer can log in with Twitch to use the web UI. The backend grants each player one Twitch-unsynced inactive `starter_egg` (`Starter Ei`) by default.
+1. Viewer redeems the Hatchery-synced Twitch Channel Point reward for `Beta Ei`.
+2. Backend receives the gateway redemption and creates one mystery egg for that Twitch user.
+3. Viewer can log in with Twitch to use the web UI. The backend grants each player one inactive `starter_egg` (`Starter Ei`) through a ledgered server-side default grant.
 4. Viewer identifies eggs in the app.
 5. Identified eggs either:
    - become cracked egg resources, or
@@ -130,7 +130,7 @@ pnpm build
 - Stores every unique EventSub notification in `twitch_events` keyed by Twitch event ID for idempotency.
 - Processes only `channel.channel_points_custom_reward_redemption.add` notifications for reward IDs that are mapped to active egg types in the database.
 - Creates a provisional user by Twitch user ID when needed.
-- Increments the configured mystery egg inventory, currently active `beta_egg`, by +1 and writes an immutable `economy_ledger` entry. The default `starter_egg` is inactive, so Twitch reward sync does not create or maintain a redeem for it.
+- Increments the configured mystery egg inventory, currently active `beta_egg`, by +1 and writes an immutable `economy_ledger` entry. Gateway reward sync creates or updates the Channel Point reward from Hatchery egg types.
 - Resolves the mystery egg outcome later when the player identifies/opens the egg. The seeded Beta Ei table grants a pet about one third of the time and `cracked_eggs` resources about two thirds of the time, split evenly across 50, 100, and 200 resource outcomes. The seeded Starter Ei table has only uncommon pet outcomes and no resource outcomes.
 - Replay-safe: duplicate EventSub event IDs and duplicate redemption IDs are ignored.
 
@@ -149,12 +149,12 @@ pnpm build
 - On API startup, subscriber status is first synchronized from Twitch Helix `Get Broadcaster Subscriptions` and cached onto `users.is_subscriber` / `users.subscriber_ends_at`.
 - If Twitch subscription sync fails (for example token/scope issues), startup falls back to replaying stored `twitch_events` (`channel.subscribe`, `channel.subscription.message`, `channel.subscription.end`) within the last `TWITCH_SUBSCRIPTION_RENEWAL_DAYS`.
 - Admin debug endpoint: `GET /api/admin/debug/eventsub-subscription` (use `?refresh=true` for an on-demand live re-check).
-- Admin custom reward sync endpoint: `POST /api/admin/twitch/custom-rewards/sync` creates/updates Twitch channel point rewards for active egg types and removes rewards for inactive egg types.
+- Admin gateway egg reward sync endpoint: `POST /api/admin/erwin-gateway/egg-rewards/sync` creates/updates one erwin-gateway Channel Point reward per database egg type and enables/disables each reward from `egg_types.is_active`.
 
 - EventSub auto-sync for channel point redemptions requires broadcaster OAuth scope `channel:read:redemptions channel:manage:redemptions channel:read:subscriptions`.
 - If debug status shows missing authorization, logout/login once with broadcaster account to refresh stored token scopes.
 
-## Twitch reward-ingestion setup
+## Twitch/gateway reward-ingestion setup
 
 A fresh deployment starts in a Twitch setup/repair state until the configured broadcaster completes `/api/setup/twitch/login`. The setup OAuth flow must be completed by `TWITCH_BROADCASTER_ID` and requests `channel:read:subscriptions`, `channel:read:redemptions`, `channel:manage:redemptions`, and `bits:read`. The setup state is persisted in `twitch_integration_state`, so setup/backfill can resume after restarts.
 

@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, desc, eq, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
-import { channelPointRedemptions, gatewayRewardMappings, gatewayWebhookEvents, users } from '../db/schema.js';
-import { smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
+import { channelPointRedemptions, economyLedger, eggTypes, gatewayRewardMappings, gatewayWebhookEvents, mysteryEggInventory, users } from '../db/schema.js';
+import { createErwinGatewayClient, smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
 import { handleErwinGatewayWebhook, type GatewayWebhookRecord, type GatewayWebhookStore } from '../services/erwinGatewayWebhook.js';
 import {
   normalizeGatewayRedemptionPayload,
@@ -63,6 +63,73 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
       const user = inserted[0];
       if (!user) throw new Error('Failed to upsert provisional Twitch user');
       return { userId: user.id, createdOrUpdated: true };
+    },
+
+    async processMappedRedemption(input: { redemption: NormalizedGatewayRedemption; userId: string | null; mapping: GatewayRewardMapping }) {
+      const { redemption, userId, mapping } = input;
+      if (!userId) return { status: 'canceled' as const, reason: 'Redemption is missing a Twitch user.' };
+      if (!mapping.localRewardType.startsWith('egg_type:')) {
+        return { status: 'canceled' as const, reason: `Unsupported Hatchery reward type: ${mapping.localRewardType}` };
+      }
+
+      const eggTypeId = mapping.localRewardType.slice('egg_type:'.length);
+      const [eggType] = await tx
+        .select({ id: eggTypes.id, isActive: eggTypes.isActive })
+        .from(eggTypes)
+        .where(eq(eggTypes.id, eggTypeId))
+        .limit(1);
+      if (!eggType) return { status: 'canceled' as const, reason: `Unknown Hatchery egg type: ${eggTypeId}` };
+      if (!eggType.isActive) return { status: 'canceled' as const, reason: `Hatchery egg type is inactive: ${eggTypeId}` };
+
+      const [redemptionRow] = await tx
+        .select({ id: channelPointRedemptions.id })
+        .from(channelPointRedemptions)
+        .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId))
+        .limit(1);
+      if (!redemptionRow) throw new Error('Expected persisted channel point redemption before reward processing');
+      const [existingLedger] = await tx
+        .select({ id: economyLedger.id })
+        .from(economyLedger)
+        .where(and(eq(economyLedger.sourceType, 'channel_point_redemption'), eq(economyLedger.sourceId, redemptionRow.id)))
+        .limit(1);
+      if (existingLedger) return { status: 'granted' as const };
+
+      await tx
+        .insert(mysteryEggInventory)
+        .values({ userId, eggTypeId: eggType.id, amount: 1, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [mysteryEggInventory.userId, mysteryEggInventory.eggTypeId],
+          set: { amount: sql`${mysteryEggInventory.amount} + 1`, updatedAt: new Date() }
+        });
+      await tx.insert(economyLedger).values({
+        userId,
+        actorUserId: null,
+        eventType: 'gateway_channel_point_redemption_granted_egg',
+        sourceType: 'channel_point_redemption',
+        sourceId: redemptionRow.id,
+        delta: { mysteryEggInventory: [{ eggTypeId: eggType.id, amountDelta: 1 }] }
+      });
+      return { status: 'granted' as const };
+    },
+    async fulfillRedemption(redemption: NormalizedGatewayRedemption) {
+      const client = createErwinGatewayClient();
+      if (!client || !redemption.gatewayRewardId) return;
+      await client.updateRedemptionStatus({
+        rewardId: redemption.gatewayRewardId,
+        redemptionId: redemption.twitchRedemptionId,
+        status: 'FULFILLED',
+        reason: 'Erwin Hatchery granted the egg and recorded the ledger entry.'
+      });
+    },
+    async cancelRedemption(redemption: NormalizedGatewayRedemption, reason: string) {
+      const client = createErwinGatewayClient();
+      if (!client || !redemption.gatewayRewardId) return;
+      await client.updateRedemptionStatus({
+        rewardId: redemption.gatewayRewardId,
+        redemptionId: redemption.twitchRedemptionId,
+        status: 'CANCELED',
+        reason
+      });
     },
     async upsertChannelPointRedemption(input: {
       redemption: NormalizedGatewayRedemption;

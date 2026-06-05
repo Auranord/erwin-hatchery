@@ -327,21 +327,16 @@ type EventSubFeedItem = {
   error: string | null;
 };
 
-type TwitchCustomReward = {
-  id: string;
-  name: string;
-  description: string;
-  cost: number;
-};
-
-type GatewayReward = {
-  id: string;
-  twitch_reward_id?: string | null;
-  twitchRewardId?: string | null;
-  title?: string | null;
-  display_name?: string | null;
-  cost?: number | null;
-  prompt?: string | null;
+type GatewayEggRewardStatus = {
+  eggType: AdminEggType & { twitchRewardId?: string | null };
+  plan: {
+    localRewardType: string;
+    title: string;
+    prompt: string;
+    cost: number;
+    isEnabled: boolean;
+  };
+  mapping: GatewayRewardMapping | null;
 };
 
 type GatewayRewardMapping = {
@@ -966,16 +961,12 @@ export function App(): JSX.Element {
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
     useState<EventSubSubscriptionStatus | null>(null);
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
-  const [twitchCustomRewards, setTwitchCustomRewards] = useState<
-    TwitchCustomReward[]
+  const [gatewayEggRewardStatuses, setGatewayEggRewardStatuses] = useState<
+    GatewayEggRewardStatus[]
   >([]);
-  const [gatewayRewards, setGatewayRewards] = useState<GatewayReward[]>([]);
   const [gatewayRewardMappings, setGatewayRewardMappings] = useState<
     GatewayRewardMapping[]
   >([]);
-  const [selectedGatewayRewardId, setSelectedGatewayRewardId] = useState('');
-  const [gatewayLocalRewardType, setGatewayLocalRewardType] = useState('');
-  const [gatewayDisplayName, setGatewayDisplayName] = useState('');
   const [adminEggTypes, setAdminEggTypes] = useState<AdminEggType[]>([]);
   const [selectedAdminEggTypeId, setSelectedAdminEggTypeId] =
     useState('beta_egg');
@@ -1138,7 +1129,7 @@ export function App(): JSX.Element {
       void loadUsers(query);
       void loadAdminHealth();
       void loadAdminEggTypes();
-      void loadGatewayRewards();
+      void loadGatewayEggRewards();
       void loadEventSubFeed();
       void loadEventSubSubscriptionStatus();
     }
@@ -1944,26 +1935,25 @@ export function App(): JSX.Element {
     }
   }
 
-  async function loadTwitchCustomRewards(): Promise<void> {
-    const response = await fetch('/api/admin/twitch/custom-rewards', {
+  async function loadGatewayEggRewards(): Promise<void> {
+    const response = await fetch('/api/admin/erwin-gateway/egg-rewards', {
       credentials: 'include'
     });
     const payload = (await response.json().catch(() => null)) as {
-      rewards?: TwitchCustomReward[];
+      eggTypes?: GatewayEggRewardStatus[];
+      mappings?: GatewayRewardMapping[];
       message?: string;
     } | null;
     if (!response.ok) {
-      window.alert(
-        payload?.message ??
-          'Twitch Custom Rewards konnten nicht geladen werden.'
-      );
+      window.alert(payload?.message ?? 'Gateway-Ei-Rewards konnten nicht geladen werden.');
       return;
     }
-    setTwitchCustomRewards(payload?.rewards ?? []);
+    setGatewayEggRewardStatuses(payload?.eggTypes ?? []);
+    setGatewayRewardMappings(payload?.mappings ?? []);
   }
 
-  async function syncTwitchCustomRewards(): Promise<void> {
-    const response = await fetch('/api/admin/twitch/custom-rewards/sync', {
+  async function syncGatewayEggRewards(): Promise<void> {
+    const response = await fetch('/api/admin/erwin-gateway/egg-rewards/sync', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -1973,71 +1963,17 @@ export function App(): JSX.Element {
       message?: string;
       created?: number;
       updated?: number;
+      skipped?: number;
       total?: number;
     } | null;
     if (!response.ok) {
-      window.alert(payload?.message ?? 'Twitch-Reward-Sync fehlgeschlagen.');
+      window.alert(payload?.message ?? 'Gateway-Ei-Reward-Sync fehlgeschlagen.');
       return;
     }
     window.alert(
-      `Twitch-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`
+      `Gateway-Ei-Reward-Sync abgeschlossen. Neu: ${payload?.created ?? 0}, aktualisiert: ${payload?.updated ?? 0}, unverändert: ${payload?.skipped ?? 0}, Ei-Typen: ${payload?.total ?? 0}.`
     );
-  }
-
-  async function loadGatewayRewards(): Promise<void> {
-    const response = await fetch('/api/admin/erwin-gateway/rewards', {
-      credentials: 'include'
-    });
-    const payload = (await response.json().catch(() => null)) as {
-      rewards?: GatewayReward[];
-      mappings?: GatewayRewardMapping[];
-      message?: string;
-    } | null;
-    if (!response.ok) {
-      window.alert(payload?.message ?? 'Gateway-Rewards konnten nicht geladen werden.');
-      return;
-    }
-    const rewards = payload?.rewards ?? [];
-    setGatewayRewards(rewards);
-    setGatewayRewardMappings(payload?.mappings ?? []);
-    if (!selectedGatewayRewardId && rewards[0]) {
-      setSelectedGatewayRewardId(rewards[0].id);
-    }
-  }
-
-  async function syncGatewayRewards(): Promise<void> {
-    const selectedReward = gatewayRewards.find((reward) => reward.id === selectedGatewayRewardId);
-    const localRewardType = gatewayLocalRewardType.trim();
-    const mappings = selectedReward && localRewardType
-      ? [{
-          localRewardType,
-          gatewayRewardId: selectedReward.id,
-          twitchRewardId: selectedReward.twitch_reward_id ?? selectedReward.twitchRewardId ?? undefined,
-          displayName: gatewayDisplayName.trim() || selectedReward.title || selectedReward.display_name || localRewardType,
-          isActive: true
-        }]
-      : [];
-
-    const response = await fetch('/api/admin/erwin-gateway/rewards/sync', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requestId: crypto.randomUUID(), mappings })
-    });
-    const payload = (await response.json().catch(() => null)) as {
-      message?: string;
-      synced?: { rewards?: GatewayReward[] };
-      mappingsUpserted?: number;
-      mappingsSkipped?: number;
-    } | null;
-    if (!response.ok) {
-      window.alert(payload?.message ?? 'Gateway-Reward-Sync fehlgeschlagen.');
-      return;
-    }
-    window.alert(
-      `Gateway-Reward-Sync abgeschlossen. Rewards: ${payload?.synced?.rewards?.length ?? 0}, Mappings gespeichert: ${payload?.mappingsUpserted ?? 0}, übersprungen: ${payload?.mappingsSkipped ?? 0}.`
-    );
-    await loadGatewayRewards();
+    await loadGatewayEggRewards();
   }
 
   async function loadLedger(userId?: string): Promise<void> {
@@ -2557,82 +2493,48 @@ export function App(): JSX.Element {
 
         <section className="card">
           <h2>Redemption-Verwaltung</h2>
-          <p>Verwaltung und Übersicht der Twitch Custom Rewards.</p>
+          <p>Erwin Hatchery ist die Quelle der Wahrheit: Für jeden Ei-Typ wird ein Gateway Custom Reward angelegt und passend zum Datenbank-Status aktiviert oder deaktiviert.</p>
           <div>
-            <button onClick={() => void syncTwitchCustomRewards()}>
-              Twitch Custom Rewards mit Ei-Typen synchronisieren
+            <button onClick={() => void syncGatewayEggRewards()}>
+              Gateway-Ei-Rewards synchronisieren
             </button>
-            <button onClick={() => void loadTwitchCustomRewards()}>
-              Alle Custom Rewards laden
+            <button onClick={() => void loadGatewayEggRewards()}>
+              Gateway-Ei-Rewards laden
             </button>
           </div>
-          <div className="admin-form-grid">
-            <button onClick={() => void syncGatewayRewards()}>
-              Gateway Rewards synchronisieren
-            </button>
-            <button onClick={() => void loadGatewayRewards()}>
-              Gateway Rewards laden
-            </button>
-            <label>
-              Gateway Reward
-              <select
-                value={selectedGatewayRewardId}
-                onChange={(event) => setSelectedGatewayRewardId(event.target.value)}
-              >
-                <option value="">Reward auswählen</option>
-                {gatewayRewards.map((reward) => (
-                  <option key={reward.id} value={reward.id}>
-                    {reward.title ?? reward.display_name ?? reward.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Lokaler Reward-Typ
-              <input
-                value={gatewayLocalRewardType}
-                onChange={(event) => setGatewayLocalRewardType(event.target.value)}
-                placeholder="z. B. eigener_reward_typ"
-              />
-            </label>
-            <label>
-              Anzeigename
-              <input
-                value={gatewayDisplayName}
-                onChange={(event) => setGatewayDisplayName(event.target.value)}
-                placeholder="Optional; sonst Gateway-Titel"
-              />
-            </label>
-          </div>
+          {gatewayEggRewardStatuses.length > 0 ? (
+            <ul>
+              {gatewayEggRewardStatuses.map((status) => (
+                <li key={status.eggType.id}>
+                  <strong>{status.plan.title}</strong>
+                  <div>Ei-Typ: {status.eggType.displayName} ({status.eggType.id})</div>
+                  <div>Kosten: {status.plan.cost}</div>
+                  <div>Status laut Datenbank: {status.plan.isEnabled ? 'aktiv' : 'inaktiv'}</div>
+                  <div>Lokaler Reward-Typ: {status.plan.localRewardType}</div>
+                  <div>Gateway Reward ID: {status.mapping?.gatewayRewardId ?? 'noch nicht synchronisiert'}</div>
+                  <div>Twitch Reward ID: {status.mapping?.twitchRewardId ?? status.eggType.twitchRewardId ?? '—'}</div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Noch keine Gateway-Ei-Rewards geladen.</p>
+          )}
           {gatewayRewardMappings.length > 0 ? (
-            <ul>
-              {gatewayRewardMappings.map((mapping) => (
-                <li key={mapping.id}>
-                  <strong>{mapping.displayName}</strong>
-                  <div>Lokaler Typ: {mapping.localRewardType}</div>
-                  <div>Gateway Reward ID: {mapping.gatewayRewardId}</div>
-                  <div>Twitch Reward ID: {mapping.twitchRewardId}</div>
-                  <div>Status: {mapping.isActive ? 'aktiv' : 'inaktiv'}</div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Noch keine Gateway-Mappings gespeichert.</p>
-          )}
-          {twitchCustomRewards.length > 0 ? (
-            <ul>
-              {twitchCustomRewards.map((reward) => (
-                <li key={reward.id}>
-                  <strong>{reward.name}</strong>
-                  <div>ID: {reward.id}</div>
-                  <div>Beschreibung: {reward.description || '—'}</div>
-                  <div>Kosten: {reward.cost}</div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>Noch keine Rewards geladen.</p>
-          )}
+            <details>
+              <summary>Gespeicherte Gateway-Mappings</summary>
+              <ul>
+                {gatewayRewardMappings.map((mapping) => (
+                  <li key={mapping.id}>
+                    <strong>{mapping.displayName}</strong>
+                    <div>Lokaler Typ: {mapping.localRewardType}</div>
+                    <div>Gateway Reward ID: {mapping.gatewayRewardId}</div>
+                    <div>Twitch Reward ID: {mapping.twitchRewardId}</div>
+                    <div>Status: {mapping.isActive ? 'aktiv' : 'inaktiv'}</div>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </section>
 
         <section className="card">

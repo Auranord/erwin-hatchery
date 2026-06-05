@@ -44,6 +44,13 @@ export type GatewayChannelPointReward = {
   display_name?: string | null;
   cost?: number | null;
   prompt?: string | null;
+  background_color?: string | null;
+  is_global_cooldown_enabled?: boolean | null;
+  global_cooldown_seconds?: number | null;
+  is_max_per_stream_enabled?: boolean | null;
+  max_per_stream?: number | null;
+  is_max_per_user_per_stream_enabled?: boolean | null;
+  max_per_user_per_stream?: number | null;
   enabled?: boolean;
   is_enabled?: boolean;
   metadata?: Record<string, unknown>;
@@ -65,6 +72,9 @@ export type GatewayChannelPointRedemption = {
 export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption[] };
 
 export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
+
+export type GatewayRewardMutationPayload = Record<string, unknown>;
+
 
 export class ErwinGatewayClient {
   private readonly baseUrl: URL;
@@ -93,6 +103,35 @@ export class ErwinGatewayClient {
     return this.request<GatewayRewardSync>('/api/v1/channel-points/rewards/sync', { method: 'POST' });
   }
 
+  async createReward(payload: GatewayRewardMutationPayload): Promise<GatewayChannelPointReward> {
+    const result = await this.request<{ reward?: GatewayChannelPointReward; rewards?: GatewayChannelPointReward[] } | GatewayChannelPointReward>(
+      '/api/v1/channel-points/rewards',
+      { method: 'POST', body: JSON.stringify(payload) }
+    );
+    if ('id' in result) return result;
+    const reward = result.reward ?? result.rewards?.[0];
+    if (!reward) throw new Error('erwin-gateway create reward response did not include a reward');
+    return reward;
+  }
+
+  async updateReward(rewardId: string, payload: GatewayRewardMutationPayload): Promise<GatewayChannelPointReward> {
+    const result = await this.request<{ reward?: GatewayChannelPointReward; rewards?: GatewayChannelPointReward[] } | GatewayChannelPointReward>(
+      `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}`,
+      { method: 'PATCH', body: JSON.stringify(payload) }
+    );
+    if ('id' in result) return result;
+    const reward = result.reward ?? result.rewards?.[0];
+    if (!reward) throw new Error('erwin-gateway update reward response did not include a reward');
+    return reward;
+  }
+
+  async updateRedemptionStatus(input: { rewardId: string; redemptionId: string; status: 'FULFILLED' | 'CANCELED'; reason: string }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      `/api/v1/channel-points/rewards/${encodeURIComponent(input.rewardId)}/redemptions/${encodeURIComponent(input.redemptionId)}/status`,
+      { method: 'PATCH', body: JSON.stringify({ status: input.status, reason: input.reason.slice(0, 500) }) }
+    );
+  }
+
   async listRedemptions(params: GatewayListRedemptionsParams = {}): Promise<GatewayRedemptionList> {
     const searchParams = new URLSearchParams();
     if (params.rewardId) searchParams.set('rewardId', params.rewardId);
@@ -110,6 +149,7 @@ export class ErwinGatewayClient {
       headers: {
         Accept: 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
+        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
         ...(init?.headers ?? {})
       }
     });

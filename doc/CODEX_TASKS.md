@@ -84,7 +84,7 @@ Acceptance:
 - Validate Twitch signature.
 - Handle challenge verification.
 - Store raw events.
-- Process configured reward ID only.
+- Process gateway-mapped active Hatchery egg reward IDs only.
 - Create provisional user if needed.
 - Create counted mystery egg inventory; hidden outcomes are determined later when the player identifies/opens the egg.
 - Idempotency by Twitch event/redemption ID.
@@ -92,7 +92,7 @@ Acceptance:
 
 Acceptance:
 
-- Redeeming `1x Mystery Ei` creates exactly one egg.
+- Redeeming the Hatchery-synced `Beta Ei` reward creates exactly one egg.
 - Replayed webhook does not duplicate egg.
 
 ## Milestone 4 - Player web UI MVP
@@ -250,7 +250,8 @@ Implemented persisted Twitch setup state, broadcaster setup OAuth, EventSub sync
 ## PR 2 completed: gateway redemption observe-only ingestion
 
 - [x] Added runtime-admin-synced gateway reward mappings for local Hatchery reward types.
-- [x] Extended the erwin-gateway app client with reward sync/list and redemption list helpers.
+- [x] Extended the erwin-gateway app client with reward sync/list, create/update, redemption status, and redemption list helpers.
+- [x] Moved egg Channel Point custom reward authority to Hatchery: the admin panel now syncs gateway rewards directly from `egg_types`, with Beta Ei as the active Channel Point egg type and Starter Ei preserved as the ledgered first egg.
 - [x] Normalized signed gateway Channel Point redemption add/update webhooks into Hatchery redemption cache rows.
 - [x] Kept observe-only as the default: no Mystery Egg grants, no egg-grant ledger entries, and no gateway fulfill/cancel calls.
 - [x] Stored unknown rewards for diagnostics and made duplicate delivery/event/redemption processing safe.

@@ -108,7 +108,7 @@ The frontend must never decide final outcomes. It only sends user intent to the 
 
 ## Pet RPG model boundaries
 
-The backend remains authoritative for hatch generation and later training/fusion progression. `pet_species` stores species templates/default stats and the default ability, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance, an individual `ability_id` copied from the species at hatch, and progression fields. Hatched pets start at level 0 with 0 experience and are not favorites by default. The favorite flag is a server-authoritative protection marker; future fusion selection must not allow favorite pets as materials unless that flag is cleared first. That pet-level ability and progression are intentionally mutable by future training or fusion systems without changing the species template. The MVP seed uses one active `beta_egg` loot table with integer pet weights totaling 1200 plus three `cracked_eggs` resource outcomes weighted 800 each, making pets about one third of identifications and egg resources about two thirds. Each seeded pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability; class metadata includes one main training stat and two secondary training stats for future class-focused pet training, and no traits are included in the seeded MVP pool. `pet_traits` and `pet_trait_assignments` remain available for future training/content systems. Each pet may equip one cosmetic hat unlocked by its owner. Hats are one-time cosmetic progression unlocks and must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Equipment seed data now includes gem-themed equipment-set items with server-authored config bonuses in three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 HP. Final event stat aggregation should read these server-side values when combat equipment effects are implemented.
+The backend remains authoritative for hatch generation and later training/fusion progression. `pet_species` stores species templates/default stats and the default ability, while `pets` stores each owned instance with permanent base stats derived from species defaults plus hatch variance, an individual `ability_id` copied from the species at hatch, and progression fields. Hatched pets start at level 0 with 0 experience and are not favorites by default. The favorite flag is a server-authoritative protection marker; future fusion selection must not allow favorite pets as materials unless that flag is cleared first. That pet-level ability and progression are intentionally mutable by future training or fusion systems without changing the species template. The MVP seed uses one active `beta_egg` loot table with integer pet weights totaling 1200 plus three `cracked_eggs` resource outcomes weighted 800 each, making pets about one third of identifications and egg resources about two thirds. It also keeps inactive `starter_egg` as the once-per-player first egg with an Uncommon-only loot table. Each seeded pet has exactly one class, one element, and the shared `beta_instinct` MVP baseline ability; class metadata includes one main training stat and two secondary training stats for future class-focused pet training, and no traits are included in the seeded MVP pool. `pet_traits` and `pet_trait_assignments` remain available for future training/content systems. Each pet may equip one cosmetic hat unlocked by its owner. Hats are one-time cosmetic progression unlocks and must not affect combat stats, AP gain, ability effects, or boss-event stack logic. Equipment seed data now includes gem-themed equipment-set items with server-authored config bonuses in three tiers: +1/+2/+3 for ATK, DEF, SPD, GAIN, and POW, and +10/+20/+30 HP. Final event stat aggregation should read these server-side values when combat equipment effects are implemented.
 
 Future boss-event state such as current AP, current HP, attacks made, effective stats, class stacks, and element stacks belongs on event participant runtime state, not on pet rows. Ability trigger logic is documented for later implementation only: attacks grant 20 base AP, GAIN modifies AP gained per attack, POW scales ability effects, and abilities auto-trigger when AP and minimum-attack requirements are met.
 
@@ -131,16 +131,16 @@ Required MVP Twitch pieces:
 
 - Twitch OAuth app credentials
 - broadcaster Twitch user ID
-- Channel Point reward ID for `1x Mystery Ei`
+- erwin-gateway Channel Point reward permissions for Hatchery-owned egg rewards
 - EventSub webhook endpoint
 - subscription types for Channel Point redemptions, subscriber status, and gifted subscriptions
 - optional future subscriptions for Bits/cheer, stream online/offline, stream updates
 
 Manual setup for MVP is acceptable:
 
-- Create the Channel Point reward manually in Twitch.
-- Paste the reward ID into `.env`.
-- Backend only processes redemptions for that configured reward ID.
+- Complete broadcaster/gateway setup.
+- Use the admin panel gateway egg sync so Hatchery creates one reward per `egg_types` row.
+- Backend only grants rewards mapped back to active Hatchery egg types.
 
 ## Event ingestion philosophy
 
@@ -298,7 +298,7 @@ The previous direct Twitch OAuth, EventSub, reward, subscription, Bits, and stre
 
 Hatchery now receives Channel Point custom reward redemption transport from `erwin-gateway`; the gateway owns Twitch EventSub delivery, webhook signing, and app API transport, while Hatchery owns reward mapping and all economy decisions. `ERWIN_GATEWAY_OBSERVE_ONLY=true` remains the default so real redemption webhooks are verified, deduped, stored, and mapped without granting Mystery Eggs, writing egg-grant ledger entries, or calling gateway fulfill/cancel.
 
-Reward mappings are created at runtime from the admin panel's erwin-gateway reward sync. Admins choose the gateway reward and local Hatchery reward type; Hatchery persists the gateway reward ID and Twitch reward ID plus enabled state, last sync time, and metadata. Unknown rewards are stored with `mapping_status='unknown'` for diagnostics and are ignored safely rather than crashing or mutating inventory.
+Reward mappings for egg rewards are authored by Hatchery from the admin panel rather than selected manually. `POST /api/admin/erwin-gateway/egg-rewards/sync` reads `egg_types`, creates or updates one app-owned gateway custom reward per egg type, stores the resulting gateway/Twitch reward IDs as `gateway_reward_mappings` using `egg_type:<egg_type_id>`, and mirrors `egg_types.is_active` to the gateway reward enabled state. For the current MVP seed `beta_egg` is active for Channel Point redemption and `starter_egg` is inactive but kept for each player's first egg. Unknown rewards are stored with `mapping_status='unknown'` for diagnostics and are ignored safely rather than crashing or mutating inventory.
 
 Duplicate gateway deliveries are safe: Hatchery dedupes by gateway delivery ID and gateway event ID before processing. The Channel Point redemption cache is also upserted by Twitch redemption ID so add/update events and retries cannot create duplicate redemption rows or repeated economy effects. Database wipes are acceptable during development, but this idempotency model is still required for the production path.
 
@@ -306,4 +306,4 @@ Inspection endpoints:
 
 - `GET /api/erwin-gateway/smoke` checks gateway app authentication.
 - `GET /api/erwin-gateway/diagnostics` returns observe-only status, reward mappings, recent gateway redemption events, recent cached Channel Point redemptions, unmapped rewards, and ignored events.
-- Admins use `GET /api/admin/erwin-gateway/rewards` and `POST /api/admin/erwin-gateway/rewards/sync` from the admin panel to sync gateway rewards and create local Hatchery reward mappings at runtime.
+- Admins use `GET /api/admin/erwin-gateway/egg-rewards` and `POST /api/admin/erwin-gateway/egg-rewards/sync` from the admin panel to let Hatchery create/update one gateway custom reward per database egg type and mirror active/inactive state.

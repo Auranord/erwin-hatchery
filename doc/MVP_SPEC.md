@@ -12,15 +12,15 @@ A fantasy pet battler built around Erwin, the NTKOH quail mascot. Viewers use Tw
 
 ## Twitch reward
 
-Initial custom Channel Point reward:
+Initial custom Channel Point reward is authored by Hatchery from `egg_types` and synchronized to erwin-gateway from the admin panel:
 
 ```text
-Name: 1x Mystery Ei
-Cost: 500
-Effect: Adds one Basic Mystery Egg to the viewer's Erwin Hatchery account.
+Name: [Erwin Hatchery] Beta Ei
+Default cost: 1000
+Effect: Adds one Beta Ei to the viewer's Erwin Hatchery account.
 ```
 
-The reward is created manually in Twitch for the MVP. The Twitch reward ID is configured through `.env`.
+Hatchery is authoritative for which egg rewards exist. The MVP seed creates active `beta_egg` and inactive `starter_egg`; `POST /api/admin/erwin-gateway/egg-rewards/sync` creates or updates gateway-owned Channel Point rewards and mirrors `egg_types.is_active` to each reward enabled state.
 
 ## Current MVP implementation status
 
@@ -165,9 +165,9 @@ Seeded pet rarity weight totals within the `beta_egg` pet subset:
 
 ## Egg loot table MVP
 
-The system must support more egg types later. MVP initializes one active Twitch-redeem egg type, `beta_egg` (`Beta Ei`), and one inactive default grant egg type, `starter_egg` (`Starter Ei`). Beta Ei has integer pet weights totaling 1200 and three `cracked_eggs` resource outcomes weighted 800 each, for a total table weight of 3600. This makes pet outcomes about one third of identified Beta eggs and egg resource outcomes about two thirds.
+The system must support more egg types later. MVP initializes one active Channel Point egg type, `beta_egg` (`Beta Ei`), and one inactive first-egg type, `starter_egg` (`Starter Ei`). Beta Ei has integer pet weights totaling 1200 and three `cracked_eggs` resource outcomes weighted 800 each, for a total table weight of 3600. This makes pet outcomes about one third of identified Beta eggs and egg resource outcomes about two thirds. Hatchery owns the egg-type list and syncs gateway Channel Point rewards from this table.
 
-Per-pet Beta Ei weights are 70 for each Common pet, 30 for each Uncommon pet, 14 for each Rare pet, 11 for each Epic pet, and 3 for the Legendary pet. Resource outcomes grant 50, 100, or 200 `cracked_eggs`; each amount has equal weight. Starter Ei uses only the eight Uncommon pet entries at weight 30 each, has no resource outcomes, incubates for 60 seconds, and is granted once per player through a ledgered default grant instead of Twitch redemption sync. The backend validates seed pet totals before writing the pool.
+Per-pet Beta Ei weights are 70 for each Common pet, 30 for each Uncommon pet, 14 for each Rare pet, 11 for each Epic pet, and 3 for the Legendary pet. Resource outcomes grant 50, 100, or 200 `cracked_eggs`; each amount has equal weight. Starter Ei uses only the eight Uncommon pet entries at weight 30 each, has no resource outcomes, incubates for 60 seconds, and is granted once per player through a ledgered default grant instead of Channel Point redemption. The backend validates seed pet totals before writing the pool.
 
 The content is determined when the player identifies/opens the mystery egg, not when the Channel Point redemption is processed.
 
