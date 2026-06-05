@@ -171,6 +171,22 @@ export const gatewayRewardMappings = pgTable(
   })
 );
 
+
+export const streamStateCache = pgTable('stream_state_cache', {
+  id: text('id').primaryKey().default('default'),
+  isLive: boolean('is_live').notNull().default(false),
+  title: text('title'),
+  category: text('category'),
+  viewerCount: integer('viewer_count').notNull().default(0),
+  startedAt: timestamp('started_at', { withTimezone: true }),
+  source: text('source').notNull().default('fallback_offline'),
+  sourceEventId: text('source_event_id'),
+  sourceDeliveryId: text('source_delivery_id'),
+  rawPayload: jsonb('raw_payload').notNull().default({}),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
 export const twitchIntegrationState = pgTable('twitch_integration_state', {
   id: text('id').primaryKey().default('default'),
   broadcasterUserId: text('broadcaster_user_id'),

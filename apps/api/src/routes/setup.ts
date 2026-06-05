@@ -18,6 +18,9 @@ export async function registerSetupRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/setup/status', async () => getSetupStatus());
 
   app.get('/api/setup/twitch/login', async (_request, reply) => {
+    if (config.ERWIN_GATEWAY_ENABLED) {
+      return reply.code(409).send({ message: 'Direct broadcaster Twitch setup is disabled while erwin-gateway mode is enabled. Set ERWIN_GATEWAY_ENABLED=false for rollback setup.' });
+    }
     const state = createSetupStateCookie(reply);
     const authUrl = new URL('https://id.twitch.tv/oauth2/authorize');
     authUrl.searchParams.set('client_id', config.TWITCH_CLIENT_ID);
@@ -29,6 +32,10 @@ export async function registerSetupRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/setup/twitch/callback', async (request, reply) => {
+    if (config.ERWIN_GATEWAY_ENABLED) {
+      clearSetupStateCookie(reply);
+      return reply.code(409).send({ message: 'Direct broadcaster Twitch setup callback is disabled while erwin-gateway mode is enabled.' });
+    }
     const query = request.query as { code?: string; state?: string };
     if (!query.code || !validateSetupState(request, query.state)) {
       return reply.code(400).send({ message: 'Invalid OAuth state' });

@@ -12,7 +12,12 @@ export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.cheer'
 ] as const;
 
-const GATEWAY_MIGRATED_EVENTSUB_TYPES = new Set<string>(REQUIRED_EVENTSUB_SUBSCRIPTIONS);
+const GATEWAY_MIGRATED_EVENTSUB_TYPES = new Set<string>([
+  ...REQUIRED_EVENTSUB_SUBSCRIPTIONS,
+  'stream.online',
+  'stream.offline',
+  'channel.update'
+]);
 
 function getTargetSubscriptionTypes(): readonly string[] {
   if (!config.ERWIN_GATEWAY_ENABLED) return REQUIRED_EVENTSUB_SUBSCRIPTIONS;
@@ -43,7 +48,8 @@ type EventSubSyncStatusValue =
   | 'missing'
   | 'error'
   | 'duplicate'
-  | 'pending_verification';
+  | 'pending_verification'
+  | 'disabled_gateway';
 
 type EventSubSyncState = {
   enabled: boolean;
@@ -236,9 +242,23 @@ async function persistEventSubStatus(input: {
 }
 
 export async function checkEventSubHealth(): Promise<EventSubSyncState & { subscriptions: Array<{ eventType: string; status: string; subscriptionId: string | null; callbackUrl: string; lastError: string | null }> }> {
+  const targetSubscriptionTypes = getTargetSubscriptionTypes();
+  if (config.ERWIN_GATEWAY_ENABLED && targetSubscriptionTypes.length === 0) {
+    return {
+      ...eventSubSyncState,
+      enabled: false,
+      status: 'disabled_gateway',
+      subscriptionId: null,
+      type: '',
+      callback: getEventSubCallbackUrl(),
+      lastCheckedAt: new Date().toISOString(),
+      error: 'Direct Twitch EventSub transport disabled because ERWIN_GATEWAY_ENABLED=true',
+      subscriptions: []
+    };
+  }
   const rows = await db.select().from(twitchEventSubSubscriptions);
   const byType = new Map(rows.map((row) => [row.eventType, row]));
-  const subscriptions = getTargetSubscriptionTypes().map((eventType) => {
+  const subscriptions = targetSubscriptionTypes.map((eventType) => {
     const row = byType.get(eventType);
     return {
       eventType,
@@ -260,7 +280,7 @@ export async function checkEventSubHealth(): Promise<EventSubSyncState & { subsc
     enabled,
     status: enabled ? 'enabled' : anyPending ? 'pending_verification' : 'missing',
     subscriptionId: subscriptions.map((subscription) => subscription.subscriptionId).filter(Boolean).join(',') || null,
-    type: getTargetSubscriptionTypes().join(','),
+    type: targetSubscriptionTypes.join(','),
     callback: getEventSubCallbackUrl(),
     createdAt: null,
     lastCheckedAt: new Date().toISOString(),
@@ -292,6 +312,29 @@ export async function syncChannelPointRedemptionEventSub(log: {
       enabled: false,
       error: 'Auto-sync disabled by TWITCH_EVENTSUB_AUTO_SYNC=false'
     };
+    return;
+  }
+
+  if (config.ERWIN_GATEWAY_ENABLED && getTargetSubscriptionTypes().length === 0) {
+    eventSubSyncState = {
+      ...eventSubSyncState,
+      enabled: false,
+      status: 'disabled_gateway',
+      subscriptionId: null,
+      type: '',
+      error: 'Direct Twitch EventSub transport disabled because ERWIN_GATEWAY_ENABLED=true'
+    };
+    for (const subscriptionType of GATEWAY_MIGRATED_EVENTSUB_TYPES) {
+      await persistEventSubStatus({
+        eventType: subscriptionType,
+        subscriptionId: null,
+        status: 'disabled_gateway',
+        callbackUrl: getEventSubCallbackUrl(),
+        error: 'Disabled because ERWIN_GATEWAY_ENABLED=true'
+      });
+    }
+    await db.update(twitchIntegrationState).set({ eventsubHealthy: false, lastError: eventSubSyncState.error, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
+    log.info('Direct Twitch EventSub sync skipped because erwin-gateway mode is enabled');
     return;
   }
 
