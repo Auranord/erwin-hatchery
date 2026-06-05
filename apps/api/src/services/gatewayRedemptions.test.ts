@@ -76,7 +76,7 @@ test('normalizes redemption add payload from gateway shape', () => {
       event_id: 'event-1',
       type: 'twitch.channel_points.custom_reward_redemption.add',
       redemption: { id: 'redemption-1', status: 'UNFULFILLED', user_input: 'hi' },
-      reward: { id: 'twitch-reward-1', gateway_reward_id: 'gateway-reward-1', title: 'Runtime Reward', cost: 1000, prompt: 'prompt' },
+      reward: { id: 'gateway-reward-1', twitch_reward_id: 'twitch-reward-1', title: 'Runtime Reward', cost: 1000, prompt: 'prompt' },
       user: { id: 'user-1', login: 'viewer', display_name: 'Viewer' }
     }
   });
@@ -85,6 +85,27 @@ test('normalizes redemption add payload from gateway shape', () => {
   assert.equal(normalized?.twitchRewardId, 'twitch-reward-1');
   assert.equal(normalized?.gatewayRewardId, 'gateway-reward-1');
   assert.equal(normalized?.twitchUserId, 'user-1');
+});
+
+test('keeps raw Twitch event reward id compatibility', () => {
+  const normalized = normalizeGatewayRedemptionPayload({
+    deliveryId: 'delivery-1',
+    eventId: 'event-1',
+    eventType: 'twitch.channel_points.custom_reward_redemption.add',
+    payload: {
+      event: {
+        id: 'redemption-1',
+        reward_id: 'twitch-reward-1',
+        reward_title: 'Runtime Reward',
+        reward_cost: 1000,
+        user_id: 'user-1'
+      }
+    }
+  });
+
+  assert.equal(normalized?.twitchRedemptionId, 'redemption-1');
+  assert.equal(normalized?.twitchRewardId, 'twitch-reward-1');
+  assert.equal(normalized?.gatewayRewardId, null);
 });
 
 test('redemption add creates or updates provisional user and stores redemption', async () => {

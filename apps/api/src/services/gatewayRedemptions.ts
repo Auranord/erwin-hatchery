@@ -88,12 +88,18 @@ export function normalizeGatewayRedemptionPayload(input: {
     stringValue(get(data, 'redemption_id')) ??
     stringValue(get(input.payload, 'redemption_id'));
 
+  const rewardTwitchRewardId = stringValue(get(reward, 'twitch_reward_id')) ?? stringValue(get(reward, 'twitchRewardId'));
+  const rawRewardId = stringValue(get(reward, 'id'));
+  const eventRewardId = stringValue(get(event, 'reward_id'));
+  const dataRewardId = stringValue(get(data, 'reward_id'));
+  const payloadRewardId = stringValue(get(input.payload, 'reward_id'));
+
   const twitchRewardId =
-    stringValue(get(reward, 'id')) ??
-    stringValue(get(reward, 'twitch_reward_id')) ??
-    stringValue(get(event, 'reward_id')) ??
-    stringValue(get(data, 'reward_id')) ??
-    stringValue(get(input.payload, 'reward_id'));
+    rewardTwitchRewardId ??
+    eventRewardId ??
+    dataRewardId ??
+    payloadRewardId ??
+    rawRewardId;
 
   if (!twitchRedemptionId || !twitchRewardId) return null;
 
@@ -101,7 +107,8 @@ export function normalizeGatewayRedemptionPayload(input: {
     stringValue(get(reward, 'gateway_reward_id')) ??
     stringValue(get(reward, 'gatewayRewardId')) ??
     stringValue(get(data, 'gateway_reward_id')) ??
-    stringValue(get(input.payload, 'gateway_reward_id'));
+    stringValue(get(input.payload, 'gateway_reward_id')) ??
+    (rewardTwitchRewardId ? rawRewardId : null);
 
   const twitchUserId =
     stringValue(get(user, 'id')) ??
