@@ -1,9 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
 import { channelPointRedemptions, economyLedger, eggTypes, gatewayRewardMappings, gatewayWebhookEvents, mysteryEggInventory, users } from '../db/schema.js';
-import { createErwinGatewayClient, smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
+import { createErwinGatewayClient, ErwinGatewayError, smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
 import { handleErwinGatewayWebhook, type GatewayWebhookRecord, type GatewayWebhookStore } from '../services/erwinGatewayWebhook.js';
 import {
   normalizeGatewayRedemptionPayload,
@@ -23,8 +23,44 @@ function rawPayloadRecord(payload: unknown): Record<string, unknown> {
 }
 
 type GatewayTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type PostCommitAction = () => Promise<void>;
 
-function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
+function nonEmptyString(value: string | null | undefined): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function gatewayStatusLogFields(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping | null; gatewayRewardId: string | null }) {
+  return {
+    twitchRedemptionId: input.redemption.twitchRedemptionId,
+    twitchRewardId: input.redemption.twitchRewardId,
+    gatewayRewardId: input.gatewayRewardId,
+    mappingId: input.mapping?.id ?? null,
+    localRewardType: input.mapping?.localRewardType ?? null
+  };
+}
+
+function gatewayErrorLogFields(error: unknown) {
+  if (error instanceof ErwinGatewayError) {
+    return {
+      gatewayStatus: error.status,
+      gatewayError: error.message.slice(0, 300),
+      gatewayCode: error.code,
+      twitchStatus: error.twitchStatus,
+      twitchErrorExcerpt: error.twitchErrorExcerpt?.slice(0, 300) ?? null,
+      retryable: error.retryable
+    };
+  }
+  return { gatewayError: error instanceof Error ? error.message.slice(0, 300) : 'Unknown erwin-gateway redemption status error' };
+}
+
+async function markRedemptionStatus(twitchRedemptionId: string, status: string): Promise<void> {
+  await db
+    .update(channelPointRedemptions)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(channelPointRedemptions.twitchRedemptionId, twitchRedemptionId));
+}
+
+function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, postCommitActions: PostCommitAction[], log: FastifyBaseLogger) {
   return {
     observeOnly,
     async findRewardMapping(redemption: NormalizedGatewayRedemption): Promise<GatewayRewardMapping | null> {
@@ -111,24 +147,89 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
       });
       return { status: 'granted' as const };
     },
-    async fulfillRedemption(redemption: NormalizedGatewayRedemption) {
-      const client = createErwinGatewayClient();
-      if (!client || !redemption.gatewayRewardId) return;
-      await client.updateRedemptionStatus({
-        rewardId: redemption.gatewayRewardId,
-        redemptionId: redemption.twitchRedemptionId,
-        status: 'FULFILLED',
-        reason: 'Erwin Hatchery granted the egg and recorded the ledger entry.'
+    async fulfillRedemption(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping }) {
+      const { redemption, mapping } = input;
+      const gatewayRewardId = nonEmptyString(redemption.gatewayRewardId ?? mapping.gatewayRewardId);
+      const logFields = gatewayStatusLogFields({ redemption, mapping, gatewayRewardId });
+      log.info(logFields, 'Gateway Channel Point redemption local grant completed');
+      if (!gatewayRewardId) {
+        await tx
+          .update(channelPointRedemptions)
+          .set({ status: 'locally_granted_pending_manual_fulfill', updatedAt: new Date() })
+          .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+        log.warn(logFields, 'Gateway Channel Point redemption fulfillment pending manual fulfill because reward id is missing');
+        return;
+      }
+
+      await tx
+        .update(channelPointRedemptions)
+        .set({ status: 'locally_granted_pending_gateway_fulfill', gatewayRewardId, updatedAt: new Date() })
+        .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+
+      postCommitActions.push(async () => {
+        const client = createErwinGatewayClient();
+        if (!client) {
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'locally_granted_pending_manual_fulfill');
+          log.warn(logFields, 'Gateway Channel Point redemption fulfillment pending manual fulfill because erwin-gateway client is not configured');
+          return;
+        }
+
+        log.info(logFields, 'Gateway Channel Point redemption fulfillment attempted');
+        try {
+          await client.updateRedemptionStatus({
+            rewardId: gatewayRewardId,
+            redemptionId: redemption.twitchRedemptionId,
+            status: 'FULFILLED',
+            reason: 'Erwin Hatchery granted the egg and recorded the ledger entry.'
+          });
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'FULFILLED');
+          log.info(logFields, 'Gateway Channel Point redemption fulfillment succeeded');
+        } catch (error) {
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'locally_granted_fulfillment_failed');
+          log.warn({ ...logFields, ...gatewayErrorLogFields(error) }, 'Gateway Channel Point redemption fulfillment failed after local grant');
+        }
       });
     },
-    async cancelRedemption(redemption: NormalizedGatewayRedemption, reason: string) {
-      const client = createErwinGatewayClient();
-      if (!client || !redemption.gatewayRewardId) return;
-      await client.updateRedemptionStatus({
-        rewardId: redemption.gatewayRewardId,
-        redemptionId: redemption.twitchRedemptionId,
-        status: 'CANCELED',
-        reason
+    async cancelRedemption(input: { redemption: NormalizedGatewayRedemption; mapping: GatewayRewardMapping | null; reason: string }) {
+      const { redemption, mapping, reason } = input;
+      const gatewayRewardId = nonEmptyString(redemption.gatewayRewardId ?? mapping?.gatewayRewardId);
+      const logFields = gatewayStatusLogFields({ redemption, mapping, gatewayRewardId });
+      if (!gatewayRewardId) {
+        await tx
+          .update(channelPointRedemptions)
+          .set({ status: 'cancel_pending_manual_fulfill', updatedAt: new Date() })
+          .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+        log.warn(logFields, 'Gateway Channel Point redemption cancel pending manual action because reward id is missing');
+        return;
+      }
+
+      await tx
+        .update(channelPointRedemptions)
+        .set({ status: 'cancel_pending_gateway', gatewayRewardId, updatedAt: new Date() })
+        .where(eq(channelPointRedemptions.twitchRedemptionId, redemption.twitchRedemptionId));
+
+      postCommitActions.push(async () => {
+        const client = createErwinGatewayClient();
+        if (!client) {
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'cancel_pending_manual_fulfill');
+          log.warn(logFields, 'Gateway Channel Point redemption cancel pending manual action because erwin-gateway client is not configured');
+          return;
+        }
+
+        log.info(logFields, 'Gateway Channel Point redemption cancel attempted');
+        try {
+          await client.updateRedemptionStatus({
+            rewardId: gatewayRewardId,
+            redemptionId: redemption.twitchRedemptionId,
+            status: 'CANCELED',
+            reason
+          });
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'CANCELED');
+          log.info(logFields, 'Gateway Channel Point redemption cancel succeeded');
+        } catch (error) {
+          await markRedemptionStatus(redemption.twitchRedemptionId, 'cancel_failed');
+          log.warn({ ...logFields, ...gatewayErrorLogFields(error) }, 'Gateway Channel Point redemption cancel failed');
+        }
       });
     },
     async upsertChannelPointRedemption(input: {
@@ -138,12 +239,13 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
       mappingStatus: 'mapped' | 'unknown';
     }) {
       const { redemption, userId, mapping, mappingStatus } = input;
+      const gatewayRewardId = nonEmptyString(redemption.gatewayRewardId ?? mapping?.gatewayRewardId);
       await tx
         .insert(channelPointRedemptions)
         .values({
           twitchRedemptionId: redemption.twitchRedemptionId,
           twitchRewardId: redemption.twitchRewardId,
-          gatewayRewardId: redemption.gatewayRewardId,
+          gatewayRewardId,
           rewardMappingId: mapping?.id ?? null,
           localRewardType: mapping?.localRewardType ?? null,
           mappingStatus,
@@ -166,7 +268,7 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
           target: channelPointRedemptions.twitchRedemptionId,
           set: {
             twitchRewardId: redemption.twitchRewardId,
-            gatewayRewardId: redemption.gatewayRewardId,
+            gatewayRewardId,
             rewardMappingId: mapping?.id ?? null,
             localRewardType: mapping?.localRewardType ?? null,
             mappingStatus,
@@ -190,10 +292,11 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
   };
 }
 
-function createDatabaseGatewayWebhookStore(observeOnly: boolean): GatewayWebhookStore {
+function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBaseLogger): GatewayWebhookStore {
   return {
     async insertEvent(record: GatewayWebhookRecord) {
-      return db.transaction(async (tx) => {
+      const postCommitActions: PostCommitAction[] = [];
+      const stored = await db.transaction(async (tx) => {
         const [eventRow] = await tx
           .insert(gatewayWebhookEvents)
           .values({
@@ -226,7 +329,7 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean): GatewayWebhook
         });
 
         if (normalized) {
-          const result = await processGatewayRedemptionObserveOnly(normalized, createRedemptionStore(tx, observeOnly));
+          const result = await processGatewayRedemptionObserveOnly(normalized, createRedemptionStore(tx, observeOnly, postCommitActions, log));
           await tx
             .update(gatewayWebhookEvents)
             .set({
@@ -239,6 +342,14 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean): GatewayWebhook
 
         return { inserted: true as const };
       });
+
+      if (stored.inserted) {
+        for (const action of postCommitActions) {
+          await action();
+        }
+      }
+
+      return stored;
     }
   };
 }
@@ -312,7 +423,7 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       rawBody: (request as FastifyRequest & { rawBodyBuffer?: Buffer }).rawBodyBuffer,
       maxAgeSeconds: config.ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS,
       observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
-      store: createDatabaseGatewayWebhookStore(config.ERWIN_GATEWAY_OBSERVE_ONLY)
+      store: createDatabaseGatewayWebhookStore(config.ERWIN_GATEWAY_OBSERVE_ONLY, request.log)
     });
 
     if (!result.ok) {
