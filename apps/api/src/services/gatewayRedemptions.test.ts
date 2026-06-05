@@ -1,0 +1,126 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  normalizeGatewayRedemptionPayload,
+  processGatewayRedemptionObserveOnly,
+  type GatewayRedemptionStore,
+  type GatewayRewardMapping,
+  type NormalizedGatewayRedemption
+} from './gatewayRedemptions.js';
+
+function redemption(overrides: Partial<NormalizedGatewayRedemption> = {}): NormalizedGatewayRedemption {
+  return {
+    gatewayDeliveryId: 'delivery-1',
+    gatewayEventId: 'event-1',
+    eventType: 'twitch.channel_points.custom_reward_redemption.add',
+    twitchRedemptionId: 'redemption-1',
+    twitchRewardId: 'twitch-reward-1',
+    gatewayRewardId: 'gateway-reward-1',
+    rewardTitle: 'Runtime Reward',
+    rewardCost: 1000,
+    rewardPrompt: 'Ei!',
+    twitchUserId: 'twitch-user-1',
+    twitchUserLogin: 'viewer',
+    twitchUserDisplayName: 'Viewer',
+    status: 'UNFULFILLED',
+    userInput: 'hello',
+    rawPayload: {},
+    ...overrides
+  };
+}
+
+function memoryStore(mapping: GatewayRewardMapping | null = {
+  id: 'mapping-1',
+  localRewardType: 'runtime_reward_type',
+  displayName: 'Runtime Reward',
+  gatewayRewardId: 'gateway-reward-1',
+  twitchRewardId: 'twitch-reward-1',
+  isActive: true
+}): GatewayRedemptionStore & {
+  users: string[];
+  redemptions: NormalizedGatewayRedemption[];
+  fulfillCalls: number;
+  cancelCalls: number;
+} {
+  return {
+    observeOnly: true,
+    users: [],
+    redemptions: [],
+    fulfillCalls: 0,
+    cancelCalls: 0,
+    async findRewardMapping() {
+      return mapping;
+    },
+    async upsertProvisionalUser(input) {
+      this.users.push(input.twitchUserId);
+      return { userId: `user-${input.twitchUserId}`, createdOrUpdated: true };
+    },
+    async upsertChannelPointRedemption(input) {
+      this.redemptions.push(input.redemption);
+    },
+    async fulfillRedemption() {
+      this.fulfillCalls += 1;
+    },
+    async cancelRedemption() {
+      this.cancelCalls += 1;
+    }
+  };
+}
+
+test('normalizes redemption add payload from gateway shape', () => {
+  const normalized = normalizeGatewayRedemptionPayload({
+    deliveryId: 'delivery-1',
+    eventId: 'event-1',
+    eventType: 'twitch.channel_points.custom_reward_redemption.add',
+    payload: {
+      event_id: 'event-1',
+      type: 'twitch.channel_points.custom_reward_redemption.add',
+      redemption: { id: 'redemption-1', status: 'UNFULFILLED', user_input: 'hi' },
+      reward: { id: 'twitch-reward-1', gateway_reward_id: 'gateway-reward-1', title: 'Runtime Reward', cost: 1000, prompt: 'prompt' },
+      user: { id: 'user-1', login: 'viewer', display_name: 'Viewer' }
+    }
+  });
+
+  assert.equal(normalized?.twitchRedemptionId, 'redemption-1');
+  assert.equal(normalized?.twitchRewardId, 'twitch-reward-1');
+  assert.equal(normalized?.gatewayRewardId, 'gateway-reward-1');
+  assert.equal(normalized?.twitchUserId, 'user-1');
+});
+
+test('redemption add creates or updates provisional user and stores redemption', async () => {
+  const store = memoryStore();
+  await processGatewayRedemptionObserveOnly(redemption(), store);
+
+  assert.deepEqual(store.users, ['twitch-user-1']);
+  assert.equal(store.redemptions.length, 1);
+});
+
+test('observe-only redemption does not call gateway fulfill/cancel', async () => {
+  const store = memoryStore();
+  await processGatewayRedemptionObserveOnly(redemption(), store);
+
+  assert.equal(store.fulfillCalls, 0);
+  assert.equal(store.cancelCalls, 0);
+});
+
+test('unknown reward is ignored safely and stored for diagnostics', async () => {
+  const store = memoryStore(null);
+  const result = await processGatewayRedemptionObserveOnly(redemption({ gatewayRewardId: 'unknown' }), store);
+
+  assert.equal(result.processed, true);
+  assert.equal('mappingStatus' in result && result.mappingStatus, 'unknown');
+  assert.equal(store.redemptions.length, 1);
+});
+
+test('redemption update updates stored status/cache without economy effects', async () => {
+  const store = memoryStore();
+  const result = await processGatewayRedemptionObserveOnly(
+    redemption({ eventType: 'twitch.channel_points.custom_reward_redemption.update', status: 'FULFILLED' }),
+    store
+  );
+
+  assert.equal(result.processed, true);
+  assert.equal(store.redemptions[0]?.status, 'FULFILLED');
+  assert.equal(store.fulfillCalls, 0);
+  assert.equal(store.cancelCalls, 0);
+});

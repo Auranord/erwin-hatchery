@@ -36,6 +36,36 @@ export type GatewayCurrentStream = {
   channel?: Record<string, unknown>;
 };
 
+export type GatewayChannelPointReward = {
+  id: string;
+  twitch_reward_id?: string | null;
+  twitchRewardId?: string | null;
+  title?: string | null;
+  display_name?: string | null;
+  cost?: number | null;
+  prompt?: string | null;
+  enabled?: boolean;
+  is_enabled?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+export type GatewayRewardList = { rewards: GatewayChannelPointReward[]; diagnostics?: Record<string, unknown> };
+export type GatewayRewardSync = GatewayRewardList & { synced?: boolean; syncedAt?: string };
+
+export type GatewayChannelPointRedemption = {
+  id: string;
+  twitch_redemption_id?: string | null;
+  twitchRedemptionId?: string | null;
+  reward_id?: string | null;
+  twitch_reward_id?: string | null;
+  status?: string | null;
+  raw?: Record<string, unknown>;
+};
+
+export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption[] };
+
+export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
+
 export class ErwinGatewayClient {
   private readonly baseUrl: URL;
   private readonly apiKey: string;
@@ -53,6 +83,24 @@ export class ErwinGatewayClient {
 
   async getCurrentStream(): Promise<GatewayCurrentStream> {
     return this.request<GatewayCurrentStream>('/api/v1/streams/current');
+  }
+
+  async listRewards(): Promise<GatewayRewardList> {
+    return this.request<GatewayRewardList>('/api/v1/channel-points/rewards');
+  }
+
+  async syncRewards(): Promise<GatewayRewardSync> {
+    return this.request<GatewayRewardSync>('/api/v1/channel-points/rewards/sync', { method: 'POST' });
+  }
+
+  async listRedemptions(params: GatewayListRedemptionsParams = {}): Promise<GatewayRedemptionList> {
+    const searchParams = new URLSearchParams();
+    if (params.rewardId) searchParams.set('rewardId', params.rewardId);
+    if (params.status) searchParams.set('status', params.status);
+    if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+    if (params.after) searchParams.set('after', params.after);
+    const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+    return this.request<GatewayRedemptionList>(`/api/v1/channel-points/redemptions${suffix}`);
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {

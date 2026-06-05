@@ -120,6 +120,13 @@
       "when": 1780613109999,
       "tag": "0016_erwin_gateway_events",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780613110000,
+      "tag": "0017_gateway_redemption_observe",
+      "breakpoints": true
     }
   ]
 }

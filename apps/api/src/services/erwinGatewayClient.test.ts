@@ -27,7 +27,7 @@ test('gateway client sends Authorization header', async () => {
   assert.equal(authorization, 'Bearer secret-api-key');
 });
 
-for (const status of [401, 403, 409, 429, 500, 502, 503] as const) {
+for (const status of [401, 403, 404, 409, 429, 500, 502, 503, 504] as const) {
   test(`gateway client handles HTTP ${status}`, async () => {
     const client = new ErwinGatewayClient({
       baseUrl: 'https://gateway.example.test',
@@ -39,12 +39,34 @@ for (const status of [401, 403, 409, 429, 500, 502, 503] as const) {
       () => client.getCurrentStream(),
       (error: unknown) => {
         assert.ok(error instanceof ErwinGatewayError);
-        assert.equal(error.status, status);
-        assert.equal(error.retryable, status === 429 || status >= 500);
-        assert.match(error.message, new RegExp(String(status)));
-        assert.doesNotMatch(error.message, /secret-api-key/);
+        const gatewayError = error as InstanceType<typeof ErwinGatewayError>;
+        assert.equal(gatewayError.status, status);
+        assert.equal(gatewayError.retryable, status === 429 || status >= 500);
+        assert.match(gatewayError.message, new RegExp(String(status)));
+        assert.doesNotMatch(gatewayError.message, /secret-api-key/);
         return true;
       }
     );
   });
 }
+
+
+test('gateway client exposes Channel Point reward and redemption helpers', async () => {
+  const calls: string[] = [];
+  const client = new ErwinGatewayClient({
+    baseUrl: 'https://gateway.example.test',
+    apiKey: 'secret-api-key',
+    fetchImpl: async (url: URL | RequestInfo) => {
+      calls.push(String(url));
+      return Response.json({ rewards: [], redemptions: [] });
+    }
+  });
+
+  await client.listRewards();
+  await client.syncRewards();
+  await client.listRedemptions({ status: 'UNFULFILLED', limit: 10 });
+
+  assert.equal(calls[0], 'https://gateway.example.test/api/v1/channel-points/rewards');
+  assert.equal(calls[1], 'https://gateway.example.test/api/v1/channel-points/rewards/sync');
+  assert.equal(calls[2], 'https://gateway.example.test/api/v1/channel-points/redemptions?status=UNFULFILLED&limit=10');
+});

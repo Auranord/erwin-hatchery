@@ -1,10 +1,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, or, type SQL } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
-import { gatewayWebhookEvents } from '../db/schema.js';
+import { channelPointRedemptions, gatewayRewardMappings, gatewayWebhookEvents, users } from '../db/schema.js';
 import { smokeCheckErwinGateway } from '../services/erwinGatewayClient.js';
 import { handleErwinGatewayWebhook, type GatewayWebhookRecord, type GatewayWebhookStore } from '../services/erwinGatewayWebhook.js';
+import {
+  normalizeGatewayRedemptionPayload,
+  processGatewayRedemptionObserveOnly,
+  type GatewayRewardMapping,
+  type NormalizedGatewayRedemption
+} from '../services/gatewayRedemptions.js';
 
 function headerValueToString(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -12,32 +18,160 @@ function headerValueToString(value: string | string[] | undefined): string | nul
   return null;
 }
 
-function createDatabaseGatewayWebhookStore(): GatewayWebhookStore {
+function rawPayloadRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as Record<string, unknown>) : {};
+}
+
+type GatewayTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean) {
+  return {
+    observeOnly,
+    async findRewardMapping(redemption: NormalizedGatewayRedemption): Promise<GatewayRewardMapping | null> {
+      const filters: SQL<unknown> = redemption.gatewayRewardId
+        ? (or(
+            eq(gatewayRewardMappings.gatewayRewardId, redemption.gatewayRewardId),
+            eq(gatewayRewardMappings.twitchRewardId, redemption.twitchRewardId)
+          ) as SQL<unknown>)
+        : eq(gatewayRewardMappings.twitchRewardId, redemption.twitchRewardId);
+      const rows = await tx
+        .select()
+        .from(gatewayRewardMappings)
+        .where(and(filters, eq(gatewayRewardMappings.isActive, true)))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+    async upsertProvisionalUser(input: { twitchUserId: string; twitchLogin: string | null; displayName: string | null }) {
+      const inserted = await tx
+        .insert(users)
+        .values({
+          twitchUserId: input.twitchUserId,
+          twitchLogin: input.twitchLogin,
+          displayName: input.displayName,
+          isProvisional: true,
+          updatedAt: new Date()
+        })
+        .onConflictDoUpdate({
+          target: users.twitchUserId,
+          set: {
+            twitchLogin: input.twitchLogin,
+            displayName: input.displayName,
+            updatedAt: new Date()
+          }
+        })
+        .returning({ id: users.id });
+      const user = inserted[0];
+      if (!user) throw new Error('Failed to upsert provisional Twitch user');
+      return { userId: user.id, createdOrUpdated: true };
+    },
+    async upsertChannelPointRedemption(input: {
+      redemption: NormalizedGatewayRedemption;
+      userId: string | null;
+      mapping: GatewayRewardMapping | null;
+      mappingStatus: 'mapped' | 'unknown';
+    }) {
+      const { redemption, userId, mapping, mappingStatus } = input;
+      await tx
+        .insert(channelPointRedemptions)
+        .values({
+          twitchRedemptionId: redemption.twitchRedemptionId,
+          twitchRewardId: redemption.twitchRewardId,
+          gatewayRewardId: redemption.gatewayRewardId,
+          rewardMappingId: mapping?.id ?? null,
+          localRewardType: mapping?.localRewardType ?? null,
+          mappingStatus,
+          userId,
+          twitchUserId: redemption.twitchUserId,
+          twitchUserLogin: redemption.twitchUserLogin,
+          twitchUserDisplayName: redemption.twitchUserDisplayName,
+          cost: redemption.rewardCost,
+          rewardTitle: redemption.rewardTitle,
+          rewardPrompt: redemption.rewardPrompt,
+          status: redemption.status,
+          userInput: redemption.userInput,
+          lastGatewayDeliveryId: redemption.gatewayDeliveryId,
+          lastGatewayEventId: redemption.gatewayEventId,
+          rawPayload: redemption.rawPayload,
+          processedAt: new Date(),
+          updatedAt: new Date()
+        })
+        .onConflictDoUpdate({
+          target: channelPointRedemptions.twitchRedemptionId,
+          set: {
+            twitchRewardId: redemption.twitchRewardId,
+            gatewayRewardId: redemption.gatewayRewardId,
+            rewardMappingId: mapping?.id ?? null,
+            localRewardType: mapping?.localRewardType ?? null,
+            mappingStatus,
+            userId,
+            twitchUserId: redemption.twitchUserId,
+            twitchUserLogin: redemption.twitchUserLogin,
+            twitchUserDisplayName: redemption.twitchUserDisplayName,
+            cost: redemption.rewardCost,
+            rewardTitle: redemption.rewardTitle,
+            rewardPrompt: redemption.rewardPrompt,
+            status: redemption.status,
+            userInput: redemption.userInput,
+            lastGatewayDeliveryId: redemption.gatewayDeliveryId,
+            lastGatewayEventId: redemption.gatewayEventId,
+            rawPayload: redemption.rawPayload,
+            processedAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+    }
+  };
+}
+
+function createDatabaseGatewayWebhookStore(observeOnly: boolean): GatewayWebhookStore {
   return {
     async insertEvent(record: GatewayWebhookRecord) {
-      const [eventRow] = await db
-        .insert(gatewayWebhookEvents)
-        .values({
+      return db.transaction(async (tx) => {
+        const [eventRow] = await tx
+          .insert(gatewayWebhookEvents)
+          .values({
+            deliveryId: record.deliveryId,
+            eventId: record.eventId,
+            eventType: record.eventType,
+            twitchRedemptionId: record.twitchRedemptionId,
+            twitchMessageId: record.twitchMessageId,
+            rawPayload: record.rawPayload,
+            processingStatus: record.processingStatus,
+            processedAt: new Date()
+          })
+          .onConflictDoNothing()
+          .returning({ id: gatewayWebhookEvents.id });
+
+        if (!eventRow) {
+          const existing = await tx
+            .select({ processingStatus: gatewayWebhookEvents.processingStatus })
+            .from(gatewayWebhookEvents)
+            .where(or(eq(gatewayWebhookEvents.deliveryId, record.deliveryId), eq(gatewayWebhookEvents.eventId, record.eventId)))
+            .limit(1);
+          return { inserted: false as const, status: existing[0]?.processingStatus ?? 'duplicate' };
+        }
+
+        const normalized = normalizeGatewayRedemptionPayload({
           deliveryId: record.deliveryId,
           eventId: record.eventId,
           eventType: record.eventType,
-          twitchRedemptionId: record.twitchRedemptionId,
-          twitchMessageId: record.twitchMessageId,
-          rawPayload: record.rawPayload,
-          processingStatus: record.processingStatus,
-          processedAt: new Date()
-        })
-        .onConflictDoNothing()
-        .returning({ id: gatewayWebhookEvents.id });
+          payload: rawPayloadRecord(record.rawPayload)
+        });
 
-      if (eventRow) return { inserted: true as const };
+        if (normalized) {
+          const result = await processGatewayRedemptionObserveOnly(normalized, createRedemptionStore(tx, observeOnly));
+          await tx
+            .update(gatewayWebhookEvents)
+            .set({
+              processingStatus: result.ignored ? 'ignored' : observeOnly ? 'observed' : 'processed',
+              error: result.ignored ? result.reason : null,
+              processedAt: new Date()
+            })
+            .where(eq(gatewayWebhookEvents.id, eventRow.id));
+        }
 
-      const existing = await db
-        .select({ processingStatus: gatewayWebhookEvents.processingStatus })
-        .from(gatewayWebhookEvents)
-        .where(eq(gatewayWebhookEvents.eventId, record.eventId))
-        .limit(1);
-      return { inserted: false as const, status: existing[0]?.processingStatus ?? 'duplicate' };
+        return { inserted: true as const };
+      });
     }
   };
 }
@@ -49,6 +183,50 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       return reply.code(503).send(result);
     }
     return result;
+  });
+
+  app.get('/api/erwin-gateway/diagnostics', async () => {
+    const [mappings, events, redemptions, unmappedRewards, ignoredEvents] = await Promise.all([
+      db.select().from(gatewayRewardMappings).orderBy(desc(gatewayRewardMappings.updatedAt)).limit(100),
+      db
+        .select({
+          id: gatewayWebhookEvents.id,
+          deliveryId: gatewayWebhookEvents.deliveryId,
+          eventId: gatewayWebhookEvents.eventId,
+          eventType: gatewayWebhookEvents.eventType,
+          twitchRedemptionId: gatewayWebhookEvents.twitchRedemptionId,
+          processingStatus: gatewayWebhookEvents.processingStatus,
+          error: gatewayWebhookEvents.error,
+          createdAt: gatewayWebhookEvents.createdAt,
+          processedAt: gatewayWebhookEvents.processedAt
+        })
+        .from(gatewayWebhookEvents)
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(50),
+      db.select().from(channelPointRedemptions).orderBy(desc(channelPointRedemptions.updatedAt)).limit(50),
+      db
+        .select({ twitchRewardId: channelPointRedemptions.twitchRewardId, gatewayRewardId: channelPointRedemptions.gatewayRewardId, rewardTitle: channelPointRedemptions.rewardTitle })
+        .from(channelPointRedemptions)
+        .where(eq(channelPointRedemptions.mappingStatus, 'unknown'))
+        .orderBy(desc(channelPointRedemptions.updatedAt))
+        .limit(50),
+      db
+        .select()
+        .from(gatewayWebhookEvents)
+        .where(eq(gatewayWebhookEvents.processingStatus, 'ignored'))
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(50)
+    ]);
+
+    return {
+      observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
+      enabled: config.ERWIN_GATEWAY_ENABLED,
+      mappings,
+      recentGatewayRedemptionEvents: events,
+      recentChannelPointRedemptions: redemptions,
+      unmappedRewards,
+      unknownOrIgnoredRedemptionEvents: ignoredEvents
+    };
   });
 
   app.post('/erwin-gateway/webhook', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -67,7 +245,7 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       rawBody: (request as FastifyRequest & { rawBodyBuffer?: Buffer }).rawBodyBuffer,
       maxAgeSeconds: config.ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS,
       observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
-      store: createDatabaseGatewayWebhookStore()
+      store: createDatabaseGatewayWebhookStore(config.ERWIN_GATEWAY_OBSERVE_ONLY)
     });
 
     if (!result.ok) {

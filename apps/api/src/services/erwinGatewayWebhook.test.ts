@@ -68,7 +68,7 @@ test('webhook rejects invalid signature', async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.statusCode, 400);
-  assert.match(result.message, /Invalid/);
+  if (!result.ok) assert.match(result.message, /Invalid/);
   assert.equal(store.records.length, 0);
 });
 
@@ -84,7 +84,7 @@ test('webhook rejects stale timestamp', async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.statusCode, 400);
-  assert.match(result.message, /Stale/);
+  if (!result.ok) assert.match(result.message, /Stale/);
   assert.equal(store.records.length, 0);
 });
 
@@ -106,6 +106,28 @@ test('duplicate event id returns 2xx without duplicate processing', async () => 
   const store = memoryStore();
   const first = signedInput({ event_id: 'event-1', type: 'twitch.chat.message' });
   const second = signedInput({ event_id: 'event-1', type: 'twitch.chat.message' }, { deliveryId: 'delivery-2' });
+
+  await handleErwinGatewayWebhook({ ...first, store });
+  const result = await handleErwinGatewayWebhook({ ...second, store });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.statusCode, 200);
+  assert.equal('duplicate' in result && result.duplicate, true);
+  assert.equal(store.records.length, 1);
+});
+
+
+test('duplicate Twitch redemption id does not duplicate processing', async () => {
+  const store = memoryStore();
+  const first = signedInput({
+    event_id: 'event-1',
+    type: 'twitch.channel_points.custom_reward_redemption.add',
+    redemption: { id: 'redemption-1' }
+  });
+  const second = signedInput(
+    { event_id: 'event-2', type: 'twitch.channel_points.custom_reward_redemption.update', redemption: { id: 'redemption-1' } },
+    { deliveryId: 'delivery-2', eventId: 'event-2' }
+  );
 
   await handleErwinGatewayWebhook({ ...first, store });
   const result = await handleErwinGatewayWebhook({ ...second, store });

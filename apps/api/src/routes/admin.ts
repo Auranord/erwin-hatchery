@@ -34,6 +34,11 @@ import {
   syncEggTypeCustomRewards
 } from '../services/twitchRewards.js';
 import {
+  listGatewayRewardsForAdmin,
+  syncGatewayRewardsForAdmin,
+  type GatewayRewardMappingRequest
+} from '../services/gatewayRewardMappings.js';
+import {
   getCurrentStreamState,
   getManualStreamStateOverride,
   setManualStreamStateOverride
@@ -402,6 +407,51 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { status: 'ok', idempotent: false, ...result };
+  });
+
+  app.get('/api/admin/erwin-gateway/rewards', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    try {
+      return await listGatewayRewardsForAdmin();
+    } catch (error) {
+      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to list erwin-gateway rewards');
+      return reply.code(502).send({ message: 'erwin-gateway rewards could not be loaded' });
+    }
+  });
+
+  app.post('/api/admin/erwin-gateway/rewards/sync', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const body = (request.body ?? {}) as { requestId?: string; mappings?: GatewayRewardMappingRequest[] };
+    const requestId = body.requestId?.trim() || randomUUID();
+    const duplicate = await db
+      .select({ id: adminActionLogs.id })
+      .from(adminActionLogs)
+      .where(eq(adminActionLogs.requestId, requestId))
+      .limit(1);
+    if (duplicate.length > 0)
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    try {
+      const result = await syncGatewayRewardsForAdmin(Array.isArray(body.mappings) ? body.mappings : []);
+
+      await db.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'erwin_gateway_rewards_sync',
+        requestId,
+        payload: result
+      });
+
+      return { status: 'ok', idempotent: false, ...result };
+    } catch (error) {
+      request.log.warn({ error: error instanceof Error ? error.message : 'unknown' }, 'Failed to sync erwin-gateway rewards');
+      return reply.code(502).send({ message: 'erwin-gateway reward sync failed' });
+    }
   });
 
   app.get('/api/admin/debug/eventsub-subscription', async (request, reply) => {
