@@ -36,7 +36,7 @@ export type GatewayRedemptionProcessingResult =
   | { processed: true; ignored: false; mappingStatus: 'mapped' | 'unknown'; userCreatedOrUpdated: boolean }
   | { processed: true; ignored: true; reason: string };
 
-export type GatewayMappedRedemptionResult = { status: 'granted' | 'canceled'; reason?: string };
+export type GatewayMappedRedemptionResult = { status: 'granted' | 'already_granted' | 'canceled'; reason?: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -201,6 +201,9 @@ export async function processGatewayRedemptionObserveOnly(
       return { processed: true, ignored: true, reason: 'active_redemption_processing_not_configured' };
     }
     const mappedResult = await store.processMappedRedemption({ redemption, userId, mapping });
+    if (mappedResult.status === 'already_granted') {
+      return { processed: true, ignored: true, reason: mappedResult.reason ?? 'duplicate_twitch_redemption_id' };
+    }
     if (mappedResult.status === 'canceled') {
       await store.cancelRedemption?.({
         redemption,

@@ -267,22 +267,30 @@ export const channelPointRedemptions = pgTable('channel_point_redemptions', {
   processedAt: timestamp('processed_at', { withTimezone: true })
 });
 
-export const economyLedger = pgTable('economy_ledger', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').references(() => users.id),
-  actorUserId: uuid('actor_user_id').references(() => users.id),
-  eventType: text('event_type').notNull(),
-  sourceType: text('source_type').notNull(),
-  sourceId: uuid('source_id'),
-  delta: jsonb('delta').notNull(),
-  revertsLedgerId: uuid('reverts_ledger_id').references(
-    (): AnyPgColumn => economyLedger.id
-  ),
-  isReverted: boolean('is_reverted').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-});
+export const economyLedger = pgTable(
+  'economy_ledger',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: uuid('user_id').references(() => users.id),
+    actorUserId: uuid('actor_user_id').references(() => users.id),
+    eventType: text('event_type').notNull(),
+    sourceType: text('source_type').notNull(),
+    sourceId: uuid('source_id'),
+    delta: jsonb('delta').notNull(),
+    revertsLedgerId: uuid('reverts_ledger_id').references(
+      (): AnyPgColumn => economyLedger.id
+    ),
+    isReverted: boolean('is_reverted').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+  },
+  (table) => ({
+    channelPointSourceUnique: uniqueIndex('economy_ledger_channel_point_source_idx')
+      .on(table.sourceType, table.sourceId)
+      .where(sql`${table.sourceType} = 'channel_point_redemption' and ${table.sourceId} is not null`)
+  })
+);
 
 export const resources = pgTable(
   'resources',

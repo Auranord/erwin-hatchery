@@ -453,7 +453,19 @@ export async function registerEventSubRoutes(
         payload.subscription.type ===
         'channel.channel_points_custom_reward_redemption.add'
       ) {
-        outcome = await processRedemption(payload, request.log);
+        if (config.ERWIN_GATEWAY_ENABLED) {
+          outcome = 'direct_twitch_redemption_ignored_gateway_enabled';
+          request.log.info(
+            {
+              twitchEventSubMessageId: messageId,
+              twitchRedemptionId: payload.event.id,
+              twitchRewardId: payload.event.reward?.id ?? null
+            },
+            'Direct Twitch Channel Point redemption ignored because erwin-gateway mode is enabled'
+          );
+        } else {
+          outcome = await processRedemption(payload, request.log);
+        }
       } else if (
         payload.subscription.type === 'channel.subscribe' ||
         payload.subscription.type === 'channel.subscription.end' ||
@@ -474,7 +486,8 @@ export async function registerEventSubRoutes(
         'unsubscribed',
         'ignored',
         'bits_counted',
-        'anonymous_bits_ignored'
+        'anonymous_bits_ignored',
+        'direct_twitch_redemption_ignored_gateway_enabled'
       ]);
       await db
         .update(twitchEvents)
