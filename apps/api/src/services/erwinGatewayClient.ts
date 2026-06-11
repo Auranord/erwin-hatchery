@@ -55,6 +55,10 @@ export type GatewayCurrentStream = {
   stream: null | Record<string, unknown>;
   channel?: Record<string, unknown>;
 };
+export type GatewayChannel = Record<string, unknown>;
+export type GatewayChannels = { channels?: GatewayChannel[]; data?: GatewayChannel[] };
+export type GatewayChannelProfile = Record<string, unknown>;
+export type GatewayChannelSchedule = Record<string, unknown>;
 
 export type GatewayChannelPointReward = {
   id: string;
@@ -162,6 +166,19 @@ export class ErwinGatewayClient {
 
   async getCurrentStream(): Promise<GatewayCurrentStream> {
     return this.request<GatewayCurrentStream>('/api/v1/streams/current');
+  }
+
+  async getChannels(): Promise<{ channels: GatewayChannel[] }> {
+    const result = await this.request<GatewayChannels>('/api/v1/channels');
+    return { channels: result.channels ?? result.data ?? [] };
+  }
+
+  async getChannelProfile(channelId: string): Promise<GatewayChannelProfile> {
+    return this.request<GatewayChannelProfile>(`/api/v1/channels/${encodeURIComponent(channelId)}/profile`);
+  }
+
+  async getChannelSchedule(channelId: string): Promise<GatewayChannelSchedule> {
+    return this.request<GatewayChannelSchedule>(`/api/v1/channels/${encodeURIComponent(channelId)}/schedule`);
   }
 
   async listRewards(): Promise<GatewayRewardList> {
