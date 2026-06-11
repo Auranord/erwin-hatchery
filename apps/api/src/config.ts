@@ -52,8 +52,8 @@ const configSchema = z.object({
   TWITCH_CLIENT_ID: z.string().min(1),
   TWITCH_CLIENT_SECRET: z.string().min(1),
   TWITCH_BROADCASTER_ID: z.string().min(1),
-  TWITCH_EVENTSUB_SECRET: z.string().min(1),
-  TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv('TWITCH_EVENTSUB_AUTO_SYNC').default(true),
+  TWITCH_EVENTSUB_SECRET: optionalStringFromEnv(),
+  TWITCH_EVENTSUB_AUTO_SYNC: booleanFromEnv('TWITCH_EVENTSUB_AUTO_SYNC').optional(),
   TWITCH_SUBSCRIPTION_RENEWAL_DAYS: z.coerce.number().int().min(1).max(90).default(31),
   TWITCH_BITS_PER_VOUCHER: z.coerce.number().int().min(1).default(500),
   FEATURE_BITS_EFFECTS: booleanFromEnv('FEATURE_BITS_EFFECTS').default(true),
@@ -79,23 +79,50 @@ const configSchema = z.object({
   ERWIN_GATEWAY_APP_API_KEY: optionalStringFromEnv(),
   ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: optionalStringFromEnv(),
   ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: z.coerce.number().int().min(1).default(300)
-}).superRefine((value, ctx) => {
-  if ((value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) && !value.ERWIN_GATEWAY_URL) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['ERWIN_GATEWAY_URL'],
-      message: 'ERWIN_GATEWAY_URL is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
-    });
-  }
+})
+  .transform((value) => ({
+    ...value,
+    TWITCH_EVENTSUB_AUTO_SYNC:
+      value.TWITCH_EVENTSUB_AUTO_SYNC ?? !value.ERWIN_GATEWAY_ENABLED
+  }))
+  .superRefine((value, ctx) => {
+    if (
+      !value.ERWIN_GATEWAY_ENABLED &&
+      value.TWITCH_EVENTSUB_AUTO_SYNC &&
+      !value.TWITCH_EVENTSUB_SECRET
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TWITCH_EVENTSUB_SECRET'],
+        message:
+          'TWITCH_EVENTSUB_SECRET is required when ERWIN_GATEWAY_ENABLED=false and TWITCH_EVENTSUB_AUTO_SYNC=true.'
+      });
+    }
 
-  if ((value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) && !value.ERWIN_GATEWAY_APP_API_KEY) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['ERWIN_GATEWAY_APP_API_KEY'],
-      message: 'ERWIN_GATEWAY_APP_API_KEY is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
-    });
-  }
-});
+    if (
+      (value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) &&
+      !value.ERWIN_GATEWAY_URL
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ERWIN_GATEWAY_URL'],
+        message:
+          'ERWIN_GATEWAY_URL is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
+      });
+    }
+
+    if (
+      (value.ERWIN_GATEWAY_ENABLED || value.ERWIN_GATEWAY_REQUIRED) &&
+      !value.ERWIN_GATEWAY_APP_API_KEY
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['ERWIN_GATEWAY_APP_API_KEY'],
+        message:
+          'ERWIN_GATEWAY_APP_API_KEY is required when ERWIN_GATEWAY_ENABLED or ERWIN_GATEWAY_REQUIRED is true.'
+      });
+    }
+  });
 
 export type AppConfig = z.infer<typeof configSchema>;
 
