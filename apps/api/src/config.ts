@@ -71,7 +71,7 @@ const configSchema = z.object({
   SHOP_WEEKLY_CONSUMABLE_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
   SUBSCRIBER_SHOP_MONTHLY_OFFER_COUNT: z.coerce.number().int().min(0).default(5),
   PET_TRAINING_MAX_LEVEL: z.coerce.number().int().min(0).max(50).default(10),
-  ERWIN_GATEWAY_ENABLED: booleanFromEnv('ERWIN_GATEWAY_ENABLED').default(false),
+  ERWIN_GATEWAY_ENABLED: booleanFromEnv('ERWIN_GATEWAY_ENABLED').default(true),
   ERWIN_GATEWAY_OBSERVE_ONLY: booleanFromEnv('ERWIN_GATEWAY_OBSERVE_ONLY').default(true),
   ERWIN_GATEWAY_REQUIRED: booleanFromEnv('ERWIN_GATEWAY_REQUIRED').default(false),
   ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: booleanFromEnv('ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS').default(false),
