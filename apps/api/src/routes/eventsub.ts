@@ -416,6 +416,10 @@ export async function registerEventSubRoutes(
   app: FastifyInstance
 ): Promise<void> {
   app.post('/api/twitch/eventsub', async (request, reply) => {
+    if (config.ERWIN_GATEWAY_ENABLED) {
+      return reply.code(204).send();
+    }
+
     const messageType = headerValueToString(
       request.headers['twitch-eventsub-message-type']
     );

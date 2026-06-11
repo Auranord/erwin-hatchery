@@ -579,7 +579,14 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       await syncChannelPointRedemptionEventSub(request.log);
     }
 
-    return getEventSubSubscriptionStatus();
+    const status = getEventSubSubscriptionStatus();
+    return {
+      ...status,
+      directTwitchEventSubDisabled: config.ERWIN_GATEWAY_ENABLED,
+      directTwitchEventSubStatusLabel: config.ERWIN_GATEWAY_ENABLED
+        ? 'Direct Twitch EventSub is disabled in erwin-gateway mode'
+        : 'Direct Twitch EventSub is active for rollback mode'
+    };
   });
 
   app.get('/api/admin/debug/eventsubs', async (request, reply) => {
