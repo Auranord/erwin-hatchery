@@ -338,6 +338,18 @@ export async function syncChannelPointRedemptionEventSub(log: {
     return;
   }
 
+  const eventSubSecret = config.TWITCH_EVENTSUB_SECRET;
+  if (!eventSubSecret) {
+    eventSubSyncState = {
+      ...eventSubSyncState,
+      status: 'missing',
+      enabled: false,
+      error:
+        'Direct Twitch EventSub secret missing; set TWITCH_EVENTSUB_SECRET for rollback/direct mode'
+    };
+    return;
+  }
+
   try {
     await assertBroadcasterAuthorization();
     const token = await getAppAccessToken();
@@ -385,7 +397,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
             transport: {
               method: 'webhook',
               callback: getEventSubCallbackUrl(),
-              secret: config.TWITCH_EVENTSUB_SECRET
+              secret: eventSubSecret
             }
           })
         }
