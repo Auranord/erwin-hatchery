@@ -55,7 +55,30 @@ CORS_ORIGIN=https://hatchery.auranord.net
 
 ## Gateway env
 
-Safe disabled/default shape:
+Production and testing deployments should run in active erwin-gateway mode after validation. Use the same active shape in the `api` service and in the one-shot `init` service so startup/config validation sees identical values:
+
+```env
+ERWIN_GATEWAY_ENABLED=true
+ERWIN_GATEWAY_OBSERVE_ONLY=false
+ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS=true
+ERWIN_GATEWAY_REQUIRED=true
+ERWIN_GATEWAY_URL=https://erwin-gateway.auranord.net
+ERWIN_GATEWAY_APP_API_KEY=<full raw app API key>
+ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET=<app webhook signing secret>
+ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS=300
+```
+
+`ERWIN_GATEWAY_REQUIRED=true` makes Hatchery fail closed when required gateway client configuration is unavailable. Use `false` only for an intentional availability-over-fail-closed exception.
+
+Direct Twitch EventSub rollback variables must be absent from active gateway deployments, or left empty/disabled if the deployment platform requires keys to exist:
+
+```env
+# Rollback only: set these only with ERWIN_GATEWAY_ENABLED=false.
+TWITCH_EVENTSUB_SECRET=
+TWITCH_EVENTSUB_AUTO_SYNC=false
+```
+
+Safe disabled/default shape for local development or explicit rollback preparation:
 
 ```env
 ERWIN_GATEWAY_ENABLED=false
@@ -68,19 +91,13 @@ ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS=300
 ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS=false
 ```
 
-For staging gateway tests:
+For pre-active staging gateway tests before validation, keep side effects disabled:
 
 ```env
 ERWIN_GATEWAY_ENABLED=true
 ERWIN_GATEWAY_OBSERVE_ONLY=true
 ERWIN_GATEWAY_REQUIRED=false
-```
-
-For active redemption grants after validation:
-
-```env
-ERWIN_GATEWAY_OBSERVE_ONLY=false
-ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS=true
+ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS=false
 ```
 
 ## Health

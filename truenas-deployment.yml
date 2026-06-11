@@ -28,10 +28,27 @@ services:
       PUBLIC_API_URL: "https://hatchery.DOMAIN"
       CORS_ORIGIN: "https://hatchery.DOMAIN"
 
+      # Twitch player OAuth login remains owned by Hatchery.
       TWITCH_CLIENT_ID: ""
       TWITCH_CLIENT_SECRET: ""
       TWITCH_BROADCASTER_ID: ""
-      TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
+
+      # Active erwin-gateway mode for testing/production after validation.
+      # Hatchery fails closed when the gateway client config is unavailable.
+      ERWIN_GATEWAY_ENABLED: "true"
+      ERWIN_GATEWAY_OBSERVE_ONLY: "false"
+      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: "true"
+      ERWIN_GATEWAY_REQUIRED: "true"
+      ERWIN_GATEWAY_URL: "https://erwin-gateway.DOMAIN"
+      ERWIN_GATEWAY_APP_API_KEY: "CHANGE_ME_GATEWAY_APP_API_KEY"
+      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: "CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET"
+      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: "300"
+
+      # Direct Twitch EventSub rollback variables are intentionally absent in
+      # active gateway mode. Add TWITCH_EVENTSUB_SECRET and set
+      # TWITCH_EVENTSUB_AUTO_SYNC=true only for explicit rollback with
+      # ERWIN_GATEWAY_ENABLED=false.
+
       SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
       OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
 
@@ -66,10 +83,27 @@ services:
       PUBLIC_API_URL: "https://hatchery.DOMAIN"
       CORS_ORIGIN: "https://hatchery.DOMAIN"
 
+      # Twitch player OAuth login remains owned by Hatchery.
       TWITCH_CLIENT_ID: ""
       TWITCH_CLIENT_SECRET: ""
       TWITCH_BROADCASTER_ID: ""
-      TWITCH_EVENTSUB_SECRET: "CHANGE_ME_EVENTSUB_SECRET"
+
+      # Active erwin-gateway mode for testing/production after validation.
+      # Hatchery fails closed when the gateway client config is unavailable.
+      ERWIN_GATEWAY_ENABLED: "true"
+      ERWIN_GATEWAY_OBSERVE_ONLY: "false"
+      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: "true"
+      ERWIN_GATEWAY_REQUIRED: "true"
+      ERWIN_GATEWAY_URL: "https://erwin-gateway.DOMAIN"
+      ERWIN_GATEWAY_APP_API_KEY: "CHANGE_ME_GATEWAY_APP_API_KEY"
+      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: "CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET"
+      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: "300"
+
+      # Direct Twitch EventSub rollback variables are intentionally absent in
+      # active gateway mode. Add TWITCH_EVENTSUB_SECRET and set
+      # TWITCH_EVENTSUB_AUTO_SYNC=true only for explicit rollback with
+      # ERWIN_GATEWAY_ENABLED=false.
+
       SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
       OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
 
