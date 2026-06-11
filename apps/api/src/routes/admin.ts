@@ -40,7 +40,7 @@ import {
   syncGatewayRewardsForAdmin,
   type GatewayRewardMappingRequest
 } from '../services/gatewayRewardMappings.js';
-import { ErwinGatewayError } from '../services/erwinGatewayClient.js';
+import { createErwinGatewayClient, ErwinGatewayError } from '../services/erwinGatewayClient.js';
 import {
   getCurrentStreamState,
   getLocalStreamStateCache,
@@ -119,6 +119,47 @@ function gatewayAdminLogPayload(error: unknown) {
     };
   }
   return { error: error instanceof Error ? error.message : 'unknown' };
+}
+
+
+function stringParam(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+function positiveIntegerParam(value: unknown): number | undefined {
+  if (value === undefined) return undefined;
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function gatewayListQuery(query: unknown): { status?: string; eventType?: string; limit?: number; after?: string } {
+  const record = query && typeof query === 'object' && !Array.isArray(query) ? (query as Record<string, unknown>) : {};
+  return {
+    status: stringParam(record.status) ?? undefined,
+    eventType: stringParam(record.eventType) ?? undefined,
+    limit: positiveIntegerParam(record.limit),
+    after: stringParam(record.after) ?? undefined
+  };
+}
+
+function requestIdFromBody(body: unknown): string {
+  const record = body && typeof body === 'object' && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+  return stringParam(record.requestId) ?? randomUUID();
+}
+
+async function hasDuplicateAdminRequest(requestId: string): Promise<boolean> {
+  const duplicate = await db
+    .select({ id: adminActionLogs.id })
+    .from(adminActionLogs)
+    .where(eq(adminActionLogs.requestId, requestId))
+    .limit(1);
+  return duplicate.length > 0;
+}
+
+function getConfiguredGatewayClient() {
+  const client = createErwinGatewayClient();
+  if (!client) throw new Error('erwin-gateway is not configured or enabled');
+  return client;
 }
 
 function hasAdminAccess(roleNames: string[]): boolean {
@@ -493,6 +534,118 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
   });
 
 
+  app.delete('/api/admin/erwin-gateway/rewards/:rewardId', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const rewardId = stringParam((request.params as { rewardId?: string }).rewardId);
+    if (!rewardId) return reply.code(400).send({ message: 'Missing gateway reward id' });
+
+    const requestId = requestIdFromBody(request.body);
+    if (await hasDuplicateAdminRequest(requestId))
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    try {
+      const result = await getConfiguredGatewayClient().deleteReward(rewardId);
+      await db.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'erwin_gateway_reward_delete',
+        requestId,
+        payload: { rewardId, result }
+      });
+      return { status: 'ok', idempotent: false, result };
+    } catch (error) {
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to delete erwin-gateway reward');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway reward delete failed'));
+    }
+  });
+
+  app.post('/api/admin/erwin-gateway/rewards/:rewardId/release', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const rewardId = stringParam((request.params as { rewardId?: string }).rewardId);
+    if (!rewardId) return reply.code(400).send({ message: 'Missing gateway reward id' });
+
+    const requestId = requestIdFromBody(request.body);
+    if (await hasDuplicateAdminRequest(requestId))
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    try {
+      const result = await getConfiguredGatewayClient().releaseReward(rewardId);
+      await db.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'erwin_gateway_reward_release',
+        requestId,
+        payload: { rewardId, result }
+      });
+      return { status: 'ok', idempotent: false, result };
+    } catch (error) {
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to release erwin-gateway reward ownership');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway reward release failed'));
+    }
+  });
+
+  app.get('/api/admin/erwin-gateway/rewards/:rewardId/redemptions', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const rewardId = stringParam((request.params as { rewardId?: string }).rewardId);
+    if (!rewardId) return reply.code(400).send({ message: 'Missing gateway reward id' });
+
+    try {
+      const { status, limit, after } = gatewayListQuery(request.query);
+      return await getConfiguredGatewayClient().listRewardRedemptions(rewardId, { status, limit, after });
+    } catch (error) {
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to list erwin-gateway reward redemptions');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway reward redemptions could not be loaded'));
+    }
+  });
+
+  app.get('/api/admin/erwin-gateway/webhook-deliveries', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    try {
+      return await getConfiguredGatewayClient().listWebhookDeliveries(gatewayListQuery(request.query));
+    } catch (error) {
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to list erwin-gateway webhook deliveries');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway webhook deliveries could not be loaded'));
+    }
+  });
+
+  app.post('/api/admin/erwin-gateway/webhook-deliveries/:deliveryId/retry', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const deliveryId = stringParam((request.params as { deliveryId?: string }).deliveryId);
+    if (!deliveryId) return reply.code(400).send({ message: 'Missing gateway delivery id' });
+
+    const requestId = requestIdFromBody(request.body);
+    if (await hasDuplicateAdminRequest(requestId))
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    try {
+      const result = await getConfiguredGatewayClient().retryWebhookDelivery(deliveryId);
+      await db.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        actionType: 'erwin_gateway_webhook_delivery_retry',
+        requestId,
+        payload: { deliveryId, result }
+      });
+      return { status: 'ok', idempotent: false, result };
+    } catch (error) {
+      request.log.warn(gatewayAdminLogPayload(error), 'Failed to retry erwin-gateway webhook delivery');
+      return reply.code(502).send(gatewayAdminErrorPayload(error, 'erwin-gateway webhook delivery retry failed'));
+    }
+  });
+
+
   app.get('/api/admin/erwin-gateway/sub-bits-diagnostics', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles))
@@ -579,7 +732,14 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
       await syncChannelPointRedemptionEventSub(request.log);
     }
 
-    return getEventSubSubscriptionStatus();
+    const status = getEventSubSubscriptionStatus();
+    return {
+      ...status,
+      directTwitchEventSubDisabled: config.ERWIN_GATEWAY_ENABLED,
+      directTwitchEventSubStatusLabel: config.ERWIN_GATEWAY_ENABLED
+        ? 'Direct Twitch EventSub is disabled in erwin-gateway mode'
+        : 'Direct Twitch EventSub is active for rollback mode'
+    };
   });
 
   app.get('/api/admin/debug/eventsubs', async (request, reply) => {

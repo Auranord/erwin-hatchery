@@ -51,9 +51,12 @@ function verifyEventSubSignature(request: FastifyRequest): boolean {
     request.headers['twitch-eventsub-message-signature']
   );
   const body = (request as FastifyRequest & { rawBody?: string }).rawBody;
-  if (!id || !timestamp || !signature || !body) return false;
+  const eventSubSecret = config.TWITCH_EVENTSUB_SECRET;
+  if (!id || !timestamp || !signature || !body || !eventSubSecret) {
+    return false;
+  }
   const value = `${id}${timestamp}${body}`;
-  const expected = `sha256=${createHmac('sha256', config.TWITCH_EVENTSUB_SECRET).update(value).digest('hex')}`;
+  const expected = `sha256=${createHmac('sha256', eventSubSecret).update(value).digest('hex')}`;
   return timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 function shouldGrantRedemption(status: string | undefined): boolean {
@@ -416,6 +419,10 @@ export async function registerEventSubRoutes(
   app: FastifyInstance
 ): Promise<void> {
   app.post('/api/twitch/eventsub', async (request, reply) => {
+    if (config.ERWIN_GATEWAY_ENABLED) {
+      return reply.code(204).send();
+    }
+
     const messageType = headerValueToString(
       request.headers['twitch-eventsub-message-type']
     );

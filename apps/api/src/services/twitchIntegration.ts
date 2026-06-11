@@ -338,10 +338,19 @@ async function createBackfillRun(type: string, source: string) {
   return run;
 }
 
-async function runGatewaySubscriptionBackfill(): Promise<boolean> {
-  if (!config.ERWIN_GATEWAY_ENABLED) return false;
+function gatewayBackfillConfigurationError(backfillType: 'subscription' | 'bits'): Error {
+  return new Error(
+    `Cannot run ${backfillType} backfill: ERWIN_GATEWAY_ENABLED=true requires erwin-gateway backfills, but the erwin-gateway client is not configured. Set ERWIN_GATEWAY_URL and ERWIN_GATEWAY_APP_API_KEY, or set ERWIN_GATEWAY_ENABLED=false for direct Helix rollback mode.`
+  );
+}
+
+async function runGatewaySubscriptionBackfill(): Promise<void> {
   const client = createErwinGatewayClient();
-  if (!client) return false;
+  if (!client) {
+    const error = gatewayBackfillConfigurationError('subscription');
+    await ensureState({ lastError: error.message });
+    throw error;
+  }
   const run = await createBackfillRun('subscriptions', 'erwin-gateway/subscriptions/backfill');
   try {
     const result = await client.runSubscriptionBackfill();
@@ -357,7 +366,7 @@ async function runGatewaySubscriptionBackfill(): Promise<boolean> {
       processedAt: now,
       processingStatus: 'processed'
     }).onConflictDoNothing();
-    return true;
+    return;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
     await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
@@ -372,7 +381,10 @@ export async function runSubscriptionBackfill(): Promise<void> {
     await finalizeSetupIfReady();
     return;
   }
-  if (await runGatewaySubscriptionBackfill()) return;
+  if (config.ERWIN_GATEWAY_ENABLED) {
+    await runGatewaySubscriptionBackfill();
+    return;
+  }
   const run = await createBackfillRun('subscriptions', 'helix/subscriptions');
   try {
     const token = await getBroadcasterToken();
@@ -411,10 +423,13 @@ export async function runSubscriptionBackfill(): Promise<void> {
   }
 }
 
-async function runGatewayBitsBackfill(): Promise<boolean> {
-  if (!config.ERWIN_GATEWAY_ENABLED) return false;
+async function runGatewayBitsBackfill(): Promise<void> {
   const client = createErwinGatewayClient();
-  if (!client) return false;
+  if (!client) {
+    const error = gatewayBackfillConfigurationError('bits');
+    await ensureState({ lastError: error.message });
+    throw error;
+  }
   const run = await createBackfillRun('bits', 'erwin-gateway/bits/backfill');
   try {
     const result = await client.runBitsBackfill();
@@ -430,7 +445,7 @@ async function runGatewayBitsBackfill(): Promise<boolean> {
       processedAt: now,
       processingStatus: 'processed'
     }).onConflictDoNothing();
-    return true;
+    return;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error';
     await db.update(twitchBackfillRuns).set({ status: 'failed', completedAt: new Date(), error: message }).where(eq(twitchBackfillRuns.id, run.id));
@@ -445,7 +460,10 @@ export async function runBitsBackfill(): Promise<void> {
     await finalizeSetupIfReady();
     return;
   }
-  if (await runGatewayBitsBackfill()) return;
+  if (config.ERWIN_GATEWAY_ENABLED) {
+    await runGatewayBitsBackfill();
+    return;
+  }
   const run = await createBackfillRun('bits', 'helix/bits/leaderboard');
   try {
     const token = await getBroadcasterToken();

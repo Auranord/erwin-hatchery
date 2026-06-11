@@ -2462,6 +2462,8 @@ export function App(): JSX.Element {
         </div>
       );
     const selected = users.find((x) => x.id === selectedUserId) ?? null;
+    const isGatewayMode = setupStatus?.gateway?.enabled === true;
+    const isDirectTwitchRollbackMode = setupStatus?.gateway?.enabled === false;
 
     return (
       <div className="app-shell app-shell--single">
@@ -2734,14 +2736,18 @@ export function App(): JSX.Element {
               <p>Twitch-Transport: {setupStatus.twitchTransport === 'erwin-gateway' ? 'erwin-gateway' : 'direkt in Hatchery'}</p>
               <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
               <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
+              <p>Twitch-Transport: {setupStatus.gateway?.enabled ? 'erwin-gateway' : 'direkter Twitch-Rollback in Hatchery'}</p>
+              <p>Backfill-Quelle: {setupStatus.gateway?.backfillMode ?? '—'}</p>
               <p>Scopes fehlen: {setupStatus.missingScopes.join(', ') || 'keine'}</p>
               <p>Letzter Health Check: {setupStatus.lastHealthCheckAt ? new Date(setupStatus.lastHealthCheckAt).toLocaleString() : '—'}</p>
               {setupStatus.lastError ? <p>Letzter Fehler: {setupStatus.lastError}</p> : null}
-              <ul>
-                {(setupStatus.eventSub.subscriptions ?? []).map((subscription) => (
-                  <li key={subscription.eventType}>{subscription.eventType}: {subscription.status}</li>
-                ))}
-              </ul>
+              {isDirectTwitchRollbackMode ? (
+                <ul>
+                  {(setupStatus.eventSub.subscriptions ?? []).map((subscription) => (
+                    <li key={subscription.eventType}>{subscription.eventType}: {subscription.status}</li>
+                  ))}
+                </ul>
+              ) : null}
               <h3>Backfill-Läufe</h3>
               <ul>
                 {setupStatus.lastBackfillRuns.map((run) => (
@@ -2752,54 +2758,56 @@ export function App(): JSX.Element {
           ) : <p>Noch kein Setup-Status geladen.</p>}
         </section>
 
-        <section className="card">
-          <h2>Debug: EventSub Subscription Status</h2>
-          <button onClick={() => void loadEventSubSubscriptionStatus(true)}>
-            Status aktualisieren
-          </button>
-          {eventSubSubscriptionStatus ? (
-            <>
-              <p>
-                Status:{' '}
-                {eventSubSubscriptionStatus.status === 'enabled'
-                  ? '✅ Aktiviert'
-                  : eventSubSubscriptionStatus.status ===
-                        'pending_verification' ||
-                      eventSubSubscriptionStatus.status === 'duplicate'
-                    ? '⚠ Ausstehend / Mehrdeutig'
-                    : '❌ Nicht eingerichtet / Fehler'}
-              </p>
-              <p>Typ: {eventSubSubscriptionStatus.type}</p>
-              <p>
-                Subscription ID:{' '}
-                {eventSubSubscriptionStatus.subscriptionId ?? '—'}
-              </p>
-              <p>Callback: {eventSubSubscriptionStatus.callback}</p>
-              <p>
-                Erstellt:{' '}
-                {eventSubSubscriptionStatus.createdAt
-                  ? new Date(
-                      eventSubSubscriptionStatus.createdAt
-                    ).toLocaleString()
-                  : '—'}
-              </p>
-              <p>
-                Letzte Prüfung:{' '}
-                {new Date(
-                  eventSubSubscriptionStatus.lastCheckedAt
-                ).toLocaleString()}
-              </p>
-              {eventSubSubscriptionStatus.error ? (
-                <p>Fehler: {eventSubSubscriptionStatus.error}</p>
-              ) : null}
-            </>
-          ) : (
-            <p>Kein Status geladen.</p>
-          )}
-        </section>
+        {isDirectTwitchRollbackMode ? (
+          <section className="card">
+            <h2>Rollback-Debug: Direkte Twitch EventSub Subscription</h2>
+            <button onClick={() => void loadEventSubSubscriptionStatus(true)}>
+              Direkten EventSub-Status aktualisieren
+            </button>
+            {eventSubSubscriptionStatus ? (
+              <>
+                <p>
+                  Status:{' '}
+                  {eventSubSubscriptionStatus.status === 'enabled'
+                    ? '✅ Aktiviert'
+                    : eventSubSubscriptionStatus.status ===
+                          'pending_verification' ||
+                        eventSubSubscriptionStatus.status === 'duplicate'
+                      ? '⚠ Ausstehend / Mehrdeutig'
+                      : '❌ Nicht eingerichtet / Fehler'}
+                </p>
+                <p>Typ: {eventSubSubscriptionStatus.type}</p>
+                <p>
+                  Subscription ID:{' '}
+                  {eventSubSubscriptionStatus.subscriptionId ?? '—'}
+                </p>
+                <p>Callback: {eventSubSubscriptionStatus.callback}</p>
+                <p>
+                  Erstellt:{' '}
+                  {eventSubSubscriptionStatus.createdAt
+                    ? new Date(
+                        eventSubSubscriptionStatus.createdAt
+                      ).toLocaleString()
+                    : '—'}
+                </p>
+                <p>
+                  Letzte Prüfung:{' '}
+                  {new Date(
+                    eventSubSubscriptionStatus.lastCheckedAt
+                  ).toLocaleString()}
+                </p>
+                {eventSubSubscriptionStatus.error ? (
+                  <p>Fehler: {eventSubSubscriptionStatus.error}</p>
+                ) : null}
+              </>
+            ) : (
+              <p>Kein Status geladen.</p>
+            )}
+          </section>
+        ) : null}
 
         <section className="card">
-          <h2>Debug: Twitch EventSub Feed (letzte 25)</h2>
+          <h2>Debug: Webhook-Ereignisfeed (letzte 25)</h2>
           <button onClick={() => void loadEventSubFeed()}>
             Feed aktualisieren
           </button>
@@ -2852,6 +2860,8 @@ export function App(): JSX.Element {
   function renderSetupScreen(): JSX.Element {
     const status = setupStatus;
     const eventSubs = status?.eventSub.subscriptions ?? [];
+    const isGatewayMode = status?.gateway?.enabled === true;
+    const isDirectTwitchRollbackMode = status?.gateway?.enabled === false;
     return (
       <div className="app-shell app-shell--single">
         <main className="app-scroll container">
@@ -2886,7 +2896,7 @@ export function App(): JSX.Element {
           {status?.requiresReauth ? <p>⚠ Reauth erforderlich.</p> : null}
         </section>
         <section className="card">
-          <h2>2. Status & Reparatur</h2>
+          <h2>2. Gateway-Status & Reparatur</h2>
           <p>Setup: {status?.completed ? '✅ Vollständig' : '❌ Unvollständig'}</p>
           <p>Fehlende Scopes: {status?.missingScopes.length ? status.missingScopes.join(', ') : 'keine'}</p>
           <p>Twitch-Transport: {status?.twitchTransport === 'erwin-gateway' ? 'erwin-gateway' : 'direkt in Hatchery'}</p>
@@ -2906,7 +2916,7 @@ export function App(): JSX.Element {
             )}
             <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
           </div>
-          {eventSubs.length > 0 ? (
+          {isDirectTwitchRollbackMode && eventSubs.length > 0 ? (
             <ul>
               {eventSubs.map((subscription) => (
                 <li key={subscription.eventType}>{subscription.eventType}: {subscription.status}{subscription.lastError ? ` · ${subscription.lastError}` : ''}</li>

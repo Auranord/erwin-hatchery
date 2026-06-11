@@ -385,7 +385,7 @@ export async function syncChannelPointRedemptionEventSub(log: {
             transport: {
               method: 'webhook',
               callback: getEventSubCallbackUrl(),
-              secret: config.TWITCH_EVENTSUB_SECRET
+              secret: eventSubSecret
             }
           })
         }

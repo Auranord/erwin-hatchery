@@ -104,9 +104,23 @@ export type GatewayChannelPointRedemption = {
   raw?: Record<string, unknown>;
 };
 
-export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption[] };
+export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
 
 export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
+export type GatewayListRewardRedemptionsParams = Omit<GatewayListRedemptionsParams, 'rewardId'>;
+
+export type GatewayChatMessagePayload = {
+  message: string;
+  channelId?: string;
+  replyParentMessageId?: string;
+  idempotencyKey?: string;
+};
+export type GatewayChatMessageResult = { status?: string; message?: Record<string, unknown>; data?: Record<string, unknown> } & Record<string, unknown>;
+
+export type GatewayWebhookDelivery = Record<string, unknown>;
+export type GatewayWebhookDeliveryList = { deliveries: GatewayWebhookDelivery[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
+export type GatewayListWebhookDeliveriesParams = { status?: string; eventType?: string; limit?: number; after?: string };
+export type GatewayWebhookDeliveryRetryResult = { status?: string; delivery?: GatewayWebhookDelivery; queued?: boolean; retried?: boolean } & Record<string, unknown>;
 
 export type GatewaySubscriptionList = { subscriptions: Record<string, unknown>[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
 export type GatewayBackfillRunResult = { status?: string; runId?: string; started?: boolean; completed?: boolean; diagnostics?: Record<string, unknown> } & Record<string, unknown>;
@@ -146,6 +160,13 @@ function stringField(value: unknown): string | null {
 
 function numberField(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function appendGatewayListParams(searchParams: URLSearchParams, params: { status?: string; limit?: number; after?: string; eventType?: string }): void {
+  if (params.status) searchParams.set('status', params.status);
+  if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+  if (params.after) searchParams.set('after', params.after);
+  if (params.eventType) searchParams.set('eventType', params.eventType);
 }
 
 
@@ -221,6 +242,21 @@ export class ErwinGatewayClient {
     return reward;
   }
 
+  async deleteReward(rewardId: string): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(`/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}`, { method: 'DELETE' });
+  }
+
+  async releaseReward(rewardId: string): Promise<GatewayChannelPointReward | Record<string, unknown>> {
+    const result = await this.request<{ reward?: GatewayChannelPointReward } | GatewayChannelPointReward | Record<string, unknown>>(
+      `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}/release`,
+      { method: 'POST' }
+    );
+    if ('id' in result) return result as GatewayChannelPointReward;
+    const wrapped = result as { reward?: GatewayChannelPointReward };
+    if (wrapped.reward) return wrapped.reward;
+    return result;
+  }
+
   async listSubscriptions(): Promise<GatewaySubscriptionList> {
     return this.request<GatewaySubscriptionList>('/api/v1/subscriptions');
   }
@@ -247,11 +283,31 @@ export class ErwinGatewayClient {
   async listRedemptions(params: GatewayListRedemptionsParams = {}): Promise<GatewayRedemptionList> {
     const searchParams = new URLSearchParams();
     if (params.rewardId) searchParams.set('rewardId', params.rewardId);
-    if (params.status) searchParams.set('status', params.status);
-    if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
-    if (params.after) searchParams.set('after', params.after);
+    appendGatewayListParams(searchParams, params);
     const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
     return this.request<GatewayRedemptionList>(`/api/v1/channel-points/redemptions${suffix}`);
+  }
+
+  async listRewardRedemptions(rewardId: string, params: GatewayListRewardRedemptionsParams = {}): Promise<GatewayRedemptionList> {
+    const searchParams = new URLSearchParams();
+    appendGatewayListParams(searchParams, params);
+    const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+    return this.request<GatewayRedemptionList>(`/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}/redemptions${suffix}`);
+  }
+
+  async sendChatMessage(payload: GatewayChatMessagePayload): Promise<GatewayChatMessageResult> {
+    return this.request<GatewayChatMessageResult>('/api/v1/chat/messages', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async listWebhookDeliveries(params: GatewayListWebhookDeliveriesParams = {}): Promise<GatewayWebhookDeliveryList> {
+    const searchParams = new URLSearchParams();
+    appendGatewayListParams(searchParams, params);
+    const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+    return this.request<GatewayWebhookDeliveryList>(`/api/v1/webhook-deliveries${suffix}`);
+  }
+
+  async retryWebhookDelivery(deliveryId: string): Promise<GatewayWebhookDeliveryRetryResult> {
+    return this.request<GatewayWebhookDeliveryRetryResult>(`/api/v1/webhook-deliveries/${encodeURIComponent(deliveryId)}/retry`, { method: 'POST' });
   }
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -291,7 +347,16 @@ export class ErwinGatewayClient {
       });
     }
 
-    return (await response.json()) as T;
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    const responseText = await response.text();
+    if (responseText.trim() === '') {
+      return {} as T;
+    }
+
+    return JSON.parse(responseText) as T;
   }
 }
 
