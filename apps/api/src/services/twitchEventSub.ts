@@ -339,6 +339,13 @@ export async function syncChannelPointRedemptionEventSub(log: {
   }
 
   try {
+    const eventSubSecret = config.TWITCH_EVENTSUB_SECRET;
+    if (!eventSubSecret) {
+      throw new Error(
+        'Missing TWITCH_EVENTSUB_SECRET. Direct Twitch EventSub sync requires a webhook signing secret.'
+      );
+    }
+
     await assertBroadcasterAuthorization();
     const token = await getAppAccessToken();
     const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>(
