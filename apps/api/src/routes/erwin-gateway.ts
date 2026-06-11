@@ -607,6 +607,10 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       enabled: config.ERWIN_GATEWAY_ENABLED,
       gatewaySmoke,
       directTwitchTransportDisabled: config.ERWIN_GATEWAY_ENABLED,
+      directTwitchEventSubDisabled: config.ERWIN_GATEWAY_ENABLED,
+      directTwitchEventSubStatusLabel: config.ERWIN_GATEWAY_ENABLED
+        ? 'Direct Twitch EventSub is disabled in erwin-gateway mode'
+        : 'Direct Twitch EventSub is active for rollback mode',
       migratedDirectEventSubTypesDisabled: config.ERWIN_GATEWAY_ENABLED,
       localStreamCache,
       mappings,
