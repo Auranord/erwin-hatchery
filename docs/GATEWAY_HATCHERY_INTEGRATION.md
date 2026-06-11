@@ -246,7 +246,7 @@ Hatchery behavior:
 - `twitch.channel.cheer` uses the existing Bits threshold Gutschein counter. Anonymous cheers are audited without voucher credit.
 - No sub/Bits path grants random eggs, random pets, mystery rewards, prize entries, giveaway chances, trading value, cash-out, or betting effects.
 
-When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route acknowledges migrated redemption, sub/Bits, stream-state, and channel-update notifications but does not mutate economy or stream cache for them. Direct EventSub subscription sync is skipped for migrated types; set `ERWIN_GATEWAY_ENABLED=false` only for an explicit rollback path. Twitch player OAuth login remains in Hatchery.
+When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route is hard-disabled and returns immediately without signature verification, storage, economy mutation, or stream cache updates. Direct EventSub subscription sync is skipped for migrated types; set `ERWIN_GATEWAY_ENABLED=false` only for an explicit rollback path. Twitch player OAuth login remains in Hatchery.
 
 Admin diagnostics:
 
