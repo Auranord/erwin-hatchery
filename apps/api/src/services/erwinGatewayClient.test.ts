@@ -86,13 +86,13 @@ test('gateway client exposes structured error details without leaking API key', 
 
 
 test('gateway client exposes Channel Point reward and redemption helpers', async () => {
-  const calls: string[] = [];
+  const calls: Array<{ url: string; method: string; body: string | null }> = [];
   const client = new ErwinGatewayClient({
     baseUrl: 'https://gateway.example.test',
     apiKey: 'secret-api-key',
-    fetchImpl: async (url: URL | RequestInfo) => {
-      calls.push(String(url));
-      return Response.json({ rewards: [], redemptions: [] });
+    fetchImpl: async (url: URL | RequestInfo, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : null });
+      return Response.json({ rewards: [], redemptions: [], deliveries: [], status: 'ok' });
     }
   });
 
@@ -103,12 +103,20 @@ test('gateway client exposes Channel Point reward and redemption helpers', async
     expected_twitch_reward_id: 'twitch-reward-1',
     local_reward_type: 'basic_mystery_egg'
   });
+  await client.deleteReward('reward-1');
+  await client.releaseReward('reward-1');
   await client.listRedemptions({ status: 'UNFULFILLED', limit: 10 });
+  await client.listRewardRedemptions('reward-1', { status: 'FULFILLED', limit: 5, after: 'cursor-1' });
 
-  assert.equal(calls[0], 'https://gateway.example.test/api/v1/channel-points/rewards');
-  assert.equal(calls[1], 'https://gateway.example.test/api/v1/channel-points/rewards/sync');
-  assert.equal(calls[2], 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1/adopt');
-  assert.equal(calls[3], 'https://gateway.example.test/api/v1/channel-points/redemptions?status=UNFULFILLED&limit=10');
+  assert.deepEqual(calls.map((call) => ({ url: call.url, method: call.method })), [
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards', method: 'GET' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards/sync', method: 'POST' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1/adopt', method: 'POST' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1', method: 'DELETE' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1/release', method: 'POST' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/redemptions?status=UNFULFILLED&limit=10', method: 'GET' },
+    { url: 'https://gateway.example.test/api/v1/channel-points/rewards/reward-1/redemptions?status=FULFILLED&limit=5&after=cursor-1', method: 'GET' }
+  ]);
 });
 
 test('gateway client exposes subscription and Bits helpers', async () => {
@@ -133,4 +141,49 @@ test('gateway client exposes subscription and Bits helpers', async () => {
     { url: 'https://gateway.example.test/api/v1/bits/leaderboard', method: 'GET' },
     { url: 'https://gateway.example.test/api/v1/bits/backfill', method: 'POST' }
   ]);
+});
+
+
+test('gateway client exposes chat and webhook delivery helpers', async () => {
+  const calls: Array<{ url: string; method: string; body: string | null }> = [];
+  const client = new ErwinGatewayClient({
+    baseUrl: 'https://gateway.example.test',
+    apiKey: 'secret-api-key',
+    fetchImpl: async (url: URL | RequestInfo, init?: RequestInit) => {
+      calls.push({ url: String(url), method: init?.method ?? 'GET', body: typeof init?.body === 'string' ? init.body : null });
+      return Response.json({ deliveries: [], status: 'ok' });
+    }
+  });
+
+  await client.sendChatMessage({ message: 'Hallo Chat', idempotencyKey: 'chat-1' });
+  await client.listWebhookDeliveries({ status: 'failed', eventType: 'twitch.channel.cheer', limit: 25, after: 'cursor-1' });
+  await client.retryWebhookDelivery('delivery-1');
+
+  assert.deepEqual(calls, [
+    {
+      url: 'https://gateway.example.test/api/v1/chat/messages',
+      method: 'POST',
+      body: JSON.stringify({ message: 'Hallo Chat', idempotencyKey: 'chat-1' })
+    },
+    {
+      url: 'https://gateway.example.test/api/v1/webhook-deliveries?status=failed&limit=25&after=cursor-1&eventType=twitch.channel.cheer',
+      method: 'GET',
+      body: null
+    },
+    {
+      url: 'https://gateway.example.test/api/v1/webhook-deliveries/delivery-1/retry',
+      method: 'POST',
+      body: null
+    }
+  ]);
+});
+
+test('gateway client handles empty success responses', async () => {
+  const client = new ErwinGatewayClient({
+    baseUrl: 'https://gateway.example.test',
+    apiKey: 'secret-api-key',
+    fetchImpl: async () => new Response(null, { status: 204 })
+  });
+
+  assert.deepEqual(await client.deleteReward('reward-1'), {});
 });
