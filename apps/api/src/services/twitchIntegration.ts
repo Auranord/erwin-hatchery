@@ -240,6 +240,9 @@ export async function completeSetupOAuth(code: string, log: { info: Function; wa
 }
 
 export async function refreshBroadcasterToken(): Promise<void> {
+  if (config.ERWIN_GATEWAY_ENABLED) {
+    throw new Error('Broadcaster token refresh is disabled while ERWIN_GATEWAY_ENABLED=true');
+  }
   const rows = await db.select({ userId: twitchUserTokens.userId, refreshToken: twitchUserTokens.refreshToken }).from(twitchUserTokens).innerJoin(users, eq(users.id, twitchUserTokens.userId)).where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID)).limit(1);
   const row = rows[0];
   if (!row) throw new Error('Missing broadcaster token');
@@ -249,6 +252,17 @@ export async function refreshBroadcasterToken(): Promise<void> {
 }
 
 export async function runHealthCheck(log: { info: Function; warn: Function; error: Function }) {
+  if (config.ERWIN_GATEWAY_ENABLED) {
+    await syncChannelPointRedemptionEventSub(log);
+    await ensureState({
+      lastHealthCheckAt: new Date(),
+      requiresReauth: false,
+      eventsubHealthy: false,
+      lastError: 'Direct broadcaster Twitch health check skipped because ERWIN_GATEWAY_ENABLED=true'
+    });
+    return getSetupStatus();
+  }
+
   try {
     await refreshBroadcasterToken();
     await syncChannelPointRedemptionEventSub(log);

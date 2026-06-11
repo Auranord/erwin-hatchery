@@ -43,6 +43,7 @@ import {
 import { ErwinGatewayError } from '../services/erwinGatewayClient.js';
 import {
   getCurrentStreamState,
+  getLocalStreamStateCache,
   getManualStreamStateOverride,
   setManualStreamStateOverride
 } from '../services/streamState.js';
@@ -1135,9 +1136,12 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     if (!identity || !hasAdminAccess(identity.roles))
       return reply.code(403).send({ message: 'Forbidden' });
 
-    const state = await getCurrentStreamState();
+    const [state, localCache] = await Promise.all([getCurrentStreamState(), getLocalStreamStateCache()]);
     return {
-      state: { ...state, manualOverride: getManualStreamStateOverride() }
+      state: { ...state, manualOverride: getManualStreamStateOverride() },
+      localCache,
+      gatewayStreamStateEnabled: config.ERWIN_GATEWAY_ENABLED,
+      directTwitchTransportDisabled: config.ERWIN_GATEWAY_ENABLED
     };
   });
 

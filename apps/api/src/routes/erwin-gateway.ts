@@ -12,6 +12,7 @@ import {
   type NormalizedGatewayRedemption
 } from '../services/gatewayRedemptions.js';
 import { normalizeGatewayTwitchEventPayload, processGatewayTwitchEventInTx } from '../services/gatewayTwitchEvents.js';
+import { getLocalStreamStateCache, upsertGatewayStreamStateFromPayload } from '../services/streamState.js';
 
 function headerValueToString(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -65,6 +66,17 @@ function gatewayStatusLogFields(input: { redemption: NormalizedGatewayRedemption
     mappingId: input.mapping?.id ?? null,
     localRewardType: input.mapping?.localRewardType ?? null
   };
+}
+
+
+const GATEWAY_STREAM_EVENT_TYPES = new Set([
+  'twitch.stream.online',
+  'twitch.stream.offline',
+  'twitch.channel.update'
+]);
+
+function isGatewayStreamEventType(eventType: string): eventType is 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update' {
+  return GATEWAY_STREAM_EVENT_TYPES.has(eventType);
 }
 
 function gatewayErrorLogFields(error: unknown) {
@@ -358,6 +370,14 @@ function createRedemptionStore(tx: GatewayTransaction, observeOnly: boolean, pos
   };
 }
 
+
+async function markGatewayEventProcessed(eventId: string, status: string, reason: string | null): Promise<void> {
+  await db
+    .update(gatewayWebhookEvents)
+    .set({ processingStatus: status, error: reason, processedAt: new Date() })
+    .where(eq(gatewayWebhookEvents.eventId, eventId));
+}
+
 function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBaseLogger): GatewayWebhookStore {
   return {
     async insertEvent(record: GatewayWebhookRecord) {
@@ -430,6 +450,16 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
                 processedAt: new Date()
               })
               .where(eq(gatewayWebhookEvents.id, eventRow.id));
+          } else if (isGatewayStreamEventType(record.eventType)) {
+            postCommitActions.push(async () => {
+              await upsertGatewayStreamStateFromPayload({
+                eventType: record.eventType,
+                gatewayEventId: record.eventId,
+                gatewayDeliveryId: record.deliveryId,
+                payload: rawPayloadRecord(record.rawPayload)
+              });
+              await markGatewayEventProcessed(record.eventId, 'processed', 'stream_state_cache_updated');
+            });
           }
         }
 
@@ -457,7 +487,7 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
   });
 
   app.get('/api/erwin-gateway/diagnostics', async () => {
-    const [mappings, events, redemptions, unmappedRewards, ignoredEvents] = await Promise.all([
+    const [mappings, events, redemptions, unmappedRewards, ignoredEvents, localStreamCache, gatewaySmoke] = await Promise.all([
       db.select().from(gatewayRewardMappings).orderBy(desc(gatewayRewardMappings.updatedAt)).limit(100),
       db
         .select({
@@ -507,7 +537,9 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
         .from(gatewayWebhookEvents)
         .where(eq(gatewayWebhookEvents.processingStatus, 'ignored'))
         .orderBy(desc(gatewayWebhookEvents.createdAt))
-        .limit(50)
+        .limit(50),
+      getLocalStreamStateCache(),
+      smokeCheckErwinGateway()
     ]);
 
     const subBitsTypes = [
@@ -517,7 +549,8 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       'twitch.channel.subscription.gift',
       'twitch.channel.cheer'
     ];
-    const [recentGatewaySubBitsEvents, gatewayVoucherGrants, gatewayBackfillRuns] = await Promise.all([
+    const streamEventTypes = ['twitch.stream.online', 'twitch.stream.offline', 'twitch.channel.update'];
+    const [recentGatewaySubBitsEvents, recentGatewayStreamEvents, gatewayVoucherGrants, gatewayBackfillRuns] = await Promise.all([
       db
         .select({
           id: gatewayWebhookEvents.id,
@@ -539,6 +572,21 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
         .limit(50),
       db
         .select({
+          id: gatewayWebhookEvents.id,
+          deliveryId: gatewayWebhookEvents.deliveryId,
+          eventId: gatewayWebhookEvents.eventId,
+          eventType: gatewayWebhookEvents.eventType,
+          processingStatus: gatewayWebhookEvents.processingStatus,
+          error: gatewayWebhookEvents.error,
+          createdAt: gatewayWebhookEvents.createdAt,
+          processedAt: gatewayWebhookEvents.processedAt
+        })
+        .from(gatewayWebhookEvents)
+        .where(inArray(gatewayWebhookEvents.eventType, streamEventTypes))
+        .orderBy(desc(gatewayWebhookEvents.createdAt))
+        .limit(20),
+      db
+        .select({
           id: economyLedger.id,
           userId: economyLedger.userId,
           eventType: economyLedger.eventType,
@@ -557,12 +605,20 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
     return {
       observeOnly: config.ERWIN_GATEWAY_OBSERVE_ONLY,
       enabled: config.ERWIN_GATEWAY_ENABLED,
+      gatewaySmoke,
+      directTwitchTransportDisabled: config.ERWIN_GATEWAY_ENABLED,
+      migratedDirectEventSubTypesDisabled: config.ERWIN_GATEWAY_ENABLED,
+      localStreamCache,
       mappings,
       recentGatewayRedemptionEvents: events,
       recentChannelPointRedemptions: redemptions,
       unmappedRewards,
       unknownOrIgnoredRedemptionEvents: ignoredEvents,
       recentGatewaySubBitsEvents,
+      recentGatewayStreamEvents,
+      lastStreamOnlineEvent: recentGatewayStreamEvents.find((event) => event.eventType === 'twitch.stream.online') ?? null,
+      lastStreamOfflineEvent: recentGatewayStreamEvents.find((event) => event.eventType === 'twitch.stream.offline') ?? null,
+      lastChannelUpdateEvent: recentGatewayStreamEvents.find((event) => event.eventType === 'twitch.channel.update') ?? null,
       gatewayVoucherGrants,
       gatewayBackfillRuns
     };

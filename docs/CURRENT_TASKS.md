@@ -25,6 +25,8 @@ Implemented:
 - Direct Twitch Channel Point redemption processing is guarded off when `ERWIN_GATEWAY_ENABLED=true`; the old EventSub route acknowledges retries but does not grant eggs.
 - Gateway redemption fulfillment state is recorded as fulfilled, pending manual fulfill, fulfillment failed, canceled, or ignored/duplicate.
 - Gateway subscription, resub, gift-sub, subscription-end, and Bits/cheer events are durably stored and deduped. Active mode applies only fixed Gutschein effects for identifiable users; anonymous paid events are audited without gifter credit.
+- Gateway stream online/offline and channel update events update the local stream cache. Public stream/profile/schedule reads use erwin-gateway while `ERWIN_GATEWAY_ENABLED=true`, with direct Twitch Helix reads retained only as rollback when gateway mode is off.
+- Direct Twitch EventSub sync for migrated redemptions, sub/Bits, stream state, and channel update transport is disabled when `ERWIN_GATEWAY_ENABLED=true`; Twitch player OAuth login remains in Hatchery.
 
 Known focus areas:
 
@@ -49,6 +51,6 @@ A successful Channel Point redemption in active mode must:
 ## Pending broader milestones
 
 - Admin lifecycle controls: freeze/reset/delete progress and fuller role lifecycle.
-- Monitor gateway sub/Bits diagnostics and confirm gateway backfill behavior in the target environment.
+- Monitor gateway sub/Bits and stream/channel diagnostics and confirm gateway backfill/read behavior in the target environment.
 - Deployment hardening: rate limiting, strict CORS, backup/restore automation.
 - erwin-music gateway migration.

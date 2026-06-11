@@ -246,7 +246,7 @@ Hatchery behavior:
 - `twitch.channel.cheer` uses the existing Bits threshold Gutschein counter. Anonymous cheers are audited without voucher credit.
 - No sub/Bits path grants random eggs, random pets, mystery rewards, prize entries, giveaway chances, trading value, cash-out, or betting effects.
 
-When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route acknowledges migrated sub/Bits notifications but does not mutate economy for them.
+When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route acknowledges migrated redemption, sub/Bits, stream-state, and channel-update notifications but does not mutate economy or stream cache for them. Direct EventSub subscription sync is skipped for migrated types; set `ERWIN_GATEWAY_ENABLED=false` only for an explicit rollback path. Twitch player OAuth login remains in Hatchery.
 
 Admin diagnostics:
 
@@ -443,7 +443,8 @@ Rules:
 - If a sub ends and the subscriber incubator is occupied, mark `remove_when_empty`.
 - Bits may be stored for future fixed transparent perks.
 - Bits and subs must never create random eggs, random pets, mystery prizes, giveaways, cash-out, trading, betting, or weighted reward chances.
-- Stream state is cached server-side and can drive incubation modifiers.
+- Stream state is cached server-side from `twitch.stream.online`, `twitch.stream.offline`, and `twitch.channel.update`; cache fields include live/offline, title, category/game, viewer count when available, source, gateway event/delivery IDs, and update timestamps.
+- Public stream/profile/schedule reads use `GET /api/v1/streams/current`, `GET /api/v1/channels`, `GET /api/v1/channels/:channelId/profile`, and `GET /api/v1/channels/:channelId/schedule` while gateway mode is enabled.
 
 ## Manual tests
 
