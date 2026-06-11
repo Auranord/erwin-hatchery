@@ -2,13 +2,14 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { roles, sessions, twitchUserTokens, users } from '../db/schema.js';
+import { roles, sessions, users } from '../db/schema.js';
 import { getSessionIdentity, isAdminRole } from './session-auth.js';
 import { config, getOAuthRedirectUri, isProduction } from '../config.js';
 
 const SESSION_COOKIE_NAME = 'eh_session';
 const ONE_DAY_SECONDS = 60 * 60 * 24;
 const SESSION_TTL_DAYS = 30;
+const PLAYER_OAUTH_SCOPE = 'user:read:email';
 
 type TwitchUser = {
   id: string;
@@ -16,7 +17,6 @@ type TwitchUser = {
   display_name: string;
   profile_image_url: string;
 };
-
 
 function parseCookie(request: FastifyRequest, name: string): string | null {
   const raw = request.headers.cookie;
@@ -35,7 +35,9 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     authUrl.searchParams.set('client_id', config.TWITCH_CLIENT_ID);
     authUrl.searchParams.set('redirect_uri', getOAuthRedirectUri());
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', 'user:read:email channel:read:redemptions channel:manage:redemptions channel:read:subscriptions');
+    // Player login only needs identity/profile access. Broadcaster transport scopes
+    // for redemptions, subscriptions, and Bits are owned by erwin-gateway.
+    authUrl.searchParams.set('scope', PLAYER_OAUTH_SCOPE);
     authUrl.searchParams.set('state', state);
     return reply.redirect(authUrl.toString());
   });
@@ -66,7 +68,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(502).send({ message: 'OAuth exchange failed' });
     }
 
-    const tokenJson = (await tokenResponse.json()) as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string[] };
+    const tokenJson = (await tokenResponse.json()) as { access_token: string };
     const meResponse = await fetch('https://api.twitch.tv/helix/users', {
       headers: {
         Authorization: `Bearer ${tokenJson.access_token}`,
@@ -113,27 +115,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
       if (twitchUser.id === config.TWITCH_BROADCASTER_ID && ownerRole.length === 0) {
         await tx.insert(roles).values({ userId: currentUser.id, role: 'owner', createdByUserId: currentUser.id });
-      }
-
-      if (tokenJson.refresh_token && tokenJson.expires_in) {
-        const expiresAt = new Date(Date.now() + tokenJson.expires_in * 1000);
-        await tx.insert(twitchUserTokens).values({
-          userId: currentUser.id,
-          accessToken: tokenJson.access_token,
-          refreshToken: tokenJson.refresh_token,
-          scope: (tokenJson.scope ?? []).join(' '),
-          expiresAt,
-          updatedAt: now
-        }).onConflictDoUpdate({
-          target: [twitchUserTokens.userId],
-          set: {
-            accessToken: tokenJson.access_token,
-            refreshToken: tokenJson.refresh_token,
-            scope: (tokenJson.scope ?? []).join(' '),
-            expiresAt,
-            updatedAt: now
-          }
-        });
       }
 
       return currentUser;
