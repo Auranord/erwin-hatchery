@@ -407,6 +407,11 @@ type SetupStatus = {
       lastError: string | null;
     }>;
   };
+  gateway?: {
+    enabled: boolean;
+    directHelixBackfillsAllowed: boolean;
+    backfillMode: string;
+  };
   lastBackfillRuns: Array<{ id: string; type: string; status: string; startedAt: string; completedAt: string | null; source: string; error: string | null }>;
 };
 
@@ -2716,12 +2721,18 @@ export function App(): JSX.Element {
           <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check</button>
           <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub Resync</button>
           <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
-          <a href="/api/setup/twitch/login">Broadcaster reauthentifizieren</a>
+          {setupStatus?.gateway?.enabled ? (
+            <span>Broadcaster-Reauth läuft im erwin-gateway; direkte Twitch-Reauth ist deaktiviert.</span>
+          ) : (
+            <a href="/api/setup/twitch/login">Broadcaster reauthentifizieren</a>
+          )}
           {setupStatus ? (
             <>
               <p>Setup: {setupStatus.completed ? '✅ vollständig' : '❌ unvollständig'}</p>
               <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
               <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
+              <p>Twitch-Modus: {setupStatus.gateway?.enabled ? 'erwin-gateway (direkte Helix-Backfills gesperrt)' : 'Direkter Helix-Rollback-Modus'}</p>
+              <p>Backfill-Quelle: {setupStatus.gateway?.backfillMode ?? '—'}</p>
               <p>Scopes fehlen: {setupStatus.missingScopes.join(', ') || 'keine'}</p>
               <p>Letzter Health Check: {setupStatus.lastHealthCheckAt ? new Date(setupStatus.lastHealthCheckAt).toLocaleString() : '—'}</p>
               {setupStatus.lastError ? <p>Letzter Fehler: {setupStatus.lastError}</p> : null}
@@ -2853,7 +2864,11 @@ export function App(): JSX.Element {
           <p>Bitte melde den konfigurierten Broadcaster-Account an. Die Anmeldung fordert Abos, Channel-Point-Rewards und Bits-Berechtigungen an.</p>
           <p><strong>Wichtig:</strong> Twitch stellt keinen vollständigen historischen EventSub-Replay bereit.</p>
           <p>Backfill importiert aktuell sichtbare Abos und Bits-Leaderboard-Werte bestmöglich.</p>
-          <a href="/api/setup/twitch/login">Broadcaster mit Twitch verbinden</a>
+          {status?.gateway?.enabled ? (
+            <p>erwin-gateway ist aktiv: Backfills laufen ausschließlich über erwin-gateway. Direkte Helix-Backfills sind nur mit ERWIN_GATEWAY_ENABLED=false als Rollback möglich.</p>
+          ) : (
+            <a href="/api/setup/twitch/login">Broadcaster mit Twitch verbinden</a>
+          )}
           {status?.broadcaster ? <p>Verbunden: {status.broadcaster.login ?? status.broadcaster.userId}</p> : null}
           {status?.requiresReauth ? <p>⚠ Reauth erforderlich.</p> : null}
         </section>
@@ -2861,6 +2876,8 @@ export function App(): JSX.Element {
           <h2>2. Status & Reparatur</h2>
           <p>Setup: {status?.completed ? '✅ Vollständig' : '❌ Unvollständig'}</p>
           <p>Fehlende Scopes: {status?.missingScopes.length ? status.missingScopes.join(', ') : 'keine'}</p>
+          <p>Twitch-Modus: {status?.gateway?.enabled ? 'erwin-gateway (direkte Helix-Backfills gesperrt)' : 'Direkter Helix-Rollback-Modus'}</p>
+          <p>Backfill-Quelle: {status?.gateway?.backfillMode ?? '—'}</p>
           <p>EventSub: {status?.eventSub.enabled ? '✅ aktiv' : '⚠ nicht vollständig aktiv'}</p>
           <p>Abo-Backfill: {status?.subscriptionBackfillCompletedAt ? new Date(status.subscriptionBackfillCompletedAt).toLocaleString() : 'offen'}</p>
           <p>Bits-Backfill: {status?.bitsBackfillCompletedAt ? new Date(status.bitsBackfillCompletedAt).toLocaleString() : 'offen'}</p>
