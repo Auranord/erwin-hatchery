@@ -386,6 +386,10 @@ type EventSubSubscriptionStatus = {
 };
 
 
+type GatewaySmokeStatus =
+  | { ok: true; enabled: boolean; required: boolean; appSlug?: string }
+  | { ok: false; enabled: boolean; required: boolean; error: string; retryable: boolean };
+
 type SetupStatus = {
   completed: boolean;
   requiresReauth: boolean;
@@ -407,11 +411,9 @@ type SetupStatus = {
       lastError: string | null;
     }>;
   };
-  gateway?: {
-    enabled: boolean;
-    directHelixBackfillsAllowed: boolean;
-    backfillMode: string;
-  };
+  gateway: GatewaySmokeStatus | null;
+  twitchTransport: 'erwin-gateway' | 'direct_twitch';
+  backfillSource: string;
   lastBackfillRuns: Array<{ id: string; type: string; status: string; startedAt: string; completedAt: string | null; source: string; error: string | null }>;
 };
 
@@ -2718,37 +2720,20 @@ export function App(): JSX.Element {
         </section>
 
         <section className="card">
-          <h2>Twitch-Transport & erwin-gateway</h2>
-          <p>Nach der Migration verwaltet erwin-gateway Twitch OAuth, EventSub, Rewards, Redemptions, Subs und Bits. Hatchery prüft hier nur Gateway-Status und lokale Gateway-Mappings.</p>
-          <div>
-            <button onClick={() => void loadSetupStatus()}>Setup-Status laden</button>
-            <button onClick={() => void postSetupAction('/api/setup/health-check')}>Hatchery/Gateway Health Check</button>
-            <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Gateway-/Setup-Backfill fortsetzen</button>
-          </div>
-          {isGatewayMode ? (
-            <>
-              <p>Gateway-Modus aktiv: Broadcaster-Reauth, EventSub-Resync und Twitch-Transport laufen im erwin-gateway.</p>
-              <ul>
-                <li><a href="/api/erwin-gateway/smoke">Gateway Smoke-Test öffnen</a></li>
-                <li><a href="/api/erwin-gateway/diagnostics">Gateway-Diagnose öffnen</a></li>
-                <li><a href="/api/admin/erwin-gateway/egg-rewards">Gateway-Ei-Reward-Mappings öffnen</a></li>
-                <li><a href="/api/admin/erwin-gateway/sub-bits-diagnostics">Gateway-Sub/Bits-Diagnose öffnen</a></li>
-              </ul>
-            </>
-          ) : null}
-          {isDirectTwitchRollbackMode ? (
-            <details>
-              <summary>Direkter Twitch-Rollback-Modus</summary>
-              <p>Nur für Rollback mit ERWIN_GATEWAY_ENABLED=false: Hatchery verwaltet Twitch EventSub und Broadcaster-Reauth direkt.</p>
-              <div>
-                <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>Direkte Twitch EventSub neu synchronisieren</button>
-                <a href="/api/setup/twitch/login">Broadcaster direkt in Hatchery reauthentifizieren</a>
-              </div>
-            </details>
-          ) : null}
+          <h2>Twitch Setup & Integration</h2>
+          <button onClick={() => void loadSetupStatus()}>Setup-Status laden</button>
+          <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check</button>
+          {setupStatus?.twitchTransport === 'erwin-gateway' ? null : (
+            <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub Resync</button>
+          )}
+          <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
+          {setupStatus?.twitchTransport === 'erwin-gateway' ? null : (
+            <a href="/api/setup/twitch/login">Broadcaster reauthentifizieren</a>
+          )}
           {setupStatus ? (
             <>
               <p>Setup: {setupStatus.completed ? '✅ vollständig' : '❌ unvollständig'}</p>
+              <p>Twitch-Transport: {setupStatus.twitchTransport === 'erwin-gateway' ? 'erwin-gateway' : 'direkt in Hatchery'}</p>
               <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
               <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
               <p>Twitch-Transport: {setupStatus.gateway?.enabled ? 'erwin-gateway' : 'direkter Twitch-Rollback in Hatchery'}</p>
@@ -2887,26 +2872,26 @@ export function App(): JSX.Element {
         </header>
         <section className="card">
           <h2>1. Twitch-Transport prüfen</h2>
-          <p>Nach der Migration verbindet und verwaltet erwin-gateway den Broadcaster für Twitch OAuth, EventSub, Channel-Point-Rewards, Abos und Bits.</p>
-          <p><strong>Wichtig:</strong> Hatchery soll Twitch EventSub im Gateway-Modus nicht direkt anlegen oder neu synchronisieren.</p>
-          {isGatewayMode ? (
+          {status?.twitchTransport === 'erwin-gateway' ? (
             <>
+              <p>Nach der Migration verbindet und verwaltet erwin-gateway den Broadcaster für Twitch OAuth, EventSub, Channel-Point-Rewards, Abos, Bits und Stream-/Kanalstatus.</p>
+              <p><strong>Wichtig:</strong> Hatchery soll Twitch EventSub im Gateway-Modus nicht direkt anlegen oder neu synchronisieren.</p>
               <p>erwin-gateway ist aktiv. Bitte nutze die Gateway-Diagnosen statt direkter Twitch-Setup-Aktionen in Hatchery.</p>
-              <ul>
-                <li><a href="/api/erwin-gateway/smoke">Gateway Smoke-Test öffnen</a></li>
-                <li><a href="/api/erwin-gateway/diagnostics">Gateway-Diagnose öffnen</a></li>
-                <li><a href="/api/admin/erwin-gateway/egg-rewards">Gateway-Ei-Reward-Mappings öffnen</a></li>
-                <li><a href="/api/admin/erwin-gateway/sub-bits-diagnostics">Gateway-Sub/Bits-Diagnose öffnen</a></li>
-              </ul>
+              <div>
+                <a href="/api/erwin-gateway/smoke">Gateway Smoke-Test öffnen</a>{' '}
+                <a href="/api/erwin-gateway/diagnostics">Gateway-Diagnose öffnen</a>{' '}
+                <a href="/api/admin/erwin-gateway/egg-rewards">Gateway-Ei-Reward-Mappings öffnen</a>{' '}
+                <a href="/api/admin/erwin-gateway/sub-bits-diagnostics">Gateway-Sub/Bits-Diagnose öffnen</a>
+              </div>
             </>
-          ) : null}
-          {isDirectTwitchRollbackMode ? (
-            <details open>
-              <summary>Direkter Twitch-Rollback-Modus</summary>
-              <p>Nur mit ERWIN_GATEWAY_ENABLED=false: Hatchery verbindet den Broadcaster und verwaltet EventSub direkt.</p>
-              <a href="/api/setup/twitch/login">Broadcaster direkt in Hatchery verbinden</a>
-            </details>
-          ) : null}
+          ) : (
+            <>
+              <p>Bitte melde den konfigurierten Broadcaster-Account an. Die Anmeldung fordert Abos, Channel-Point-Rewards und Bits-Berechtigungen an.</p>
+              <p><strong>Wichtig:</strong> Twitch stellt keinen vollständigen historischen EventSub-Replay bereit.</p>
+              <p>Backfill importiert aktuell sichtbare Abos und Bits-Leaderboard-Werte bestmöglich.</p>
+              <a href="/api/setup/twitch/login">Broadcaster mit Twitch verbinden</a>
+            </>
+          )}
           {status?.broadcaster ? <p>Verbunden: {status.broadcaster.login ?? status.broadcaster.userId}</p> : null}
           {status?.requiresReauth ? <p>⚠ Reauth erforderlich.</p> : null}
         </section>
@@ -2914,20 +2899,22 @@ export function App(): JSX.Element {
           <h2>2. Gateway-Status & Reparatur</h2>
           <p>Setup: {status?.completed ? '✅ Vollständig' : '❌ Unvollständig'}</p>
           <p>Fehlende Scopes: {status?.missingScopes.length ? status.missingScopes.join(', ') : 'keine'}</p>
-          <p>Twitch-Transport: {status?.gateway?.enabled ? 'erwin-gateway' : 'direkter Twitch-Rollback in Hatchery'}</p>
-          <p>Backfill-Quelle: {status?.gateway?.backfillMode ?? '—'}</p>
-          {isDirectTwitchRollbackMode ? (
-            <p>Direkte EventSub-Subscriptions: {status?.eventSub.enabled ? '✅ aktiv' : '⚠ nicht vollständig aktiv'}</p>
-          ) : null}
+          <p>Twitch-Transport: {status?.twitchTransport === 'erwin-gateway' ? 'erwin-gateway' : 'direkt in Hatchery'}</p>
+          <p>Backfill-Quelle: {status?.backfillSource ?? '—'}</p>
+          {status?.twitchTransport === 'erwin-gateway' ? (
+            <p>Gateway Smoke: {status.gateway?.ok ? '✅ ok' : `⚠ ${status.gateway?.error ?? 'nicht verfügbar'}`}</p>
+          ) : (
+            <p>EventSub: {status?.eventSub.enabled ? '✅ aktiv' : '⚠ nicht vollständig aktiv'}</p>
+          )}
           <p>Abo-Backfill: {status?.subscriptionBackfillCompletedAt ? new Date(status.subscriptionBackfillCompletedAt).toLocaleString() : 'offen'}</p>
           <p>Bits-Backfill: {status?.bitsBackfillCompletedAt ? new Date(status.bitsBackfillCompletedAt).toLocaleString() : 'offen'}</p>
           {status?.lastError ? <p>Letzter Twitch/Gateway-Fehler: {status.lastError}</p> : null}
           <div>
-            <button onClick={() => void postSetupAction('/api/setup/health-check')}>Hatchery/Gateway Health Check ausführen</button>
-            <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Gateway-/Setup-Backfill fortsetzen</button>
-            {isDirectTwitchRollbackMode ? (
-              <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>Direkte Twitch EventSub neu synchronisieren</button>
-            ) : null}
+            <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check ausführen</button>
+            {status?.twitchTransport === 'erwin-gateway' ? null : (
+              <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub neu synchronisieren</button>
+            )}
+            <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
           </div>
           {isDirectTwitchRollbackMode && eventSubs.length > 0 ? (
             <ul>

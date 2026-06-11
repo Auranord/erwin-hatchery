@@ -12,7 +12,7 @@ import {
   type NormalizedGatewayRedemption
 } from '../services/gatewayRedemptions.js';
 import { normalizeGatewayTwitchEventPayload, processGatewayTwitchEventInTx } from '../services/gatewayTwitchEvents.js';
-import { getLocalStreamStateCache, upsertGatewayStreamStateFromPayload, type GatewayStreamEventType } from '../services/streamState.js';
+import { getLocalStreamStateCache, upsertGatewayStreamStateFromPayload } from '../services/streamState.js';
 
 function headerValueToString(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -69,13 +69,13 @@ function gatewayStatusLogFields(input: { redemption: NormalizedGatewayRedemption
 }
 
 
-const GATEWAY_STREAM_EVENT_TYPES = new Set<string>([
+const GATEWAY_STREAM_EVENT_TYPES = new Set([
   'twitch.stream.online',
   'twitch.stream.offline',
   'twitch.channel.update'
-] satisfies GatewayStreamEventType[]);
+]);
 
-function isGatewayStreamEventType(eventType: string): eventType is GatewayStreamEventType {
+function isGatewayStreamEventType(eventType: string): eventType is 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update' {
   return GATEWAY_STREAM_EVENT_TYPES.has(eventType);
 }
 
@@ -451,10 +451,9 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
               })
               .where(eq(gatewayWebhookEvents.id, eventRow.id));
           } else if (isGatewayStreamEventType(record.eventType)) {
-            const streamEventType = record.eventType;
             postCommitActions.push(async () => {
               await upsertGatewayStreamStateFromPayload({
-                eventType: streamEventType,
+                eventType: record.eventType,
                 gatewayEventId: record.eventId,
                 gatewayDeliveryId: record.deliveryId,
                 payload: rawPayloadRecord(record.rawPayload)
@@ -608,10 +607,6 @@ export async function registerErwinGatewayRoutes(app: FastifyInstance): Promise<
       enabled: config.ERWIN_GATEWAY_ENABLED,
       gatewaySmoke,
       directTwitchTransportDisabled: config.ERWIN_GATEWAY_ENABLED,
-      directTwitchEventSubDisabled: config.ERWIN_GATEWAY_ENABLED,
-      directTwitchEventSubStatusLabel: config.ERWIN_GATEWAY_ENABLED
-        ? 'Direct Twitch EventSub is disabled in erwin-gateway mode'
-        : 'Direct Twitch EventSub is active for rollback mode',
       migratedDirectEventSubTypesDisabled: config.ERWIN_GATEWAY_ENABLED,
       localStreamCache,
       mappings,

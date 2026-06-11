@@ -196,10 +196,8 @@ async function loadCachedStreamState(): Promise<CachedStreamState | null> {
   };
 }
 
-export type GatewayStreamEventType = 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update';
-
 export async function upsertGatewayStreamStateFromPayload(input: {
-  eventType: GatewayStreamEventType;
+  eventType: 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update';
   gatewayEventId: string;
   gatewayDeliveryId: string;
   payload: Record<string, unknown>;

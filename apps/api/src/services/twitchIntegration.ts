@@ -14,7 +14,7 @@ import {
   twitchUserTokens,
   users
 } from '../db/schema.js';
-import { createErwinGatewayClient } from './erwinGatewayClient.js';
+import { createErwinGatewayClient, smokeCheckErwinGateway } from './erwinGatewayClient.js';
 import {
   REQUIRED_EVENTSUB_SUBSCRIPTIONS,
   checkEventSubHealth,
@@ -157,26 +157,33 @@ async function ensureState(values: Partial<typeof twitchIntegrationState.$inferI
 async function readSetupReadiness() {
   const [state] = await db.select().from(twitchIntegrationState).where(eq(twitchIntegrationState.id, 'default')).limit(1);
   const health = await checkEventSubHealth();
-  const tokenRows = await db
-    .select({ scope: twitchUserTokens.scope })
-    .from(twitchUserTokens)
-    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
-    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
-    .limit(1);
-  const missingScopes = tokenRows[0]
-    ? missingRequiredScopes(tokenRows[0].scope)
-    : REQUIRED_BROADCASTER_SCOPES.slice();
-  const ready = Boolean(
-    tokenRows[0] &&
-      missingScopes.length === 0 &&
-      !state?.requiresReauth &&
-      health.enabled &&
-      state?.eventsubSyncedAt &&
-      state.subscriptionBackfillCompletedAt &&
-      state.bitsBackfillCompletedAt
-  );
+  const gatewaySmoke = config.ERWIN_GATEWAY_ENABLED ? await smokeCheckErwinGateway() : null;
+  const tokenRows: Array<{ scope: string }> = config.ERWIN_GATEWAY_ENABLED
+    ? []
+    : await db
+        .select({ scope: twitchUserTokens.scope })
+        .from(twitchUserTokens)
+        .innerJoin(users, eq(users.id, twitchUserTokens.userId))
+        .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
+        .limit(1);
+  const missingScopes = config.ERWIN_GATEWAY_ENABLED
+    ? []
+    : tokenRows[0]
+      ? missingRequiredScopes(tokenRows[0].scope)
+      : REQUIRED_BROADCASTER_SCOPES.slice();
+  const backfillsComplete = Boolean(state?.subscriptionBackfillCompletedAt && state.bitsBackfillCompletedAt);
+  const ready = config.ERWIN_GATEWAY_ENABLED
+    ? Boolean(gatewaySmoke?.ok && backfillsComplete)
+    : Boolean(
+        tokenRows[0] &&
+          missingScopes.length === 0 &&
+          !state?.requiresReauth &&
+          health.enabled &&
+          state?.eventsubSyncedAt &&
+          backfillsComplete
+      );
 
-  return { state, health, missingScopes, ready };
+  return { state, health, missingScopes, ready, gatewaySmoke };
 }
 
 export async function finalizeSetupIfReady(): Promise<void> {
@@ -186,29 +193,26 @@ export async function finalizeSetupIfReady(): Promise<void> {
 }
 
 export async function getSetupStatus() {
-  const { state, health, missingScopes, ready } = await readSetupReadiness();
+  const { state, health, missingScopes, ready, gatewaySmoke } = await readSetupReadiness();
   const backfills = await db.select().from(twitchBackfillRuns).orderBy(desc(twitchBackfillRuns.startedAt)).limit(10);
-  const completed = Boolean(state?.setupCompletedAt && ready);
+  const completed = ready;
+  const suppressedGatewaySkipError = config.ERWIN_GATEWAY_ENABLED && state?.lastError === 'Direct broadcaster Twitch health check skipped because ERWIN_GATEWAY_ENABLED=true';
   return {
     completed,
-    requiresReauth: state?.requiresReauth ?? false,
+    requiresReauth: config.ERWIN_GATEWAY_ENABLED ? false : state?.requiresReauth ?? false,
     broadcaster: state?.broadcasterUserId ? { userId: state.broadcasterUserId, login: state.broadcasterLogin } : null,
-    requiredScopes: REQUIRED_BROADCASTER_SCOPES,
+    requiredScopes: config.ERWIN_GATEWAY_ENABLED ? [] : REQUIRED_BROADCASTER_SCOPES,
     missingScopes,
     setupCompletedAt: state?.setupCompletedAt ?? null,
     eventsubSyncedAt: state?.eventsubSyncedAt ?? null,
     subscriptionBackfillCompletedAt: state?.subscriptionBackfillCompletedAt ?? null,
     bitsBackfillCompletedAt: state?.bitsBackfillCompletedAt ?? null,
     lastHealthCheckAt: state?.lastHealthCheckAt ?? null,
-    lastError: state?.lastError ?? null,
+    lastError: suppressedGatewaySkipError ? null : state?.lastError ?? null,
     eventSub: health,
-    gateway: {
-      enabled: config.ERWIN_GATEWAY_ENABLED,
-      directHelixBackfillsAllowed: !config.ERWIN_GATEWAY_ENABLED,
-      backfillMode: config.ERWIN_GATEWAY_ENABLED
-        ? 'erwin-gateway backfills only; direct Helix backfills are disabled'
-        : 'direct Helix rollback backfills'
-    },
+    gateway: gatewaySmoke,
+    twitchTransport: config.ERWIN_GATEWAY_ENABLED ? 'erwin-gateway' : 'direct_twitch',
+    backfillSource: config.ERWIN_GATEWAY_ENABLED ? 'erwin-gateway backfills only; direct Helix backfills are disabled' : 'direct Twitch Helix/EventSub',
     lastBackfillRuns: backfills
   };
 }
@@ -261,12 +265,14 @@ export async function refreshBroadcasterToken(): Promise<void> {
 export async function runHealthCheck(log: { info: Function; warn: Function; error: Function }) {
   if (config.ERWIN_GATEWAY_ENABLED) {
     await syncChannelPointRedemptionEventSub(log);
+    const gatewaySmoke = await smokeCheckErwinGateway();
     await ensureState({
       lastHealthCheckAt: new Date(),
       requiresReauth: false,
       eventsubHealthy: false,
-      lastError: 'Direct broadcaster Twitch health check skipped because ERWIN_GATEWAY_ENABLED=true'
+      lastError: gatewaySmoke.ok ? null : gatewaySmoke.error
     });
+    await finalizeSetupIfReady();
     return getSetupStatus();
   }
 
