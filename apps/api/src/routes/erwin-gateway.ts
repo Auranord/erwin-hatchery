@@ -12,7 +12,7 @@ import {
   type NormalizedGatewayRedemption
 } from '../services/gatewayRedemptions.js';
 import { normalizeGatewayTwitchEventPayload, processGatewayTwitchEventInTx } from '../services/gatewayTwitchEvents.js';
-import { getLocalStreamStateCache, upsertGatewayStreamStateFromPayload } from '../services/streamState.js';
+import { getLocalStreamStateCache, upsertGatewayStreamStateFromPayload, type GatewayStreamEventType } from '../services/streamState.js';
 
 function headerValueToString(value: string | string[] | undefined): string | null {
   if (typeof value === 'string') return value;
@@ -69,14 +69,14 @@ function gatewayStatusLogFields(input: { redemption: NormalizedGatewayRedemption
 }
 
 
-const GATEWAY_STREAM_EVENT_TYPES = new Set([
+const GATEWAY_STREAM_EVENT_TYPES = [
   'twitch.stream.online',
   'twitch.stream.offline',
   'twitch.channel.update'
-]);
+] as const satisfies readonly GatewayStreamEventType[];
 
-function isGatewayStreamEventType(eventType: string): eventType is 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update' {
-  return GATEWAY_STREAM_EVENT_TYPES.has(eventType);
+function isGatewayStreamEventType(eventType: string): eventType is GatewayStreamEventType {
+  return GATEWAY_STREAM_EVENT_TYPES.some((candidate) => candidate === eventType);
 }
 
 function gatewayErrorLogFields(error: unknown) {
@@ -451,9 +451,10 @@ function createDatabaseGatewayWebhookStore(observeOnly: boolean, log: FastifyBas
               })
               .where(eq(gatewayWebhookEvents.id, eventRow.id));
           } else if (isGatewayStreamEventType(record.eventType)) {
+            const eventType = record.eventType;
             postCommitActions.push(async () => {
               await upsertGatewayStreamStateFromPayload({
-                eventType: record.eventType,
+                eventType,
                 gatewayEventId: record.eventId,
                 gatewayDeliveryId: record.deliveryId,
                 payload: rawPayloadRecord(record.rawPayload)

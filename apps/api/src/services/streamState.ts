@@ -4,6 +4,8 @@ import { db } from '../db/client.js';
 import { streamStateCache } from '../db/schema.js';
 import { createErwinGatewayClient, type GatewayChannel, type GatewayChannelProfile, type GatewayChannelSchedule, type GatewayCurrentStream } from './erwinGatewayClient.js';
 
+export type GatewayStreamEventType = 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update';
+
 type LiveOverride = 'live' | 'offline' | null;
 
 let manualOverride: LiveOverride = null;
@@ -197,7 +199,7 @@ async function loadCachedStreamState(): Promise<CachedStreamState | null> {
 }
 
 export async function upsertGatewayStreamStateFromPayload(input: {
-  eventType: 'twitch.stream.online' | 'twitch.stream.offline' | 'twitch.channel.update';
+  eventType: GatewayStreamEventType;
   gatewayEventId: string;
   gatewayDeliveryId: string;
   payload: Record<string, unknown>;
