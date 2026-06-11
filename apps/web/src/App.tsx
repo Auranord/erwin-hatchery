@@ -2737,7 +2737,7 @@ export function App(): JSX.Element {
               <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
               <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
               <p>Twitch-Transport: {setupStatus.gateway?.enabled ? 'erwin-gateway' : 'direkter Twitch-Rollback in Hatchery'}</p>
-              <p>Backfill-Quelle: {setupStatus.gateway?.backfillMode ?? '—'}</p>
+              <p>Backfill-Quelle: {setupStatus.backfillSource || '—'}</p>
               <p>Scopes fehlen: {setupStatus.missingScopes.join(', ') || 'keine'}</p>
               <p>Letzter Health Check: {setupStatus.lastHealthCheckAt ? new Date(setupStatus.lastHealthCheckAt).toLocaleString() : '—'}</p>
               {setupStatus.lastError ? <p>Letzter Fehler: {setupStatus.lastError}</p> : null}
