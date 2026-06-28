@@ -1,58 +1,25 @@
 import type { FastifyInstance } from 'fastify';
-import { config } from '../config.js';
-import {
-  REQUIRED_BROADCASTER_SCOPES,
-  clearSetupStateCookie,
-  completeSetupOAuth,
-  createSetupStateCookie,
-  finalizeSetupIfReady,
-  getSetupStatus,
-  runHealthCheck,
-  setupRedirectUri,
-  validateSetupState
-} from '../services/twitchIntegration.js';
+import { finalizeSetupIfReady, getSetupStatus, runHealthCheck } from '../services/twitchIntegration.js';
 import { syncChannelPointRedemptionEventSub } from '../services/twitchEventSub.js';
 
 export async function registerSetupRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/setup/status', async () => getSetupStatus());
 
   app.get('/api/setup/twitch/login', async (_request, reply) => {
-    if (config.ERWIN_GATEWAY_ENABLED) {
-      return reply.code(409).send({ message: 'Direct broadcaster Twitch setup is disabled while erwin-gateway mode is enabled. Set ERWIN_GATEWAY_ENABLED=false for rollback setup.' });
-    }
-    const state = createSetupStateCookie(reply);
-    const authUrl = new URL('https://id.twitch.tv/oauth2/authorize');
-    authUrl.searchParams.set('client_id', config.TWITCH_CLIENT_ID);
-    authUrl.searchParams.set('redirect_uri', setupRedirectUri());
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', REQUIRED_BROADCASTER_SCOPES.join(' '));
-    authUrl.searchParams.set('state', state);
-    return reply.redirect(authUrl.toString());
+    return reply.code(410).send({
+      message: 'Direct broadcaster Twitch setup is retired. Configure broadcaster OAuth in erwin-gateway.',
+    });
   });
 
-  app.get('/api/setup/twitch/callback', async (request, reply) => {
-    if (config.ERWIN_GATEWAY_ENABLED) {
-      clearSetupStateCookie(reply);
-      return reply.code(409).send({ message: 'Direct broadcaster Twitch setup callback is disabled while erwin-gateway mode is enabled.' });
-    }
-    const query = request.query as { code?: string; state?: string };
-    if (!query.code || !validateSetupState(request, query.state)) {
-      return reply.code(400).send({ message: 'Invalid OAuth state' });
-    }
-    try {
-      await completeSetupOAuth(query.code, request.log);
-      clearSetupStateCookie(reply);
-      return reply.redirect('/');
-    } catch (error) {
-      request.log.error({ err: error }, 'Twitch setup callback failed');
-      clearSetupStateCookie(reply);
-      return reply.code(400).send({ message: error instanceof Error ? error.message : 'Twitch setup failed' });
-    }
+  app.get('/api/setup/twitch/callback', async (_request, reply) => {
+    return reply.code(410).send({
+      message: 'Direct broadcaster Twitch setup callback is retired. Configure broadcaster OAuth in erwin-gateway.',
+    });
   });
 
   app.post('/api/setup/run-backfill', async (_request, reply) => {
     return reply.code(410).send({
-      message: 'Automated Twitch backfills are retired. Use the admin inventory controls for manual first-launch grants.'
+      message: 'Direct Twitch backfills are retired. Use erwin-gateway backfills or admin inventory controls for manual first-launch grants.',
     });
   });
 

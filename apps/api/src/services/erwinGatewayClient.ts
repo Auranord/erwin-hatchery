@@ -56,7 +56,10 @@ export type GatewayCurrentStream = {
   channel?: Record<string, unknown>;
 };
 export type GatewayChannel = Record<string, unknown>;
-export type GatewayChannels = { channels?: GatewayChannel[]; data?: GatewayChannel[] };
+export type GatewayChannels = {
+  channels?: GatewayChannel[];
+  data?: GatewayChannel[];
+};
 export type GatewayChannelProfile = Record<string, unknown>;
 export type GatewayChannelSchedule = Record<string, unknown>;
 
@@ -91,8 +94,14 @@ export type GatewayChannelPointReward = {
   metadata?: Record<string, unknown>;
 };
 
-export type GatewayRewardList = { rewards: GatewayChannelPointReward[]; diagnostics?: Record<string, unknown> };
-export type GatewayRewardSync = GatewayRewardList & { synced?: boolean; syncedAt?: string };
+export type GatewayRewardList = {
+  rewards: GatewayChannelPointReward[];
+  diagnostics?: Record<string, unknown>;
+};
+export type GatewayRewardSync = GatewayRewardList & {
+  synced?: boolean;
+  syncedAt?: string;
+};
 
 export type GatewayChannelPointRedemption = {
   id: string;
@@ -104,9 +113,18 @@ export type GatewayChannelPointRedemption = {
   raw?: Record<string, unknown>;
 };
 
-export type GatewayRedemptionList = { redemptions: GatewayChannelPointRedemption[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
+export type GatewayRedemptionList = {
+  redemptions: GatewayChannelPointRedemption[];
+  pagination?: Record<string, unknown>;
+  diagnostics?: Record<string, unknown>;
+};
 
-export type GatewayListRedemptionsParams = { rewardId?: string; status?: string; limit?: number; after?: string };
+export type GatewayListRedemptionsParams = {
+  rewardId?: string;
+  status?: string;
+  limit?: number;
+  after?: string;
+};
 export type GatewayListRewardRedemptionsParams = Omit<GatewayListRedemptionsParams, 'rewardId'>;
 
 export type GatewayChatMessagePayload = {
@@ -115,16 +133,49 @@ export type GatewayChatMessagePayload = {
   replyParentMessageId?: string;
   idempotencyKey?: string;
 };
-export type GatewayChatMessageResult = { status?: string; message?: Record<string, unknown>; data?: Record<string, unknown> } & Record<string, unknown>;
+export type GatewayChatMessageResult = {
+  status?: string;
+  message?: Record<string, unknown>;
+  data?: Record<string, unknown>;
+} & Record<string, unknown>;
 
 export type GatewayWebhookDelivery = Record<string, unknown>;
-export type GatewayWebhookDeliveryList = { deliveries: GatewayWebhookDelivery[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
-export type GatewayListWebhookDeliveriesParams = { status?: string; eventType?: string; limit?: number; after?: string };
-export type GatewayWebhookDeliveryRetryResult = { status?: string; delivery?: GatewayWebhookDelivery; queued?: boolean; retried?: boolean } & Record<string, unknown>;
+export type GatewayWebhookDeliveryList = {
+  deliveries: GatewayWebhookDelivery[];
+  pagination?: Record<string, unknown>;
+  diagnostics?: Record<string, unknown>;
+};
+export type GatewayListWebhookDeliveriesParams = {
+  status?: string;
+  eventType?: string;
+  limit?: number;
+  after?: string;
+};
+export type GatewayWebhookDeliveryRetryResult = {
+  status?: string;
+  delivery?: GatewayWebhookDelivery;
+  queued?: boolean;
+  retried?: boolean;
+} & Record<string, unknown>;
 
-export type GatewaySubscriptionList = { subscriptions: Record<string, unknown>[]; pagination?: Record<string, unknown>; diagnostics?: Record<string, unknown> };
-export type GatewayBackfillRunResult = { status?: string; runId?: string; started?: boolean; completed?: boolean; diagnostics?: Record<string, unknown> } & Record<string, unknown>;
-export type GatewayBitsLeaderboard = { entries?: Record<string, unknown>[]; data?: Record<string, unknown>[]; leaderboard?: Record<string, unknown>[]; diagnostics?: Record<string, unknown> };
+export type GatewaySubscriptionList = {
+  subscriptions: Record<string, unknown>[];
+  pagination?: Record<string, unknown>;
+  diagnostics?: Record<string, unknown>;
+};
+export type GatewayBackfillRunResult = {
+  status?: string;
+  runId?: string;
+  started?: boolean;
+  completed?: boolean;
+  diagnostics?: Record<string, unknown>;
+} & Record<string, unknown>;
+export type GatewayBitsLeaderboard = {
+  entries?: Record<string, unknown>[];
+  data?: Record<string, unknown>[];
+  leaderboard?: Record<string, unknown>[];
+  diagnostics?: Record<string, unknown>;
+};
 
 export type GatewayRewardMutationPayload = Record<string, unknown>;
 
@@ -162,13 +213,20 @@ function numberField(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function appendGatewayListParams(searchParams: URLSearchParams, params: { status?: string; limit?: number; after?: string; eventType?: string }): void {
+function appendGatewayListParams(
+  searchParams: URLSearchParams,
+  params: {
+    status?: string;
+    limit?: number;
+    after?: string;
+    eventType?: string;
+  },
+): void {
   if (params.status) searchParams.set('status', params.status);
   if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
   if (params.after) searchParams.set('after', params.after);
   if (params.eventType) searchParams.set('eventType', params.eventType);
 }
-
 
 export class ErwinGatewayClient {
   private readonly baseUrl: URL;
@@ -211,10 +269,16 @@ export class ErwinGatewayClient {
   }
 
   async createReward(payload: GatewayRewardMutationPayload): Promise<GatewayChannelPointReward> {
-    const result = await this.request<{ reward?: GatewayChannelPointReward; rewards?: GatewayChannelPointReward[] } | GatewayChannelPointReward>(
-      '/api/v1/channel-points/rewards',
-      { method: 'POST', body: JSON.stringify(payload) }
-    );
+    const result = await this.request<
+      | {
+          reward?: GatewayChannelPointReward;
+          rewards?: GatewayChannelPointReward[];
+        }
+      | GatewayChannelPointReward
+    >('/api/v1/channel-points/rewards', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
     if ('id' in result) return result;
     const reward = result.reward ?? result.rewards?.[0];
     if (!reward) throw new Error('erwin-gateway create reward response did not include a reward');
@@ -224,7 +288,10 @@ export class ErwinGatewayClient {
   async adoptReward(rewardId: string, payload: GatewayRewardAdoptionPayload): Promise<GatewayChannelPointReward> {
     const result = await this.request<{ reward?: GatewayChannelPointReward } | GatewayChannelPointReward>(
       `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}/adopt`,
-      { method: 'POST', body: JSON.stringify(payload) }
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
     );
     if ('id' in result) return result;
     if (!result.reward) throw new Error('erwin-gateway adopt reward response did not include a reward');
@@ -232,10 +299,16 @@ export class ErwinGatewayClient {
   }
 
   async updateReward(rewardId: string, payload: GatewayRewardMutationPayload): Promise<GatewayChannelPointReward> {
-    const result = await this.request<{ reward?: GatewayChannelPointReward; rewards?: GatewayChannelPointReward[] } | GatewayChannelPointReward>(
-      `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}`,
-      { method: 'PATCH', body: JSON.stringify(payload) }
-    );
+    const result = await this.request<
+      | {
+          reward?: GatewayChannelPointReward;
+          rewards?: GatewayChannelPointReward[];
+        }
+      | GatewayChannelPointReward
+    >(`/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
     if ('id' in result) return result;
     const reward = result.reward ?? result.rewards?.[0];
     if (!reward) throw new Error('erwin-gateway update reward response did not include a reward');
@@ -249,7 +322,7 @@ export class ErwinGatewayClient {
   async releaseReward(rewardId: string): Promise<GatewayChannelPointReward | Record<string, unknown>> {
     const result = await this.request<{ reward?: GatewayChannelPointReward } | GatewayChannelPointReward | Record<string, unknown>>(
       `/api/v1/channel-points/rewards/${encodeURIComponent(rewardId)}/release`,
-      { method: 'POST' }
+      { method: 'POST' },
     );
     if ('id' in result) return result as GatewayChannelPointReward;
     const wrapped = result as { reward?: GatewayChannelPointReward };
@@ -270,13 +343,26 @@ export class ErwinGatewayClient {
   }
 
   async runBitsBackfill(): Promise<GatewayBackfillRunResult> {
-    return this.request<GatewayBackfillRunResult>('/api/v1/bits/backfill', { method: 'POST' });
+    return this.request<GatewayBackfillRunResult>('/api/v1/bits/backfill', {
+      method: 'POST',
+    });
   }
 
-  async updateRedemptionStatus(input: { rewardId: string; redemptionId: string; status: 'FULFILLED' | 'CANCELED'; reason: string }): Promise<Record<string, unknown>> {
+  async updateRedemptionStatus(input: {
+    rewardId: string;
+    redemptionId: string;
+    status: 'FULFILLED' | 'CANCELED';
+    reason: string;
+  }): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>(
       `/api/v1/channel-points/rewards/${encodeURIComponent(input.rewardId)}/redemptions/${encodeURIComponent(input.redemptionId)}/status`,
-      { method: 'PATCH', body: JSON.stringify({ status: input.status, reason: input.reason.slice(0, 500) }) }
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: input.status,
+          reason: input.reason.slice(0, 500),
+        }),
+      },
     );
   }
 
@@ -296,7 +382,10 @@ export class ErwinGatewayClient {
   }
 
   async sendChatMessage(payload: GatewayChatMessagePayload): Promise<GatewayChatMessageResult> {
-    return this.request<GatewayChatMessageResult>('/api/v1/chat/messages', { method: 'POST', body: JSON.stringify(payload) });
+    return this.request<GatewayChatMessageResult>('/api/v1/chat/messages', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   async listWebhookDeliveries(params: GatewayListWebhookDeliveriesParams = {}): Promise<GatewayWebhookDeliveryList> {
@@ -318,8 +407,8 @@ export class ErwinGatewayClient {
         Accept: 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(init?.headers ?? {})
-      }
+        ...(init?.headers ?? {}),
+      },
     });
 
     if (!response.ok) {
@@ -335,15 +424,17 @@ export class ErwinGatewayClient {
         message: [
           `erwin-gateway request failed with HTTP ${response.status}`,
           code ? `code=${code}` : null,
-          errorText ? `error=${errorText.slice(0, 200)}` : null
-        ].filter(Boolean).join(' '),
+          errorText ? `error=${errorText.slice(0, 200)}` : null,
+        ]
+          .filter(Boolean)
+          .join(' '),
         retryable: response.status === 429 || response.status >= 500,
         responseBody: safeResponseBody,
         code,
         details: parsed?.details,
         twitchStatus,
         twitchErrorExcerpt,
-        issues: parsed?.issues
+        issues: parsed?.issues,
       });
     }
 
@@ -361,24 +452,33 @@ export class ErwinGatewayClient {
 }
 
 export function createErwinGatewayClient(): ErwinGatewayClient | null {
-  if (!config.ERWIN_GATEWAY_ENABLED && !config.ERWIN_GATEWAY_REQUIRED) {
-    return null;
-  }
-
   if (!config.ERWIN_GATEWAY_URL || !config.ERWIN_GATEWAY_APP_API_KEY) {
     return null;
   }
 
   return new ErwinGatewayClient({
     baseUrl: config.ERWIN_GATEWAY_URL,
-    apiKey: config.ERWIN_GATEWAY_APP_API_KEY
+    apiKey: config.ERWIN_GATEWAY_APP_API_KEY,
   });
 }
 
-export async function smokeCheckErwinGateway(): Promise<{ ok: true; enabled: boolean; required: boolean; appSlug?: string } | { ok: false; enabled: boolean; required: boolean; error: string; retryable: boolean }> {
+export async function smokeCheckErwinGateway(): Promise<
+  | { ok: true; enabled: boolean; required: boolean; appSlug?: string }
+  | {
+      ok: false;
+      enabled: boolean;
+      required: boolean;
+      error: string;
+      retryable: boolean;
+    }
+> {
   const client = createErwinGatewayClient();
   if (!client) {
-    return { ok: true, enabled: false, required: config.ERWIN_GATEWAY_REQUIRED };
+    return {
+      ok: true,
+      enabled: false,
+      required: config.ERWIN_GATEWAY_REQUIRED,
+    };
   }
 
   try {
@@ -387,7 +487,7 @@ export async function smokeCheckErwinGateway(): Promise<{ ok: true; enabled: boo
       ok: true,
       enabled: true,
       required: config.ERWIN_GATEWAY_REQUIRED,
-      appSlug: identity.app.slug
+      appSlug: identity.app.slug,
     };
   } catch (error) {
     const gatewayError = error instanceof ErwinGatewayError ? error : null;
@@ -396,7 +496,7 @@ export async function smokeCheckErwinGateway(): Promise<{ ok: true; enabled: boo
       enabled: true,
       required: config.ERWIN_GATEWAY_REQUIRED,
       error: gatewayError ? gatewayError.message : 'erwin-gateway smoke check failed',
-      retryable: gatewayError?.retryable ?? false
+      retryable: gatewayError?.retryable ?? false,
     };
   }
 }

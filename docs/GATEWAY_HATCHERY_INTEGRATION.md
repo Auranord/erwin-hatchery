@@ -21,7 +21,7 @@ Purpose: this file replaces the larger gateway-related docs inside `erwin-hatche
 - Deciding whether a redemption is fulfilled, canceled, ignored, or retryable.
 - Idempotency for gateway deliveries and Twitch redemption IDs.
 
-Do not store broadcaster Twitch access/refresh tokens in Hatchery for gateway-owned transport.
+Hatchery no longer stores broadcaster Twitch access/refresh tokens. erwin-gateway is required for all Twitch transport, including EventSub, Channel Points, subscriptions, Bits, stream/profile, and schedule access.
 
 ## Required gateway state
 
@@ -100,6 +100,7 @@ The shorter `egw_live_<keyId>` prefix is only an identifier and will fail authen
 ## Hatchery environment variables
 
 ```env
+# erwin-gateway is required; ERWIN_GATEWAY_ENABLED=false is unsupported.
 ERWIN_GATEWAY_ENABLED=true
 ERWIN_GATEWAY_OBSERVE_ONLY=true
 ERWIN_GATEWAY_REQUIRED=false
@@ -222,7 +223,6 @@ processed_at
 raw_payload jsonb
 ```
 
-
 ## Subscription and Bits ingestion
 
 Gateway-owned Twitch transport now covers these paid event webhooks:
@@ -246,7 +246,7 @@ Hatchery behavior:
 - `twitch.channel.cheer` uses the existing Bits threshold Gutschein counter. Anonymous cheers are audited without voucher credit.
 - No sub/Bits path grants random eggs, random pets, mystery rewards, prize entries, giveaway chances, trading value, cash-out, or betting effects.
 
-When `ERWIN_GATEWAY_ENABLED=true`, the old direct Twitch EventSub route acknowledges migrated redemption, sub/Bits, stream-state, and channel-update notifications but does not mutate economy or stream cache for them. Direct EventSub subscription sync is skipped for migrated types, and Hatchery setup completion depends on gateway smoke plus gateway backfills instead of Hatchery-held broadcaster OAuth or direct EventSub health. Set `ERWIN_GATEWAY_ENABLED=false` only for an explicit rollback path. Twitch player OAuth login remains in Hatchery.
+The old direct Twitch EventSub route exists only to acknowledge stale Twitch webhook retries and does not mutate economy or stream cache. Direct EventSub subscription sync, broadcaster OAuth setup, and direct Helix subscription/Bits backfills are retired. Hatchery setup completion depends on gateway smoke plus gateway backfills instead of Hatchery-held broadcaster OAuth or direct EventSub health. `ERWIN_GATEWAY_ENABLED=false` rollback mode is no longer supported. Twitch player OAuth login remains in Hatchery.
 
 Admin diagnostics:
 
@@ -457,7 +457,7 @@ curl https://<hatchery>/api/erwin-gateway/smoke
 Expected:
 
 ```json
-{"ok":true,"enabled":true,"appSlug":"erwin-hatchery"}
+{ "ok": true, "enabled": true, "appSlug": "erwin-hatchery" }
 ```
 
 ### Signed webhook
@@ -494,16 +494,16 @@ With `ERWIN_GATEWAY_OBSERVE_ONLY=false` and `ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTI
 
 ## Common failure map
 
-| Symptom | Likely cause |
-| --- | --- |
-| `/api/v1/me` returns 401 | Prefix copied instead of full API key, revoked key, wrong app key. |
-| Webhook signature fails | Missing raw body parser or wrong signing secret. |
-| Reward sync 400 `Invalid reward payload` | Zero numeric limit fields or unsupported `metadata`/`enabled` fields sent to gateway. |
-| Reward update/delete 403 | Reward not owned by Hatchery. Adopt first if manageable. |
-| Reward update/delete 409 | Reward is not manageable by this Twitch client. |
-| Redemption grants locally but stays unfulfilled | Auto-fulfill disabled, missing gateway reward ID, or fulfill call failed. |
-| Duplicate grant | Dedupe missing on Twitch redemption ID or event ID. |
-| Both `/api/twitch/eventsub` and `/erwin-gateway/webhook` receive redemptions | Old direct EventSub still active. Disable old transport before active grants. |
+| Symptom                                                                      | Likely cause                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `/api/v1/me` returns 401                                                     | Prefix copied instead of full API key, revoked key, wrong app key.                    |
+| Webhook signature fails                                                      | Missing raw body parser or wrong signing secret.                                      |
+| Reward sync 400 `Invalid reward payload`                                     | Zero numeric limit fields or unsupported `metadata`/`enabled` fields sent to gateway. |
+| Reward update/delete 403                                                     | Reward not owned by Hatchery. Adopt first if manageable.                              |
+| Reward update/delete 409                                                     | Reward is not manageable by this Twitch client.                                       |
+| Redemption grants locally but stays unfulfilled                              | Auto-fulfill disabled, missing gateway reward ID, or fulfill call failed.             |
+| Duplicate grant                                                              | Dedupe missing on Twitch redemption ID or event ID.                                   |
+| Both `/api/twitch/eventsub` and `/erwin-gateway/webhook` receive redemptions | Old direct EventSub still active. Disable old transport before active grants.         |
 
 ## Token-saving rule for future Codex tasks
 

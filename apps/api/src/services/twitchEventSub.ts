@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { config, getEventSubCallbackUrl } from '../config.js';
 import { db } from '../db/client.js';
-import { twitchEventSubSubscriptions, twitchIntegrationState, twitchEvents, twitchUserTokens, users } from '../db/schema.js';
+import { twitchEventSubSubscriptions, twitchIntegrationState, twitchEvents, users } from '../db/schema.js';
 
 export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -9,47 +9,14 @@ export const REQUIRED_EVENTSUB_SUBSCRIPTIONS = [
   'channel.subscription.end',
   'channel.subscription.message',
   'channel.subscription.gift',
-  'channel.cheer'
+  'channel.cheer',
 ] as const;
 
-const GATEWAY_MIGRATED_EVENTSUB_TYPES = new Set<string>([
-  ...REQUIRED_EVENTSUB_SUBSCRIPTIONS,
-  'stream.online',
-  'stream.offline',
-  'channel.update'
-]);
+const GATEWAY_MIGRATED_EVENTSUB_TYPES = new Set<string>([...REQUIRED_EVENTSUB_SUBSCRIPTIONS, 'stream.online', 'stream.offline', 'channel.update']);
 
-function getTargetSubscriptionTypes(): readonly string[] {
-  if (!config.ERWIN_GATEWAY_ENABLED) return REQUIRED_EVENTSUB_SUBSCRIPTIONS;
-  return REQUIRED_EVENTSUB_SUBSCRIPTIONS.filter(
-    (type) => !GATEWAY_MIGRATED_EVENTSUB_TYPES.has(type)
-  );
-}
 const TARGET_SUBSCRIPTION_VERSION = '1';
 
-type TwitchEventSubTransport = {
-  method: 'webhook';
-  callback: string;
-  secret: string;
-};
-
-type TwitchEventSubSubscription = {
-  id: string;
-  status: string;
-  type: string;
-  version: string;
-  condition: { broadcaster_user_id?: string };
-  created_at: string;
-  transport: TwitchEventSubTransport;
-};
-
-type EventSubSyncStatusValue =
-  | 'enabled'
-  | 'missing'
-  | 'error'
-  | 'duplicate'
-  | 'pending_verification'
-  | 'disabled_gateway';
+type EventSubSyncStatusValue = 'disabled_gateway';
 
 type EventSubSyncState = {
   enabled: boolean;
@@ -62,230 +29,61 @@ type EventSubSyncState = {
   error: string | null;
 };
 
-
-function getSubscriptionStatusFromEventType(eventType: string): boolean | null {
-  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
-  const deactivateTypes = new Set(['channel.subscription.end']);
-  if (activateTypes.has(eventType)) return true;
-  if (deactivateTypes.has(eventType)) return false;
-  return null;
-}
-
-async function readErrorDetails(response: Response): Promise<string> {
-  const contentType = response.headers.get('content-type') ?? '';
-  if (contentType.includes('application/json')) {
-    const payload = (await response.json().catch(() => null)) as {
-      message?: string;
-      error?: string;
-    } | null;
-    const details = [payload?.error, payload?.message].filter(
-      (value): value is string => Boolean(value)
-    );
-    if (details.length > 0) {
-      return details.join(' - ');
-    }
-  }
-
-  const text = await response.text().catch(() => '');
-  const normalized = text.trim();
-  return normalized.length > 0 ? normalized.slice(0, 300) : 'no response body';
-}
-
 let eventSubSyncState: EventSubSyncState = {
   enabled: false,
-  status: 'missing',
+  status: 'disabled_gateway',
   subscriptionId: null,
-  type: getTargetSubscriptionTypes().join(','),
+  type: '',
   callback: getEventSubCallbackUrl(),
   createdAt: null,
   lastCheckedAt: new Date(0).toISOString(),
-  error: null
+  error: 'Direct Twitch EventSub transport is retired; erwin-gateway is required',
 };
 
-const REQUIRED_BROADCASTER_SCOPES = [
-  'channel:read:redemptions',
-  'channel:manage:redemptions',
-  'channel:read:subscriptions',
-  'bits:read'
-] as const;
-
-async function assertBroadcasterAuthorization(): Promise<void> {
-  const rows = await db
-    .select({
-      accessToken: twitchUserTokens.accessToken,
-      scope: twitchUserTokens.scope
-    })
-    .from(twitchUserTokens)
-    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
-    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
-    .limit(1);
-
-  const tokenRow = rows[0];
-  if (!tokenRow?.accessToken) {
-    throw new Error(
-      'Missing broadcaster OAuth token. Login with broadcaster account first.'
-    );
-  }
-
-  const grantedScopes = new Set(tokenRow.scope.split(/\s+/).filter(Boolean));
-  const missingScopes = REQUIRED_BROADCASTER_SCOPES.filter(
-    (scope) => !grantedScopes.has(scope)
-  );
-  if (missingScopes.length > 0) {
-    throw new Error(
-      `Broadcaster token missing scopes: ${missingScopes.join(', ')}. Login again to refresh scopes.`
-    );
-  }
-}
-
-async function getBroadcasterUserAccessToken(): Promise<string> {
-  const rows = await db
-    .select({ accessToken: twitchUserTokens.accessToken })
-    .from(twitchUserTokens)
-    .innerJoin(users, eq(users.id, twitchUserTokens.userId))
-    .where(eq(users.twitchUserId, config.TWITCH_BROADCASTER_ID))
-    .limit(1);
-  const token = rows[0]?.accessToken;
-  if (!token)
-    throw new Error(
-      'Missing broadcaster OAuth token. Login with broadcaster account first.'
-    );
-  return token;
-}
-
-async function getAppAccessToken(): Promise<string> {
-  const response = await fetch('https://id.twitch.tv/oauth2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: config.TWITCH_CLIENT_ID,
-      client_secret: config.TWITCH_CLIENT_SECRET,
-      grant_type: 'client_credentials'
-    })
-  });
-
-  if (!response.ok) {
-    const details = await readErrorDetails(response);
-    throw new Error(
-      `Twitch app token request failed: ${response.status} (${details})`
-    );
-  }
-
-  const payload = (await response.json()) as { access_token?: string };
-  if (!payload.access_token)
-    throw new Error('Twitch app token response did not include access_token');
-  return payload.access_token;
-}
-async function twitchApi<T>(
-  path: string,
-  token: string,
-  init?: RequestInit
-): Promise<T> {
-  const response = await fetch(`https://api.twitch.tv/helix${path}`, {
-    ...init,
-    headers: {
-      'Client-Id': config.TWITCH_CLIENT_ID,
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {})
-    }
-  });
-
-  if (!response.ok) {
-    const details = await readErrorDetails(response);
-    throw new Error(
-      `Twitch API ${path} failed: ${response.status} (${details})`
-    );
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
-
-async function persistEventSubStatus(input: {
-  eventType: string;
-  subscriptionId: string | null;
-  status: string;
-  callbackUrl: string;
-  error: string | null;
-}): Promise<void> {
+async function persistRetiredEventSubStatuses(): Promise<void> {
   const now = new Date();
-  await db
-    .insert(twitchEventSubSubscriptions)
-    .values({
-      eventType: input.eventType,
-      version: TARGET_SUBSCRIPTION_VERSION,
-      twitchSubscriptionId: input.subscriptionId,
-      status: input.status,
-      callbackUrl: input.callbackUrl,
-      lastSyncedAt: now,
-      lastError: input.error,
-      updatedAt: now
-    })
-    .onConflictDoUpdate({
-      target: [
-        twitchEventSubSubscriptions.eventType,
-        twitchEventSubSubscriptions.version
-      ],
-      set: {
-        twitchSubscriptionId: input.subscriptionId,
-        status: input.status,
-        callbackUrl: input.callbackUrl,
+  for (const eventType of GATEWAY_MIGRATED_EVENTSUB_TYPES) {
+    await db
+      .insert(twitchEventSubSubscriptions)
+      .values({
+        eventType,
+        version: TARGET_SUBSCRIPTION_VERSION,
+        twitchSubscriptionId: null,
+        status: 'disabled_gateway',
+        callbackUrl: getEventSubCallbackUrl(),
         lastSyncedAt: now,
-        lastError: input.error,
-        updatedAt: now
-      }
-    });
+        lastError: 'Direct Twitch EventSub transport is retired; erwin-gateway is required',
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [twitchEventSubSubscriptions.eventType, twitchEventSubSubscriptions.version],
+        set: {
+          twitchSubscriptionId: null,
+          status: 'disabled_gateway',
+          callbackUrl: getEventSubCallbackUrl(),
+          lastSyncedAt: now,
+          lastError: 'Direct Twitch EventSub transport is retired; erwin-gateway is required',
+          updatedAt: now,
+        },
+      });
+  }
 }
 
-export async function checkEventSubHealth(): Promise<EventSubSyncState & { subscriptions: Array<{ eventType: string; status: string; subscriptionId: string | null; callbackUrl: string; lastError: string | null }> }> {
-  const targetSubscriptionTypes = getTargetSubscriptionTypes();
-  if (config.ERWIN_GATEWAY_ENABLED && targetSubscriptionTypes.length === 0) {
-    return {
-      ...eventSubSyncState,
-      enabled: false,
-      status: 'disabled_gateway',
-      subscriptionId: null,
-      type: '',
-      callback: getEventSubCallbackUrl(),
-      lastCheckedAt: new Date().toISOString(),
-      error: 'Direct Twitch EventSub transport disabled because ERWIN_GATEWAY_ENABLED=true',
-      subscriptions: []
-    };
+export async function checkEventSubHealth(): Promise<
+  EventSubSyncState & {
+    subscriptions: Array<{
+      eventType: string;
+      status: string;
+      subscriptionId: string | null;
+      callbackUrl: string;
+      lastError: string | null;
+    }>;
   }
-  const rows = await db.select().from(twitchEventSubSubscriptions);
-  const byType = new Map(rows.map((row) => [row.eventType, row]));
-  const subscriptions = targetSubscriptionTypes.map((eventType) => {
-    const row = byType.get(eventType);
-    return {
-      eventType,
-      status: row?.status ?? 'missing',
-      subscriptionId: row?.twitchSubscriptionId ?? null,
-      callbackUrl: row?.callbackUrl ?? getEventSubCallbackUrl(),
-      lastError: row?.lastError ?? null
-    };
-  });
-  const enabled = subscriptions.every(
-    (subscription) =>
-      subscription.status === 'enabled' &&
-      subscription.callbackUrl === getEventSubCallbackUrl()
-  );
-  const anyPending = subscriptions.some((subscription) => subscription.status === 'webhook_callback_verification_pending');
-  const firstStoredError = subscriptions.find((subscription) => subscription.lastError)?.lastError ?? null;
-  const callbackMismatch = subscriptions.some((subscription) => subscription.callbackUrl !== getEventSubCallbackUrl());
+> {
   return {
-    enabled,
-    status: enabled ? 'enabled' : anyPending ? 'pending_verification' : 'missing',
-    subscriptionId: subscriptions.map((subscription) => subscription.subscriptionId).filter(Boolean).join(',') || null,
-    type: targetSubscriptionTypes.join(','),
-    callback: getEventSubCallbackUrl(),
-    createdAt: null,
+    ...eventSubSyncState,
     lastCheckedAt: new Date().toISOString(),
-    error: firstStoredError ?? (callbackMismatch ? 'EventSub callback URL does not match configured PUBLIC_APP_URL' : null),
-    subscriptions
+    subscriptions: [],
   };
 }
 
@@ -293,197 +91,35 @@ export function getEventSubSubscriptionStatus(): EventSubSyncState {
   return { ...eventSubSyncState };
 }
 
-export async function syncChannelPointRedemptionEventSub(log: {
-  info: Function;
-  warn: Function;
-  error: Function;
-}): Promise<void> {
-  const checkedAt = new Date().toISOString();
+export async function syncChannelPointRedemptionEventSub(log: { info: Function; warn: Function; error: Function }): Promise<void> {
   eventSubSyncState = {
-    ...eventSubSyncState,
-    lastCheckedAt: checkedAt,
-    error: null
+    enabled: false,
+    status: 'disabled_gateway',
+    subscriptionId: null,
+    type: '',
+    callback: getEventSubCallbackUrl(),
+    createdAt: null,
+    lastCheckedAt: new Date().toISOString(),
+    error: 'Direct Twitch EventSub transport is retired; erwin-gateway is required',
   };
+  await persistRetiredEventSubStatuses();
+  await db
+    .update(twitchIntegrationState)
+    .set({
+      eventsubHealthy: false,
+      lastError: eventSubSyncState.error,
+      updatedAt: new Date(),
+    })
+    .where(eq(twitchIntegrationState.id, 'default'));
+  log.info('Direct Twitch EventSub sync skipped because erwin-gateway is required');
+}
 
-  if (!config.TWITCH_EVENTSUB_AUTO_SYNC) {
-    eventSubSyncState = {
-      ...eventSubSyncState,
-      status: 'missing',
-      enabled: false,
-      error: 'Auto-sync disabled by TWITCH_EVENTSUB_AUTO_SYNC=false'
-    };
-    return;
-  }
-
-  if (config.ERWIN_GATEWAY_ENABLED && getTargetSubscriptionTypes().length === 0) {
-    eventSubSyncState = {
-      ...eventSubSyncState,
-      enabled: false,
-      status: 'disabled_gateway',
-      subscriptionId: null,
-      type: '',
-      error: 'Direct Twitch EventSub transport disabled because ERWIN_GATEWAY_ENABLED=true'
-    };
-    for (const subscriptionType of GATEWAY_MIGRATED_EVENTSUB_TYPES) {
-      await persistEventSubStatus({
-        eventType: subscriptionType,
-        subscriptionId: null,
-        status: 'disabled_gateway',
-        callbackUrl: getEventSubCallbackUrl(),
-        error: 'Disabled because ERWIN_GATEWAY_ENABLED=true'
-      });
-    }
-    await db.update(twitchIntegrationState).set({ eventsubHealthy: false, lastError: eventSubSyncState.error, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
-    log.info('Direct Twitch EventSub sync skipped because erwin-gateway mode is enabled');
-    return;
-  }
-
-  try {
-    const eventSubSecret = config.TWITCH_EVENTSUB_SECRET;
-    if (!eventSubSecret) {
-      throw new Error(
-        'Missing TWITCH_EVENTSUB_SECRET. Direct Twitch EventSub sync requires a webhook signing secret.'
-      );
-    }
-
-    await assertBroadcasterAuthorization();
-    const token = await getAppAccessToken();
-    const list = await twitchApi<{ data: TwitchEventSubSubscription[] }>(
-      '/eventsub/subscriptions',
-      token
-    );
-    const ensured: TwitchEventSubSubscription[] = [];
-    let duplicateCleanupCount = 0;
-    for (const subscriptionType of getTargetSubscriptionTypes()) {
-      const matching = list.data.filter(
-        (subscription) =>
-          subscription.type === subscriptionType &&
-          subscription.version === TARGET_SUBSCRIPTION_VERSION &&
-          subscription.condition.broadcaster_user_id ===
-            config.TWITCH_BROADCASTER_ID &&
-          subscription.transport.method === 'webhook' &&
-          subscription.transport.callback === getEventSubCallbackUrl()
-      );
-      if (matching.length > 1) {
-        duplicateCleanupCount += matching.length - 1;
-        for (const duplicate of matching.slice(1)) {
-          await twitchApi(
-            `/eventsub/subscriptions?id=${encodeURIComponent(duplicate.id)}`,
-            token,
-            { method: 'DELETE' }
-          );
-        }
-      }
-      const active = matching[0];
-      if (active) {
-        ensured.push(active);
-        await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: active.id, status: active.status, callbackUrl: active.transport.callback, error: null });
-        continue;
-      }
-      const created = await twitchApi<{ data: TwitchEventSubSubscription[] }>(
-        '/eventsub/subscriptions',
-        token,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            type: subscriptionType,
-            version: TARGET_SUBSCRIPTION_VERSION,
-            condition: { broadcaster_user_id: config.TWITCH_BROADCASTER_ID },
-            transport: {
-              method: 'webhook',
-              callback: getEventSubCallbackUrl(),
-              secret: eventSubSecret
-            }
-          })
-        }
-      );
-      const first = created.data[0];
-      if (!first)
-        throw new Error(
-          `Twitch create subscription response was empty for ${subscriptionType}`
-        );
-      ensured.push(first);
-      await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: first.id, status: first.status, callbackUrl: first.transport.callback, error: null });
-    }
-    if (config.ERWIN_GATEWAY_ENABLED) {
-      const migratedSubscriptions = list.data.filter(
-        (subscription) =>
-          GATEWAY_MIGRATED_EVENTSUB_TYPES.has(subscription.type) &&
-          subscription.transport.callback === getEventSubCallbackUrl()
-      );
-      for (const migratedSubscription of migratedSubscriptions) {
-        await twitchApi(
-          `/eventsub/subscriptions?id=${encodeURIComponent(migratedSubscription.id)}`,
-          token,
-          { method: 'DELETE' }
-        );
-        await persistEventSubStatus({
-          eventType: migratedSubscription.type,
-          subscriptionId: null,
-          status: 'missing',
-          callbackUrl: getEventSubCallbackUrl(),
-          error: 'Disabled because ERWIN_GATEWAY_ENABLED=true'
-        });
-      }
-      if (migratedSubscriptions.length > 0) {
-        log.info(
-          { subscriptionIds: migratedSubscriptions.map((subscription) => subscription.id), eventTypes: migratedSubscriptions.map((subscription) => subscription.type) },
-          'Direct Twitch EventSub subscriptions disabled because erwin-gateway mode is enabled'
-        );
-      }
-    }
-
-    const allEnabled = ensured.every(
-      (subscription) => subscription.status === 'enabled'
-    );
-    const anyPending = ensured.some(
-      (subscription) =>
-        subscription.status === 'webhook_callback_verification_pending'
-    );
-    const first = ensured[0];
-
-    eventSubSyncState = {
-      enabled: allEnabled,
-      status: allEnabled
-        ? 'enabled'
-        : anyPending
-          ? 'pending_verification'
-          : 'error',
-      subscriptionId: ensured.map((subscription) => subscription.id).join(','),
-      type: getTargetSubscriptionTypes().join(','),
-      callback: first?.transport.callback ?? getEventSubCallbackUrl(),
-      createdAt: first?.created_at ?? checkedAt,
-      lastCheckedAt: checkedAt,
-      error:
-        duplicateCleanupCount > 0
-          ? `Duplicate subscriptions detected and cleaned up (${duplicateCleanupCount}).`
-          : null
-    };
-    await db.update(twitchIntegrationState).set({ eventsubSyncedAt: new Date(), eventsubHealthy: allEnabled, lastError: eventSubSyncState.error, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
-    log.info(
-      {
-        subscriptionIds: ensured.map((subscription) => subscription.id),
-        status: eventSubSyncState.status
-      },
-      'EventSub subscriptions ensured'
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'unknown error';
-    eventSubSyncState = {
-      ...eventSubSyncState,
-      enabled: false,
-      status: 'error',
-      subscriptionId: null,
-      createdAt: null,
-      lastCheckedAt: checkedAt,
-      error: `EventSub sync failed: ${message}`
-    };
-    for (const subscriptionType of getTargetSubscriptionTypes()) {
-      await persistEventSubStatus({ eventType: subscriptionType, subscriptionId: null, status: 'error', callbackUrl: getEventSubCallbackUrl(), error: message });
-    }
-    await db.update(twitchIntegrationState).set({ eventsubHealthy: false, lastError: `EventSub sync failed: ${message}`, updatedAt: new Date() }).where(eq(twitchIntegrationState.id, 'default'));
-    log.error({ err: error }, 'EventSub sync failed');
-  }
+function getSubscriptionStatusFromEventType(eventType: string): boolean | null {
+  const activateTypes = new Set(['channel.subscribe', 'channel.subscription.message']);
+  const deactivateTypes = new Set(['channel.subscription.end']);
+  if (activateTypes.has(eventType)) return true;
+  if (deactivateTypes.has(eventType)) return false;
+  return null;
 }
 
 type SubscriptionEventEnvelope = {
@@ -494,122 +130,15 @@ type SubscriptionEventEnvelope = {
   };
 };
 
-type HelixSubscription = {
-  user_id: string;
-  user_login: string;
-  user_name: string;
-};
-
-type HelixSubscriptionsResponse = {
-  data: HelixSubscription[];
-  pagination?: { cursor?: string };
-};
-
-export async function syncSubscriberStatusFromTwitch(log: {
-  info: Function;
-  warn: Function;
-  error: Function;
-}): Promise<void> {
-  await assertBroadcasterAuthorization();
-  const token = await getBroadcasterUserAccessToken();
-  const now = new Date();
-  const subscriberEndsAt = new Date(now);
-  subscriberEndsAt.setUTCDate(
-    subscriberEndsAt.getUTCDate() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS
-  );
-
-  const activeSubs: HelixSubscription[] = [];
-  let cursor: string | null = null;
-  do {
-    const query = new URLSearchParams({
-      broadcaster_id: config.TWITCH_BROADCASTER_ID,
-      first: '100'
-    });
-    if (cursor) query.set('after', cursor);
-    const page = await twitchApi<HelixSubscriptionsResponse>(
-      `/subscriptions?${query.toString()}`,
-      token
-    );
-    activeSubs.push(...page.data);
-    cursor = page.pagination?.cursor ?? null;
-  } while (cursor);
-
-  const activeSubUserIds = new Set(activeSubs.map((sub) => sub.user_id));
-  const currentSubscriberUsers = await db
-    .select({
-      id: users.id,
-      twitchUserId: users.twitchUserId
-    })
-    .from(users)
-    .where(eq(users.isSubscriber, true));
-
-  let deactivatedSubscribers = 0;
-  for (const user of currentSubscriberUsers) {
-    if (activeSubUserIds.has(user.twitchUserId)) continue;
-    await db
-      .update(users)
-      .set({
-        isSubscriber: false,
-        subscriberEndsAt: now,
-        updatedAt: now
-      })
-      .where(eq(users.id, user.id));
-    deactivatedSubscribers += 1;
-  }
-
-  for (const sub of activeSubs) {
-    const existing = await db
-      .select()
-      .from(users)
-      .where(eq(users.twitchUserId, sub.user_id))
-      .limit(1);
-    const current = existing[0];
-    if (current) {
-      await db
-        .update(users)
-        .set({
-          twitchLogin: sub.user_login,
-          displayName: sub.user_name,
-          isSubscriber: true,
-          subscriberEndsAt,
-          updatedAt: now
-        })
-        .where(eq(users.id, current.id));
-    } else {
-      await db.insert(users).values({
-        twitchUserId: sub.user_id,
-        twitchLogin: sub.user_login,
-        displayName: sub.user_name,
-        isProvisional: true,
-        isSubscriber: true,
-        subscriberEndsAt,
-        lastLoginAt: null,
-        updatedAt: now
-      });
-    }
-  }
-
-  log.info(
-    { activeSubscriptions: activeSubs.length, deactivatedSubscribers },
-    'Subscriber startup sync from Twitch completed'
-  );
-}
-
-export async function syncSubscriberStatusFromRecentEvents(log: {
-  info: Function;
-  warn: Function;
-  error: Function;
-}): Promise<void> {
+export async function syncSubscriberStatusFromRecentEvents(log: { info: Function; warn: Function; error: Function }): Promise<void> {
   const now = new Date();
   const rangeStart = new Date(now);
-  rangeStart.setUTCDate(
-    rangeStart.getUTCDate() - config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS
-  );
+  rangeStart.setUTCDate(rangeStart.getUTCDate() - config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
   const rows = await db
     .select({
       type: twitchEvents.type,
       rawPayload: twitchEvents.rawPayload,
-      receivedAt: twitchEvents.receivedAt
+      receivedAt: twitchEvents.receivedAt,
     })
     .from(twitchEvents);
 
@@ -624,19 +153,10 @@ export async function syncSubscriberStatusFromRecentEvents(log: {
     const twitchUserId = payload.event?.user_id?.trim();
     const status = getSubscriptionStatusFromEventType(row.type);
     if (!twitchUserId || status === null) continue;
-    const subscriberEndsAt = status
-      ? new Date(
-          now.getTime() +
-            config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS * 24 * 60 * 60 * 1000
-        )
-      : now;
+    const subscriberEndsAt = status ? new Date(now.getTime() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS * 24 * 60 * 60 * 1000) : now;
     const userLogin = payload.event?.user_login ?? null;
     const displayName = payload.event?.user_name ?? null;
-    const existing = await db
-      .select()
-      .from(users)
-      .where(eq(users.twitchUserId, twitchUserId))
-      .limit(1);
+    const existing = await db.select().from(users).where(eq(users.twitchUserId, twitchUserId)).limit(1);
     const current = existing[0];
     if (current) {
       await db
@@ -646,7 +166,7 @@ export async function syncSubscriberStatusFromRecentEvents(log: {
           subscriberEndsAt,
           twitchLogin: userLogin ?? current.twitchLogin ?? null,
           displayName: displayName ?? current.displayName ?? null,
-          updatedAt: now
+          updatedAt: now,
         })
         .where(eq(users.id, current.id));
     } else {
@@ -658,7 +178,7 @@ export async function syncSubscriberStatusFromRecentEvents(log: {
         isSubscriber: status,
         subscriberEndsAt,
         lastLoginAt: null,
-        updatedAt: now
+        updatedAt: now,
       });
     }
     updatedUsers += 1;
@@ -668,8 +188,8 @@ export async function syncSubscriberStatusFromRecentEvents(log: {
     {
       scannedEvents: relevantRows.length,
       updatedUsers,
-      rangeStart: rangeStart.toISOString()
+      rangeStart: rangeStart.toISOString(),
     },
-    'Subscriber startup status replay completed'
+    'Subscriber startup status replay completed',
   );
 }

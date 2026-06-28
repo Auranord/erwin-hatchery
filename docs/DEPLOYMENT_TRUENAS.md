@@ -70,18 +70,17 @@ ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS=300
 
 `ERWIN_GATEWAY_REQUIRED=true` makes Hatchery fail closed when required gateway client configuration is unavailable. Use `false` only for an intentional availability-over-fail-closed exception.
 
-Direct Twitch EventSub rollback variables must be absent from active gateway deployments, or left empty/disabled if the deployment platform requires keys to exist:
+Hatchery no longer stores broadcaster OAuth access or refresh tokens and no longer supports direct Twitch EventSub/Helix rollback mode. All Twitch transport must go through erwin-gateway. Keep legacy direct EventSub variables empty unless temporarily acknowledging old Twitch webhook retries:
 
 ```env
-# Rollback only: set these only with ERWIN_GATEWAY_ENABLED=false.
 TWITCH_EVENTSUB_SECRET=
 TWITCH_EVENTSUB_AUTO_SYNC=false
 ```
 
-Safe disabled/default shape for local development or explicit rollback preparation:
+For local development, keep gateway enabled and observe-only unless you are intentionally testing grants:
 
 ```env
-ERWIN_GATEWAY_ENABLED=false
+ERWIN_GATEWAY_ENABLED=true
 ERWIN_GATEWAY_OBSERVE_ONLY=true
 ERWIN_GATEWAY_REQUIRED=false
 ERWIN_GATEWAY_URL=https://erwin-gateway.auranord.net

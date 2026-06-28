@@ -1,25 +1,9 @@
 import { sql } from 'drizzle-orm';
-import {
-  AnyPgColumn,
-  boolean,
-  integer,
-  jsonb,
-  bigint,
-  pgTable,
-  primaryKey,
-  text,
-  uniqueIndex,
-  timestamp,
-  uuid
-} from 'drizzle-orm/pg-core';
+import { AnyPgColumn, boolean, integer, jsonb, bigint, pgTable, primaryKey, text, uniqueIndex, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 const timestamps = {
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 };
 
 export const users = pgTable('users', {
@@ -34,7 +18,7 @@ export const users = pgTable('users', {
   subscriberEndsAt: timestamp('subscriber_ends_at', { withTimezone: true }),
   createdAt: timestamps.createdAt,
   updatedAt: timestamps.updatedAt,
-  lastLoginAt: timestamp('last_login_at', { withTimezone: true })
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
 });
 
 export const sessions = pgTable('sessions', {
@@ -45,10 +29,8 @@ export const sessions = pgTable('sessions', {
   sessionTokenHash: text('session_token_hash').notNull().unique(),
   csrfState: text('csrf_state'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  revokedAt: timestamp('revoked_at', { withTimezone: true })
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
 });
 
 export const roles = pgTable(
@@ -60,16 +42,11 @@ export const roles = pgTable(
       .references(() => users.id),
     role: text('role').notNull(),
     createdByUserId: uuid('created_by_user_id').references(() => users.id),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    userRoleUnique: uniqueIndex('roles_user_id_role_idx').on(
-      table.userId,
-      table.role
-    )
-  })
+    userRoleUnique: uniqueIndex('roles_user_id_role_idx').on(table.userId, table.role),
+  }),
 );
 
 export const userReports = pgTable('user_reports', {
@@ -84,7 +61,7 @@ export const userReports = pgTable('user_reports', {
   clientContext: jsonb('client_context').notNull().default({}),
   status: text('status').notNull().default('new'),
   createdAt: timestamps.createdAt,
-  updatedAt: timestamps.updatedAt
+  updatedAt: timestamps.updatedAt,
 });
 
 export const adminActionLogs = pgTable('admin_action_logs', {
@@ -96,9 +73,7 @@ export const adminActionLogs = pgTable('admin_action_logs', {
   actionType: text('action_type').notNull(),
   requestId: text('request_id').notNull().unique(),
   payload: jsonb('payload').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export const twitchEvents = pgTable('twitch_events', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -107,16 +82,11 @@ export const twitchEvents = pgTable('twitch_events', {
   source: text('source').notNull(),
   userId: uuid('user_id').references(() => users.id),
   rawPayload: jsonb('raw_payload').notNull(),
-  receivedAt: timestamp('received_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
   processedAt: timestamp('processed_at', { withTimezone: true }),
   processingStatus: text('processing_status').notNull().default('received'),
-  error: text('error')
+  error: text('error'),
 });
-
-
-
 
 export const gatewayWebhookEvents = pgTable(
   'gateway_webhook_events',
@@ -134,15 +104,15 @@ export const gatewayWebhookEvents = pgTable(
     processingStatus: text('processing_status').notNull().default('received'),
     error: text('error'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    processedAt: timestamp('processed_at', { withTimezone: true })
+    processedAt: timestamp('processed_at', { withTimezone: true }),
   },
   (table) => ({
     deliveryIdUnique: uniqueIndex('gateway_webhook_events_delivery_id_idx').on(table.deliveryId),
     eventIdUnique: uniqueIndex('gateway_webhook_events_event_id_idx').on(table.eventId),
     twitchMessageIdUnique: uniqueIndex('gateway_webhook_events_twitch_message_id_idx')
       .on(table.twitchMessageId)
-      .where(sql`${table.twitchMessageId} is not null`)
-  })
+      .where(sql`${table.twitchMessageId} is not null`),
+  }),
 );
 
 export const gatewayRewardMappings = pgTable(
@@ -162,15 +132,14 @@ export const gatewayRewardMappings = pgTable(
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     metadata: jsonb('metadata').notNull().default({}),
     createdAt: timestamps.createdAt,
-    updatedAt: timestamps.updatedAt
+    updatedAt: timestamps.updatedAt,
   },
   (table) => ({
     gatewayRewardIdUnique: uniqueIndex('gateway_reward_mappings_gateway_reward_id_idx').on(table.gatewayRewardId),
     twitchRewardIdUnique: uniqueIndex('gateway_reward_mappings_twitch_reward_id_idx').on(table.twitchRewardId),
-    localRewardTypeUnique: uniqueIndex('gateway_reward_mappings_local_reward_type_idx').on(table.localRewardType)
-  })
+    localRewardTypeUnique: uniqueIndex('gateway_reward_mappings_local_reward_type_idx').on(table.localRewardType),
+  }),
 );
-
 
 export const streamStateCache = pgTable('stream_state_cache', {
   id: text('id').primaryKey().default('default'),
@@ -184,7 +153,7 @@ export const streamStateCache = pgTable('stream_state_cache', {
   sourceDeliveryId: text('source_delivery_id'),
   rawPayload: jsonb('raw_payload').notNull().default({}),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const twitchIntegrationState = pgTable('twitch_integration_state', {
@@ -195,13 +164,15 @@ export const twitchIntegrationState = pgTable('twitch_integration_state', {
   setupCompletedAt: timestamp('setup_completed_at', { withTimezone: true }),
   eventsubSyncedAt: timestamp('eventsub_synced_at', { withTimezone: true }),
   subscriptionBackfillCompletedAt: timestamp('subscription_backfill_completed_at', { withTimezone: true }),
-  bitsBackfillCompletedAt: timestamp('bits_backfill_completed_at', { withTimezone: true }),
+  bitsBackfillCompletedAt: timestamp('bits_backfill_completed_at', {
+    withTimezone: true,
+  }),
   requiresReauth: boolean('requires_reauth').notNull().default(false),
   eventsubHealthy: boolean('eventsub_healthy').notNull().default(false),
   lastHealthCheckAt: timestamp('last_health_check_at', { withTimezone: true }),
   lastError: text('last_error'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const twitchEventSubSubscriptions = pgTable(
@@ -215,13 +186,12 @@ export const twitchEventSubSubscriptions = pgTable(
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
     lastError: text('last_error'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.eventType, table.version] })
-  })
+    pk: primaryKey({ columns: [table.eventType, table.version] }),
+  }),
 );
-
 
 export const twitchPlayerTokens = pgTable('twitch_player_tokens', {
   userId: uuid('user_id')
@@ -232,12 +202,8 @@ export const twitchPlayerTokens = pgTable('twitch_player_tokens', {
   refreshToken: text('refresh_token').notNull(),
   scope: text('scope').notNull(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const twitchBackfillRuns = pgTable('twitch_backfill_runs', {
@@ -247,35 +213,21 @@ export const twitchBackfillRuns = pgTable('twitch_backfill_runs', {
   startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   source: text('source').notNull(),
-  error: text('error')
+  error: text('error'),
 });
 
 export const twitchBitsBalances = pgTable('twitch_bits_balances', {
-  userId: uuid('user_id').notNull().primaryKey().references(() => users.id),
+  userId: uuid('user_id')
+    .notNull()
+    .primaryKey()
+    .references(() => users.id),
   twitchUserId: text('twitch_user_id').notNull().unique(),
   importedBitsBaseline: bigint('imported_bits_baseline', { mode: 'number' }).notNull().default(0),
   eventsubBitsTotal: bigint('eventsub_bits_total', { mode: 'number' }).notNull().default(0),
   totalBitsCounted: bigint('total_bits_counted', { mode: 'number' }).notNull().default(0),
   voucherThresholdsGranted: integer('voucher_thresholds_granted').notNull().default(0),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
-});
-
-export const twitchUserTokens = pgTable('twitch_user_tokens', {
-  userId: uuid('user_id')
-    .notNull()
-    .primaryKey()
-    .references(() => users.id),
-  accessToken: text('access_token').notNull(),
-  refreshToken: text('refresh_token').notNull(),
-  scope: text('scope').notNull(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const channelPointRedemptions = pgTable('channel_point_redemptions', {
@@ -298,13 +250,9 @@ export const channelPointRedemptions = pgTable('channel_point_redemptions', {
   lastGatewayDeliveryId: text('last_gateway_delivery_id'),
   lastGatewayEventId: text('last_gateway_event_id'),
   rawPayload: jsonb('raw_payload').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  processedAt: timestamp('processed_at', { withTimezone: true })
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
 });
 
 export const economyLedger = pgTable(
@@ -317,19 +265,15 @@ export const economyLedger = pgTable(
     sourceType: text('source_type').notNull(),
     sourceId: uuid('source_id'),
     delta: jsonb('delta').notNull(),
-    revertsLedgerId: uuid('reverts_ledger_id').references(
-      (): AnyPgColumn => economyLedger.id
-    ),
+    revertsLedgerId: uuid('reverts_ledger_id').references((): AnyPgColumn => economyLedger.id),
     isReverted: boolean('is_reverted').notNull().default(false),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     channelPointSourceUnique: uniqueIndex('economy_ledger_channel_point_source_idx')
       .on(table.sourceType, table.sourceId)
-      .where(sql`${table.sourceType} = 'channel_point_redemption' and ${table.sourceId} is not null`)
-  })
+      .where(sql`${table.sourceType} = 'channel_point_redemption' and ${table.sourceId} is not null`),
+  }),
 );
 
 export const resources = pgTable(
@@ -340,13 +284,11 @@ export const resources = pgTable(
       .references(() => users.id),
     resourceType: text('resource_type').notNull(),
     amount: integer('amount').notNull().default(0),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.resourceType] })
-  })
+    pk: primaryKey({ columns: [table.userId, table.resourceType] }),
+  }),
 );
 
 export const eggTypes = pgTable('egg_types', {
@@ -358,17 +300,11 @@ export const eggTypes = pgTable('egg_types', {
   twitchRewardPrompt: text('twitch_reward_prompt'),
   twitchRewardCost: integer('twitch_reward_cost'),
   twitchRewardBackgroundColor: text('twitch_reward_background_color'),
-  twitchRewardGlobalCooldownMinutes: integer(
-    'twitch_reward_global_cooldown_minutes'
-  ),
+  twitchRewardGlobalCooldownMinutes: integer('twitch_reward_global_cooldown_minutes'),
   twitchRewardMaxPerStream: integer('twitch_reward_max_per_stream'),
-  twitchRewardMaxPerUserPerStream: integer(
-    'twitch_reward_max_per_user_per_stream'
-  ),
+  twitchRewardMaxPerUserPerStream: integer('twitch_reward_max_per_user_per_stream'),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const petRarities = pgTable(
@@ -380,14 +316,12 @@ export const petRarities = pgTable(
     recycleCrackedEggs: integer('recycle_cracked_eggs').notNull().default(0),
     displayConfig: jsonb('display_config').notNull().default({}),
     economyConfig: jsonb('economy_config').notNull().default({}),
-    combineProgressionConfig: jsonb('combine_progression_config')
-      .notNull()
-      .default({}),
-    isActive: boolean('is_active').notNull().default(true)
+    combineProgressionConfig: jsonb('combine_progression_config').notNull().default({}),
+    isActive: boolean('is_active').notNull().default(true),
   },
   (table) => ({
-    rankUnique: uniqueIndex('pet_rarities_rank_idx').on(table.rank)
-  })
+    rankUnique: uniqueIndex('pet_rarities_rank_idx').on(table.rank),
+  }),
 );
 
 export const petClasses = pgTable('pet_classes', {
@@ -397,14 +331,14 @@ export const petClasses = pgTable('pet_classes', {
   relatedEnemyStat: text('related_enemy_stat').notNull(),
   mainStat: text('main_stat').notNull(),
   secondaryStatOne: text('secondary_stat_one').notNull(),
-  secondaryStatTwo: text('secondary_stat_two').notNull()
+  secondaryStatTwo: text('secondary_stat_two').notNull(),
 });
 
 export const elements = pgTable('elements', {
   id: text('id').primaryKey(),
   labelDe: text('label_de').notNull(),
   description: text('description').notNull().default(''),
-  isActive: boolean('is_active').notNull().default(true)
+  isActive: boolean('is_active').notNull().default(true),
 });
 
 export const petAbilities = pgTable('pet_abilities', {
@@ -415,7 +349,7 @@ export const petAbilities = pgTable('pet_abilities', {
   minAttacksRequired: integer('min_attacks_required').notNull().default(0),
   effectType: text('effect_type').notNull(),
   effectConfig: jsonb('effect_config').notNull().default({}),
-  isActive: boolean('is_active').notNull().default(true)
+  isActive: boolean('is_active').notNull().default(true),
 });
 
 export const hats = pgTable('hats', {
@@ -425,11 +359,8 @@ export const hats = pgTable('hats', {
   config: jsonb('config').notNull().default({}),
   isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
-
 
 export const shopOfferSelections = pgTable(
   'shop_offer_selections',
@@ -445,17 +376,11 @@ export const shopOfferSelections = pgTable(
     resourcePrice: integer('resource_price').notNull(),
     stock: integer('stock').notNull(),
     displayOrder: integer('display_order').notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    shopPeriodOrderUnique: uniqueIndex('shop_offer_selections_period_order_idx').on(
-      table.shopId,
-      table.periodKey,
-      table.displayOrder
-    )
-  })
+    shopPeriodOrderUnique: uniqueIndex('shop_offer_selections_period_order_idx').on(table.shopId, table.periodKey, table.displayOrder),
+  }),
 );
 
 export const petSpecies = pgTable('pet_species', {
@@ -483,7 +408,7 @@ export const petSpecies = pgTable('pet_species', {
     .references(() => petAbilities.id),
   assetKey: text('asset_key').notNull(),
   isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
-  isActive: boolean('is_active').notNull().default(true)
+  isActive: boolean('is_active').notNull().default(true),
 });
 
 export const eggLootTableEntries = pgTable('egg_loot_table_entries', {
@@ -495,7 +420,7 @@ export const eggLootTableEntries = pgTable('egg_loot_table_entries', {
   outcomeType: text('outcome_type').notNull(),
   resourceType: text('resource_type'),
   resourceAmount: integer('resource_amount'),
-  petSpeciesId: text('pet_species_id').references(() => petSpecies.id)
+  petSpeciesId: text('pet_species_id').references(() => petSpecies.id),
 });
 
 export const mysteryEggInventory = pgTable(
@@ -508,13 +433,11 @@ export const mysteryEggInventory = pgTable(
       .notNull()
       .references(() => eggTypes.id),
     amount: integer('amount').notNull().default(0),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.eggTypeId] })
-  })
+    pk: primaryKey({ columns: [table.userId, table.eggTypeId] }),
+  }),
 );
 
 export const inventoryDimensions = pgTable(
@@ -528,13 +451,11 @@ export const inventoryDimensions = pgTable(
     baseRows: integer('base_rows').notNull(),
     bonusRows: integer('bonus_rows').notNull().default(0),
     upgradeRef: text('upgrade_ref'),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.inventoryKind] })
-  })
+    pk: primaryKey({ columns: [table.userId, table.inventoryKind] }),
+  }),
 );
 
 export const unhatchedEggs = pgTable(
@@ -552,19 +473,12 @@ export const unhatchedEggs = pgTable(
       .references(() => petSpecies.id),
     state: text('state').notNull(),
     slotIndex: integer('slot_index'),
-    createdFromRedemptionId: uuid('created_from_redemption_id').references(
-      () => channelPointRedemptions.id
-    ),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdFromRedemptionId: uuid('created_from_redemption_id').references(() => channelPointRedemptions.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    ownerSlotUnique: uniqueIndex('unhatched_eggs_owner_slot_idx').on(
-      table.ownerUserId,
-      table.slotIndex
-    )
-  })
+    ownerSlotUnique: uniqueIndex('unhatched_eggs_owner_slot_idx').on(table.ownerUserId, table.slotIndex),
+  }),
 );
 
 export const incubatorSlots = pgTable(
@@ -577,25 +491,18 @@ export const incubatorSlots = pgTable(
     slotSource: text('slot_source').notNull(),
     slotLevel: integer('slot_level').notNull().default(1),
     slotIndex: integer('slot_index'),
-    speedMultiplierBasisPoints: integer('speed_multiplier_basis_points')
-      .notNull()
-      .default(10000),
-    specialBonusBasisPoints: integer('special_bonus_basis_points')
-      .notNull()
-      .default(0),
+    speedMultiplierBasisPoints: integer('speed_multiplier_basis_points').notNull().default(10000),
+    specialBonusBasisPoints: integer('special_bonus_basis_points').notNull().default(0),
     fuelBehavior: text('fuel_behavior').notNull().default('none'),
     specialEffectConfig: jsonb('special_effect_config').notNull().default({}),
     isAvailable: boolean('is_available').notNull().default(true),
     removeWhenEmpty: boolean('remove_when_empty').notNull().default(false),
     createdAt: timestamps.createdAt,
-    updatedAt: timestamps.updatedAt
+    updatedAt: timestamps.updatedAt,
   },
   (table) => ({
-    ownerSlotUnique: uniqueIndex('incubator_slots_owner_slot_idx').on(
-      table.ownerUserId,
-      table.slotIndex
-    )
-  })
+    ownerSlotUnique: uniqueIndex('incubator_slots_owner_slot_idx').on(table.ownerUserId, table.slotIndex),
+  }),
 );
 
 export const incubationJobs = pgTable('incubation_jobs', {
@@ -610,16 +517,12 @@ export const incubationJobs = pgTable('incubation_jobs', {
     .notNull()
     .references(() => incubatorSlots.id),
   state: text('state').notNull(),
-  startedAt: timestamp('started_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   requiredProgressSeconds: integer('required_progress_seconds').notNull(),
-  progressSecondsAccumulated: integer('progress_seconds_accumulated')
-    .notNull()
-    .default(0),
+  progressSecondsAccumulated: integer('progress_seconds_accumulated').notNull().default(0),
   lastProgressedAt: timestamp('last_progressed_at', { withTimezone: true }),
-  progressSnapshot: jsonb('progress_snapshot').notNull()
+  progressSnapshot: jsonb('progress_snapshot').notNull(),
 });
 
 export const petTraits = pgTable('pet_traits', {
@@ -633,10 +536,8 @@ export const petTraits = pgTable('pet_traits', {
   gainModifier: integer('gain_modifier').notNull().default(0),
   powModifier: integer('pow_modifier').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamps.updatedAt
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamps.updatedAt,
 });
 
 export const pets = pgTable(
@@ -689,16 +590,11 @@ export const pets = pgTable(
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
     isScrapped: boolean('is_scrapped').notNull().default(false),
     scrappedAt: timestamp('scrapped_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    ownerSlotUnique: uniqueIndex('pets_owner_slot_idx').on(
-      table.ownerUserId,
-      table.slotIndex
-    )
-  })
+    ownerSlotUnique: uniqueIndex('pets_owner_slot_idx').on(table.ownerUserId, table.slotIndex),
+  }),
 );
 
 export const petTraitAssignments = pgTable(
@@ -710,13 +606,11 @@ export const petTraitAssignments = pgTable(
     traitId: text('trait_id')
       .notNull()
       .references(() => petTraits.id),
-    assignedAt: timestamp('assigned_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    assignedAt: timestamp('assigned_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.petId, table.traitId] })
-  })
+    pk: primaryKey({ columns: [table.petId, table.traitId] }),
+  }),
 );
 
 export const consumableTypes = pgTable('consumable_types', {
@@ -728,7 +622,7 @@ export const consumableTypes = pgTable('consumable_types', {
   resourcePrice: integer('resource_price').notNull().default(0),
   stock: integer('stock').notNull().default(0),
   isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
-  isActive: boolean('is_active').notNull().default(true)
+  isActive: boolean('is_active').notNull().default(true),
 });
 
 export const consumableInventorySlots = pgTable(
@@ -742,19 +636,12 @@ export const consumableInventorySlots = pgTable(
       .notNull()
       .references(() => consumableTypes.id),
     slotIndex: integer('slot_index'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    userSlotUnique: uniqueIndex('consumable_inventory_slots_user_slot_idx').on(
-      table.userId,
-      table.slotIndex
-    )
-  })
+    userSlotUnique: uniqueIndex('consumable_inventory_slots_user_slot_idx').on(table.userId, table.slotIndex),
+  }),
 );
 
 export const equipmentTypes = pgTable('equipment_types', {
@@ -767,11 +654,8 @@ export const equipmentTypes = pgTable('equipment_types', {
   stock: integer('stock').notNull().default(0),
   isShopPurchasable: boolean('is_shop_purchasable').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
-
 
 export const equipmentSets = pgTable(
   'equipment_sets',
@@ -787,14 +671,11 @@ export const equipmentSets = pgTable(
     selectedForEvent: boolean('selected_for_event').notNull().default(false),
     upgradeRef: text('upgrade_ref'),
     createdAt: timestamps.createdAt,
-    updatedAt: timestamps.updatedAt
+    updatedAt: timestamps.updatedAt,
   },
   (table) => ({
-    userSetIndexUnique: uniqueIndex('equipment_sets_user_index_idx').on(
-      table.userId,
-      table.setIndex
-    )
-  })
+    userSetIndexUnique: uniqueIndex('equipment_sets_user_index_idx').on(table.userId, table.setIndex),
+  }),
 );
 
 export const equipmentInventorySlots = pgTable(
@@ -810,23 +691,13 @@ export const equipmentInventorySlots = pgTable(
     slotIndex: integer('slot_index'),
     equipmentSetId: uuid('equipment_set_id').references(() => equipmentSets.id),
     equipmentSetSlotIndex: integer('equipment_set_slot_index'),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    userSlotUnique: uniqueIndex('equipment_inventory_slots_user_slot_idx').on(
-      table.userId,
-      table.slotIndex
-    ),
-    setSlotUnique: uniqueIndex('equipment_inventory_slots_set_slot_idx').on(
-      table.equipmentSetId,
-      table.equipmentSetSlotIndex
-    )
-  })
+    userSlotUnique: uniqueIndex('equipment_inventory_slots_user_slot_idx').on(table.userId, table.slotIndex),
+    setSlotUnique: uniqueIndex('equipment_inventory_slots_set_slot_idx').on(table.equipmentSetId, table.equipmentSetSlotIndex),
+  }),
 );
 
 export const userHatUnlocks = pgTable(
@@ -838,15 +709,13 @@ export const userHatUnlocks = pgTable(
     hatId: text('hat_id')
       .notNull()
       .references(() => hats.id),
-    unlockedAt: timestamp('unlocked_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    unlockedAt: timestamp('unlocked_at', { withTimezone: true }).notNull().defaultNow(),
     sourceType: text('source_type').notNull().default('unknown'),
-    sourceId: uuid('source_id')
+    sourceId: uuid('source_id'),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.hatId] })
-  })
+    pk: primaryKey({ columns: [table.userId, table.hatId] }),
+  }),
 );
 
 export const hatcheryUpgrades = pgTable('hatchery_upgrades', {
@@ -857,7 +726,7 @@ export const hatcheryUpgrades = pgTable('hatchery_upgrades', {
   upgradeType: text('upgrade_type').notNull(),
   level: integer('level').notNull(),
   createdAt: timestamps.createdAt,
-  updatedAt: timestamps.updatedAt
+  updatedAt: timestamps.updatedAt,
 });
 
 export const gameEvents = pgTable('game_events', {
@@ -865,12 +734,10 @@ export const gameEvents = pgTable('game_events', {
   eventType: text('event_type').notNull(),
   status: text('status').notNull(),
   startedByUserId: uuid('started_by_user_id').references(() => users.id),
-  startedAt: timestamp('started_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   revertedAt: timestamp('reverted_at', { withTimezone: true }),
-  resultJson: jsonb('result_json')
+  resultJson: jsonb('result_json'),
 });
 
 export const gameEventParticipants = pgTable('game_event_participants', {
@@ -887,9 +754,7 @@ export const gameEventParticipants = pgTable('game_event_participants', {
   placement: integer('placement'),
   pointsAwarded: integer('points_awarded').notNull().default(0),
   runtimeState: jsonb('runtime_state').notNull().default({}),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const leaderboardScores = pgTable(
@@ -900,11 +765,9 @@ export const leaderboardScores = pgTable(
       .references(() => users.id),
     leaderboardType: text('leaderboard_type').notNull(),
     score: integer('score').notNull().default(0),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.leaderboardType] })
-  })
+    pk: primaryKey({ columns: [table.userId, table.leaderboardType] }),
+  }),
 );
