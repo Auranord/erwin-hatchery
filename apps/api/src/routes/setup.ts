@@ -7,7 +7,6 @@ import {
   createSetupStateCookie,
   finalizeSetupIfReady,
   getSetupStatus,
-  runAllBackfills,
   runHealthCheck,
   setupRedirectUri,
   validateSetupState
@@ -51,9 +50,10 @@ export async function registerSetupRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post('/api/setup/run-backfill', async (request) => {
-    await runAllBackfills(request.log);
-    return getSetupStatus();
+  app.post('/api/setup/run-backfill', async (_request, reply) => {
+    return reply.code(410).send({
+      message: 'Automated Twitch backfills are retired. Use the admin inventory controls for manual first-launch grants.'
+    });
   });
 
   app.post('/api/setup/resync-eventsub', async (request) => {

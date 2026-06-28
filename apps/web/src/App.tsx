@@ -917,6 +917,11 @@ function formatUpgradeSlotCount(slotCount: number): string {
 }
 
 const DEBUG_EGG_GRANT_AMOUNTS = [1, 5, 10] as const;
+const ADMIN_RESOURCE_GRANT_AMOUNTS = [1, 10, 100, 1000] as const;
+const ADMIN_GRANTABLE_RESOURCES = [
+  { type: CRACKED_EGGS_RESOURCE_TYPE, label: EGG_RESOURCE_LABELS[CRACKED_EGGS_RESOURCE_TYPE] },
+  { type: VOUCHER_RESOURCE_TYPE, label: EGG_RESOURCE_LABELS[VOUCHER_RESOURCE_TYPE] }
+] as const;
 
 
 const PET_STAT_IDS: PetStatId[] = ['HP', 'ATK', 'DEF', 'SPD', 'GAIN', 'POW'];
@@ -1003,6 +1008,8 @@ export function App(): JSX.Element {
   const [adminEggTypes, setAdminEggTypes] = useState<AdminEggType[]>([]);
   const [selectedAdminEggTypeId, setSelectedAdminEggTypeId] =
     useState('beta_egg');
+  const [selectedAdminResourceType, setSelectedAdminResourceType] =
+    useState<string>(CRACKED_EGGS_RESOURCE_TYPE);
   const [leaderboardEntries, setLeaderboardEntries] = useState<
     LeaderboardEntry[]
   >([]);
@@ -1884,6 +1891,33 @@ export function App(): JSX.Element {
     await loadLedger(userId);
   }
 
+  async function grantAdminResource(
+    userId: string,
+    resourceType: string,
+    amount: number
+  ): Promise<void> {
+    const response = await fetch(`/api/admin/users/${userId}/grant-resource`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId: crypto.randomUUID(),
+        resourceType,
+        amount
+      })
+    });
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as {
+        message?: string;
+      } | null;
+      throw new Error(
+        payload?.message ?? 'Ressourcen konnten nicht vergeben werden.'
+      );
+    }
+    await loadInventory(userId);
+    await loadLedger(userId);
+  }
+
   async function grantTestEggsToAll(
     eggTypeId: string,
     amount: 1 | 5 | 10
@@ -2728,6 +2762,37 @@ export function App(): JSX.Element {
                     </button>
                   ))}
                 </div>
+                <label>
+                  Backfill-Ressource:{' '}
+                  <select
+                    value={selectedAdminResourceType}
+                    onChange={(event) =>
+                      setSelectedAdminResourceType(event.target.value)
+                    }
+                  >
+                    {ADMIN_GRANTABLE_RESOURCES.map((resource) => (
+                      <option key={resource.type} value={resource.type}>
+                        {resource.label} ({resource.type})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div>
+                  {ADMIN_RESOURCE_GRANT_AMOUNTS.map((amount) => (
+                    <button
+                      key={`resource:${amount}`}
+                      onClick={() =>
+                        void grantAdminResource(
+                          selected.id,
+                          selectedAdminResourceType,
+                          amount
+                        )
+                      }
+                    >
+                      +{amount} {EGG_RESOURCE_LABELS[selectedAdminResourceType] ?? selectedAdminResourceType}
+                    </button>
+                  ))}
+                </div>
                 <button onClick={() => void loadInventory(selected.id)}>
                   Inventar laden
                 </button>
@@ -2752,7 +2817,6 @@ export function App(): JSX.Element {
           {setupStatus?.twitchTransport === 'erwin-gateway' ? null : (
             <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub Resync</button>
           )}
-          <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
           {setupStatus?.twitchTransport === 'erwin-gateway' ? null : (
             <a href="/api/setup/twitch/login">Broadcaster reauthentifizieren</a>
           )}
@@ -2763,7 +2827,7 @@ export function App(): JSX.Element {
               <p>Reauth: {setupStatus.requiresReauth ? 'erforderlich' : 'nein'}</p>
               <p>Broadcaster: {setupStatus.broadcaster?.login ?? setupStatus.broadcaster?.userId ?? '—'}</p>
               <p>Twitch-Transport: {setupStatus.gateway?.enabled ? 'erwin-gateway' : 'direkter Twitch-Rollback in Hatchery'}</p>
-              <p>Backfill-Quelle: {setupStatus.backfillSource || '—'}</p>
+              <p>Backfill: Manuell über Admin-Inventarsteuerung.</p>
               <p>Scopes fehlen: {setupStatus.missingScopes.join(', ') || 'keine'}</p>
               <p>Letzter Health Check: {setupStatus.lastHealthCheckAt ? new Date(setupStatus.lastHealthCheckAt).toLocaleString() : '—'}</p>
               {setupStatus.lastError ? <p>Letzter Fehler: {setupStatus.lastError}</p> : null}
@@ -2774,12 +2838,6 @@ export function App(): JSX.Element {
                   ))}
                 </ul>
               ) : null}
-              <h3>Backfill-Läufe</h3>
-              <ul>
-                {setupStatus.lastBackfillRuns.map((run) => (
-                  <li key={run.id}>{run.type}: {run.status} · {run.source}{run.error ? ` · ${run.error}` : ''}</li>
-                ))}
-              </ul>
             </>
           ) : <p>Noch kein Setup-Status geladen.</p>}
         </section>
@@ -2964,7 +3022,7 @@ export function App(): JSX.Element {
             <>
               <p>Bitte melde den konfigurierten Broadcaster-Account an. Die Anmeldung fordert Abos, Channel-Point-Rewards und Bits-Berechtigungen an.</p>
               <p><strong>Wichtig:</strong> Twitch stellt keinen vollständigen historischen EventSub-Replay bereit.</p>
-              <p>Backfill importiert aktuell sichtbare Abos und Bits-Leaderboard-Werte bestmöglich.</p>
+              <p>Historische Ressourcen werden manuell über die Admin-Inventarsteuerung vergeben.</p>
               <a href="/api/setup/twitch/login">Broadcaster mit Twitch verbinden</a>
             </>
           )}
@@ -2976,21 +3034,18 @@ export function App(): JSX.Element {
           <p>Setup: {status?.completed ? '✅ Vollständig' : '❌ Unvollständig'}</p>
           <p>Fehlende Scopes: {status?.missingScopes.length ? status.missingScopes.join(', ') : 'keine'}</p>
           <p>Twitch-Transport: {status?.twitchTransport === 'erwin-gateway' ? 'erwin-gateway' : 'direkt in Hatchery'}</p>
-          <p>Backfill-Quelle: {status?.backfillSource ?? '—'}</p>
+          <p>Backfill: Manuell über Admin-Inventarsteuerung.</p>
           {status?.twitchTransport === 'erwin-gateway' ? (
             <p>Gateway Smoke: {status.gateway?.ok ? '✅ ok' : `⚠ ${status.gateway?.error ?? 'nicht verfügbar'}`}</p>
           ) : (
             <p>EventSub: {status?.eventSub.enabled ? '✅ aktiv' : '⚠ nicht vollständig aktiv'}</p>
           )}
-          <p>Abo-Backfill: {status?.subscriptionBackfillCompletedAt ? new Date(status.subscriptionBackfillCompletedAt).toLocaleString() : 'offen'}</p>
-          <p>Bits-Backfill: {status?.bitsBackfillCompletedAt ? new Date(status.bitsBackfillCompletedAt).toLocaleString() : 'offen'}</p>
           {status?.lastError ? <p>Letzter Twitch/Gateway-Fehler: {status.lastError}</p> : null}
           <div>
             <button onClick={() => void postSetupAction('/api/setup/health-check')}>Health Check ausführen</button>
             {status?.twitchTransport === 'erwin-gateway' ? null : (
               <button onClick={() => void postSetupAction('/api/setup/resync-eventsub')}>EventSub neu synchronisieren</button>
             )}
-            <button onClick={() => void postSetupAction('/api/setup/run-backfill')}>Backfill fortsetzen</button>
           </div>
           {isDirectTwitchRollbackMode && eventSubs.length > 0 ? (
             <ul>
