@@ -65,7 +65,7 @@ Stores:
 
 ### twitch_events
 
-Legacy/direct Twitch EventSub and backfill audit table. Still relevant while old direct Twitch path exists.
+Legacy/direct Twitch EventSub and gateway/backfill audit table. Direct Twitch transport is retired; remaining direct EventSub entries are acknowledgements for stale webhook retries or historical audit rows.
 
 ### channel_point_redemptions
 

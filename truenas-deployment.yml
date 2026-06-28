@@ -9,7 +9,7 @@ services:
     image: ghcr.io/auranord/erwin-hatchery:BRANCH
     container_name: erwin-hatchery-init-BRANCH
     pull_policy: always
-    restart: "no"
+    restart: 'no'
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,38 +21,38 @@ services:
       TZ: Europe/Berlin
 
       # Choose postgres password
-      DATABASE_URL: "postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery"
+      DATABASE_URL: 'postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery'
 
       # Choose domain for front and backend
-      PUBLIC_APP_URL: "https://hatchery.DOMAIN"
-      PUBLIC_API_URL: "https://hatchery.DOMAIN"
-      CORS_ORIGIN: "https://hatchery.DOMAIN"
+      PUBLIC_APP_URL: 'https://hatchery.DOMAIN'
+      PUBLIC_API_URL: 'https://hatchery.DOMAIN'
+      CORS_ORIGIN: 'https://hatchery.DOMAIN'
 
       # Twitch player OAuth login remains owned by Hatchery.
-      TWITCH_CLIENT_ID: ""
-      TWITCH_CLIENT_SECRET: ""
-      TWITCH_BROADCASTER_ID: ""
+      TWITCH_CLIENT_ID: ''
+      TWITCH_CLIENT_SECRET: ''
+      TWITCH_BROADCASTER_ID: ''
 
       # Active erwin-gateway mode for testing/production after validation.
       # Hatchery fails closed when the gateway client config is unavailable.
-      ERWIN_GATEWAY_ENABLED: "true"
-      ERWIN_GATEWAY_OBSERVE_ONLY: "false"
-      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: "true"
-      ERWIN_GATEWAY_REQUIRED: "true"
-      ERWIN_GATEWAY_URL: "https://erwin-gateway.DOMAIN"
-      ERWIN_GATEWAY_APP_API_KEY: "CHANGE_ME_GATEWAY_APP_API_KEY"
-      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: "CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET"
-      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: "300"
+      ERWIN_GATEWAY_ENABLED: 'true'
+      ERWIN_GATEWAY_OBSERVE_ONLY: 'false'
+      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: 'true'
+      ERWIN_GATEWAY_REQUIRED: 'true'
+      ERWIN_GATEWAY_URL: 'https://erwin-gateway.DOMAIN'
+      ERWIN_GATEWAY_APP_API_KEY: 'CHANGE_ME_GATEWAY_APP_API_KEY'
+      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: 'CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET'
+      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: '300'
 
-      # Direct Twitch EventSub rollback variables are intentionally absent in
-      # active gateway mode. Add TWITCH_EVENTSUB_SECRET and set
-      # TWITCH_EVENTSUB_AUTO_SYNC=true only for explicit rollback with
-      # ERWIN_GATEWAY_ENABLED=false.
+      # Hatchery no longer stores broadcaster OAuth tokens. erwin-gateway
+      # is required for Twitch transport; direct EventSub rollback is retired.
+      TWITCH_EVENTSUB_SECRET: ''
+      TWITCH_EVENTSUB_AUTO_SYNC: 'false'
 
-      SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
-      OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
+      SESSION_SECRET: 'CHANGE_ME_SESSION_SECRET'
+      OVERLAY_SECRET: 'CHANGE_ME_OVERLAY_SECRET'
 
-    command: ["sh", "-c", "node dist/db/migrate.js && node dist/db/seed.js"]
+    command: ['sh', '-c', 'node dist/db/migrate.js && node dist/db/seed.js']
 
     networks:
       - erwin_internal_BRANCH
@@ -62,7 +62,7 @@ services:
     container_name: erwin-hatchery-api-BRANCH
     pull_policy: always
     restart: unless-stopped
-    command: ["./scripts/container-start.sh"]
+    command: ['./scripts/container-start.sh']
     depends_on:
       postgres:
         condition: service_healthy
@@ -76,40 +76,40 @@ services:
       TZ: Europe/Berlin
 
       # Choose postgres password
-      DATABASE_URL: "postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery"
+      DATABASE_URL: 'postgres://erwin_hatchery:CHANGE_ME_LONG_PASSWORD@postgres:5432/erwin_hatchery'
 
       # Choose domain for front and backend
-      PUBLIC_APP_URL: "https://hatchery.DOMAIN"
-      PUBLIC_API_URL: "https://hatchery.DOMAIN"
-      CORS_ORIGIN: "https://hatchery.DOMAIN"
+      PUBLIC_APP_URL: 'https://hatchery.DOMAIN'
+      PUBLIC_API_URL: 'https://hatchery.DOMAIN'
+      CORS_ORIGIN: 'https://hatchery.DOMAIN'
 
       # Twitch player OAuth login remains owned by Hatchery.
-      TWITCH_CLIENT_ID: ""
-      TWITCH_CLIENT_SECRET: ""
-      TWITCH_BROADCASTER_ID: ""
+      TWITCH_CLIENT_ID: ''
+      TWITCH_CLIENT_SECRET: ''
+      TWITCH_BROADCASTER_ID: ''
 
       # Active erwin-gateway mode for testing/production after validation.
       # Hatchery fails closed when the gateway client config is unavailable.
-      ERWIN_GATEWAY_ENABLED: "true"
-      ERWIN_GATEWAY_OBSERVE_ONLY: "false"
-      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: "true"
-      ERWIN_GATEWAY_REQUIRED: "true"
-      ERWIN_GATEWAY_URL: "https://erwin-gateway.DOMAIN"
-      ERWIN_GATEWAY_APP_API_KEY: "CHANGE_ME_GATEWAY_APP_API_KEY"
-      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: "CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET"
-      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: "300"
+      ERWIN_GATEWAY_ENABLED: 'true'
+      ERWIN_GATEWAY_OBSERVE_ONLY: 'false'
+      ERWIN_GATEWAY_AUTO_FULFILL_REDEMPTIONS: 'true'
+      ERWIN_GATEWAY_REQUIRED: 'true'
+      ERWIN_GATEWAY_URL: 'https://erwin-gateway.DOMAIN'
+      ERWIN_GATEWAY_APP_API_KEY: 'CHANGE_ME_GATEWAY_APP_API_KEY'
+      ERWIN_GATEWAY_WEBHOOK_SIGNING_SECRET: 'CHANGE_ME_GATEWAY_WEBHOOK_SIGNING_SECRET'
+      ERWIN_GATEWAY_WEBHOOK_MAX_AGE_SECONDS: '300'
 
-      # Direct Twitch EventSub rollback variables are intentionally absent in
-      # active gateway mode. Add TWITCH_EVENTSUB_SECRET and set
-      # TWITCH_EVENTSUB_AUTO_SYNC=true only for explicit rollback with
-      # ERWIN_GATEWAY_ENABLED=false.
+      # Hatchery no longer stores broadcaster OAuth tokens. erwin-gateway
+      # is required for Twitch transport; direct EventSub rollback is retired.
+      TWITCH_EVENTSUB_SECRET: ''
+      TWITCH_EVENTSUB_AUTO_SYNC: 'false'
 
-      SESSION_SECRET: "CHANGE_ME_SESSION_SECRET"
-      OVERLAY_SECRET: "CHANGE_ME_OVERLAY_SECRET"
+      SESSION_SECRET: 'CHANGE_ME_SESSION_SECRET'
+      OVERLAY_SECRET: 'CHANGE_ME_OVERLAY_SECRET'
 
     # Choose host port to use
     ports:
-      - "30XX:3000"
+      - '30XX:3000'
 
     networks:
       - erwin_internal_BRANCH
@@ -120,7 +120,7 @@ services:
       - /MOUNT/erwin-hatchery/logs:/app/logs
 
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/admin/health"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:3000/api/admin/health']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -136,7 +136,7 @@ services:
     environment:
       POSTGRES_DB: erwin_hatchery
       POSTGRES_USER: erwin_hatchery
-      POSTGRES_PASSWORD: "CHANGE_ME_LONG_PASSWORD"
+      POSTGRES_PASSWORD: 'CHANGE_ME_LONG_PASSWORD'
 
     # Choose dataset to mount for database
     volumes:
@@ -146,7 +146,7 @@ services:
       - erwin_internal_BRANCH
 
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U erwin_hatchery -d erwin_hatchery"]
+      test: ['CMD-SHELL', 'pg_isready -U erwin_hatchery -d erwin_hatchery']
       interval: 10s
       timeout: 5s
       retries: 10
