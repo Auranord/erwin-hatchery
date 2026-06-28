@@ -52,6 +52,8 @@ import { calculateLevelStatBonus, levelForTrainingPoints, type PetStatId, type P
 
 const ROLE_ORDER = ['owner', 'admin', 'moderator', 'user'] as const;
 type AppRole = (typeof ROLE_ORDER)[number];
+const ADMIN_GRANTABLE_RESOURCE_TYPES = ['cracked_eggs', 'voucher'] as const;
+type AdminGrantableResourceType = (typeof ADMIN_GRANTABLE_RESOURCE_TYPES)[number];
 
 
 type TrainingLedgerDelta = {
@@ -76,6 +78,14 @@ function isPetStatId(value: string): value is PetStatId {
 function normalizePetStat(value: string): PetStatId {
   if (!isPetStatId(value)) throw new Error(`Invalid pet stat id: ${value}`);
   return value;
+}
+
+function isAdminGrantableResourceType(
+  value: string
+): value is AdminGrantableResourceType {
+  return ADMIN_GRANTABLE_RESOURCE_TYPES.includes(
+    value as AdminGrantableResourceType
+  );
 }
 
 function petStatsToBonusColumns(stats: PetStats) {
@@ -1050,6 +1060,91 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { status: 'ok', idempotent: false, ...result };
+  });
+
+  app.post('/api/admin/users/:userId/grant-resource', async (request, reply) => {
+    const identity = await getSessionIdentity(request);
+    if (!identity || !hasAdminAccess(identity.roles))
+      return reply.code(403).send({ message: 'Forbidden' });
+
+    const userId = (request.params as { userId: string }).userId;
+    const body = (request.body ?? {}) as {
+      requestId?: string;
+      resourceType?: string;
+      amount?: number;
+    };
+    const requestId = body.requestId?.trim() || randomUUID();
+    const resourceType = String(body.resourceType ?? '').trim();
+    const amount = Number(body.amount);
+    if (
+      !isAdminGrantableResourceType(resourceType) ||
+      !Number.isInteger(amount) ||
+      amount <= 0 ||
+      amount > 100000
+    ) {
+      return reply.code(400).send({ message: 'Invalid payload' });
+    }
+
+    const duplicate = await db
+      .select({ id: adminActionLogs.id })
+      .from(adminActionLogs)
+      .where(eq(adminActionLogs.requestId, requestId))
+      .limit(1);
+    if (duplicate.length > 0)
+      return reply.code(200).send({ status: 'ok', idempotent: true });
+
+    const targetUser = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, userId), eq(users.isDeleted, false)))
+      .limit(1);
+    if (targetUser.length === 0) {
+      return reply.code(404).send({ message: 'Target user not found' });
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(resources)
+        .values({ userId, resourceType, amount })
+        .onConflictDoUpdate({
+          target: [resources.userId, resources.resourceType],
+          set: {
+            amount: sql`${resources.amount} + ${amount}`,
+            updatedAt: sql`now()`
+          }
+        });
+
+      const insertedLedgerRows = await tx
+        .insert(economyLedger)
+        .values({
+          userId,
+          actorUserId: identity.userId,
+          eventType: 'admin_resource_grant',
+          sourceType: 'admin_action',
+          delta: {
+            resources: [{ resourceType, amountDelta: amount }]
+          }
+        })
+        .returning({ id: economyLedger.id });
+      const ledgerRow = insertedLedgerRows[0];
+      if (!ledgerRow)
+        throw new Error('Failed to create ledger entry for admin resource grant');
+
+      await tx.insert(adminActionLogs).values({
+        actorUserId: identity.userId,
+        targetUserId: userId,
+        actionType: 'grant_resource',
+        requestId,
+        payload: {
+          resourceType,
+          amount,
+          ledgerId: ledgerRow.id,
+          reversible: false
+        }
+      });
+    });
+
+    return { status: 'ok', idempotent: false };
   });
 
   app.post('/api/admin/events/start', async (request, reply) => {
