@@ -1,7 +1,7 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { config } from '../config.js';
 import { db } from '../db/client.js';
-import { economyLedger, gatewayWebhookEvents, resources, twitchBitsBalances, users } from '../db/schema.js';
+import { economyLedger, resources, twitchBitsBalances, users } from '../db/schema.js';
 
 const VOUCHER_RESOURCE_TYPE = 'voucher';
 
@@ -68,23 +68,6 @@ function numberValue(value: unknown): number | null {
 
 function booleanValue(value: unknown): boolean {
   return value === true || value === 'true';
-}
-
-function subscriberStatusFromGatewayEventType(eventType: string): boolean | null {
-  if (eventType === 'twitch.channel.subscription.end') return false;
-  if (
-    eventType === 'twitch.channel.subscribe' ||
-    eventType === 'twitch.channel.subscription.message' ||
-    eventType === 'twitch.channel.subscription.gift'
-  ) {
-    return true;
-  }
-  return null;
-}
-
-function subscriberEndsAtForStatus(status: boolean, now: Date): Date {
-  if (!status) return now;
-  return new Date(now.getTime() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS * 24 * 60 * 60 * 1000);
 }
 
 function pickUser(...sources: (Record<string, unknown> | null | undefined)[]): TwitchUserRef {
@@ -273,18 +256,13 @@ export async function processGatewayTwitchEventInTx(tx: Tx, event: NormalizedGat
   if (config.ERWIN_GATEWAY_OBSERVE_ONLY) return { processed: true, ignored: false, reason: 'observe_only', voucherGrants: 0 };
 
   if (event.eventType === 'twitch.channel.subscription.end') {
-    if (!event.primaryUser.twitchUserId) return { processed: true, ignored: true, reason: 'missing_twitch_user', voucherGrants: 0 };
-    const user = await upsertProvisionalUserInTx(tx, event.primaryUser);
-    if (!user) return { processed: true, ignored: true, reason: 'missing_twitch_user', voucherGrants: 0 };
-    await tx.update(users).set({ isSubscriber: false, subscriberEndsAt: new Date(), updatedAt: new Date() }).where(eq(users.id, user.id));
-    return { processed: true, ignored: false, reason: 'subscription_ended_no_voucher', voucherGrants: 0 };
+    return { processed: true, ignored: true, reason: 'subscription_ended_no_voucher', voucherGrants: 0 };
   }
 
   if (event.eventType === 'twitch.channel.subscribe' || event.eventType === 'twitch.channel.subscription.message') {
     if (!event.primaryUser.twitchUserId) return { processed: true, ignored: true, reason: 'missing_twitch_user', voucherGrants: 0 };
     const user = await upsertProvisionalUserInTx(tx, event.primaryUser);
     if (!user) return { processed: true, ignored: true, reason: 'missing_twitch_user', voucherGrants: 0 };
-    await tx.update(users).set({ isSubscriber: true, updatedAt: new Date() }).where(eq(users.id, user.id));
     const granted = await grantVoucherInTx(tx, {
       userId: user.id,
       gatewayEventRowId,
@@ -320,7 +298,6 @@ export async function processGatewayTwitchEventInTx(tx: Tx, event: NormalizedGat
           reason: 'gateway_gift_subscription_recipient'
         });
       }
-      if (recipient) await tx.update(users).set({ isSubscriber: true, updatedAt: new Date() }).where(eq(users.id, recipient.id));
     }
     return { processed: true, ignored: granted === 0, reason: granted === 0 ? 'anonymous_or_duplicate_gift_without_recipient_grant' : null, voucherGrants: granted };
   }
@@ -333,96 +310,4 @@ export async function processGatewayTwitchEventInTx(tx: Tx, event: NormalizedGat
   }
 
   return { processed: false, ignored: true, reason: 'unsupported_gateway_twitch_event', voucherGrants: 0 };
-}
-
-
-export async function syncSubscriberStatusFromGatewayWebhookEvents(log: {
-  info: Function;
-  warn: Function;
-  error: Function;
-}): Promise<void> {
-  const now = new Date();
-  const rangeStart = new Date(now);
-  rangeStart.setUTCDate(rangeStart.getUTCDate() - config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS);
-  const subscriberEventTypes = [
-    'twitch.channel.subscribe',
-    'twitch.channel.subscription.end',
-    'twitch.channel.subscription.message',
-    'twitch.channel.subscription.gift'
-  ];
-
-  const rows = await db
-    .select({
-      deliveryId: gatewayWebhookEvents.deliveryId,
-      eventId: gatewayWebhookEvents.eventId,
-      eventType: gatewayWebhookEvents.eventType,
-      twitchMessageId: gatewayWebhookEvents.twitchMessageId,
-      rawPayload: gatewayWebhookEvents.rawPayload,
-      createdAt: gatewayWebhookEvents.createdAt
-    })
-    .from(gatewayWebhookEvents)
-    .where(inArray(gatewayWebhookEvents.eventType, subscriberEventTypes));
-
-  const relevantRows = rows
-    .filter((row) => row.createdAt >= rangeStart)
-    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-
-  let updatedUsers = 0;
-  let skippedEvents = 0;
-  for (const row of relevantRows) {
-    const normalized = normalizeGatewayTwitchEventPayload({
-      deliveryId: row.deliveryId,
-      eventId: row.eventId,
-      eventType: row.eventType,
-      twitchMessageId: row.twitchMessageId,
-      payload: record(row.rawPayload) ?? {}
-    });
-    const status = subscriberStatusFromGatewayEventType(row.eventType);
-    if (!normalized || status === null) {
-      skippedEvents += 1;
-      continue;
-    }
-
-    const subscriberUser = row.eventType === 'twitch.channel.subscription.gift' ? normalized.recipientUser : normalized.primaryUser;
-    if (!subscriberUser.twitchUserId) {
-      skippedEvents += 1;
-      continue;
-    }
-
-    const subscriberEndsAt = subscriberEndsAtForStatus(status, now);
-    const [user] = await db
-      .insert(users)
-      .values({
-        twitchUserId: subscriberUser.twitchUserId,
-        twitchLogin: subscriberUser.twitchLogin,
-        displayName: subscriberUser.twitchDisplayName,
-        isProvisional: true,
-        isSubscriber: status,
-        subscriberEndsAt,
-        lastLoginAt: null,
-        updatedAt: now
-      })
-      .onConflictDoUpdate({
-        target: users.twitchUserId,
-        set: {
-          twitchLogin: subscriberUser.twitchLogin,
-          displayName: subscriberUser.twitchDisplayName,
-          isSubscriber: status,
-          subscriberEndsAt,
-          updatedAt: now
-        }
-      })
-      .returning({ id: users.id });
-    if (user) updatedUsers += 1;
-  }
-
-  log.info(
-    {
-      scannedGatewayEvents: relevantRows.length,
-      updatedUsers,
-      skippedEvents,
-      rangeStart: rangeStart.toISOString()
-    },
-    'Subscriber startup status replay from erwin-gateway webhook events completed'
-  );
 }

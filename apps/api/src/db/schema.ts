@@ -222,6 +222,24 @@ export const twitchEventSubSubscriptions = pgTable(
   })
 );
 
+
+export const twitchPlayerTokens = pgTable('twitch_player_tokens', {
+  userId: uuid('user_id')
+    .notNull()
+    .primaryKey()
+    .references(() => users.id),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  scope: text('scope').notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+});
+
 export const twitchBackfillRuns = pgTable('twitch_backfill_runs', {
   id: uuid('id').defaultRandom().primaryKey(),
   type: text('type').notNull(),

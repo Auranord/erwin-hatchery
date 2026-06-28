@@ -28,7 +28,7 @@ packages/
 
 ## Backend owns
 
-- Twitch player login/session.
+- Twitch player login/session and player-authorized subscription status checks.
 - Gateway webhook verification and ingestion.
 - Direct Twitch transport only while migration requires it.
 - Inventory, economy, rolls, ledger, incubations, hatches, pets, battle/event resolution.
@@ -77,6 +77,12 @@ Preferred source during gateway migration:
 - `GET /api/v1/streams/current`.
 
 Viewer count must not be trusted from the client.
+
+## Player subscription status
+
+- Player login requests `user:read:subscriptions` in addition to identity/profile scope.
+- `GET /api/me/subscription` checks the authenticated player's subscription to the configured broadcaster with the player's Twitch OAuth token.
+- Subscription, resubscription, gift-subscription, and subscription-end events remain voucher/audit inputs only and must not derive subscriber status.
 
 ## Admin UI
 

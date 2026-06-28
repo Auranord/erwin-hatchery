@@ -398,7 +398,6 @@ export async function runSubscriptionBackfill(): Promise<void> {
           const [eventRow] = await tx.insert(twitchEvents).values({ twitchEventId: `subscription_backfill:${sub.user_id}`, type: 'subscription_backfill', source: 'twitch_backfill', rawPayload: sub, processedAt: new Date(), processingStatus: 'processed' }).onConflictDoNothing().returning({ id: twitchEvents.id });
           if (!eventRow) return;
           const user = await upsertProvisionalUserInTx(tx, { twitchUserId: sub.user_id, login: sub.user_login, displayName: sub.user_name });
-          await tx.update(users).set({ isSubscriber: true, updatedAt: new Date() }).where(eq(users.id, user.id));
           await grantVoucherInTx(tx, { userId: user.id, sourceId: eventRow.id, sourceType: 'subscription_backfill', eventType: 'subscription_backfill_voucher_granted', amount: 1, reason: 'subscription_backfill_recipient' });
           if (sub.gifter_id) {
             const [giftRow] = await tx.insert(twitchEvents).values({ twitchEventId: `subscription_gift_backfill:${sub.gifter_id}:${sub.user_id}`, type: 'subscription_gift_backfill', source: 'twitch_backfill', rawPayload: sub, processedAt: new Date(), processingStatus: 'processed' }).onConflictDoNothing().returning({ id: twitchEvents.id });
