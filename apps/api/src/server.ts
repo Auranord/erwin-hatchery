@@ -1,9 +1,8 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { checkActiveEggTypesHealth, ensureCoreSchema } from './db/client.js';
-import { syncChannelPointRedemptionEventSub, syncSubscriberStatusFromRecentEvents, syncSubscriberStatusFromTwitch } from './services/twitchEventSub.js';
+import { syncChannelPointRedemptionEventSub } from './services/twitchEventSub.js';
 import { smokeCheckErwinGateway } from './services/erwinGatewayClient.js';
-import { syncSubscriberStatusFromGatewayWebhookEvents } from './services/gatewayTwitchEvents.js';
 
 const app = buildApp();
 
@@ -23,16 +22,7 @@ const start = async (): Promise<void> => {
       app.log.warn(logPayload, 'erwin-gateway smoke check failed; continuing because gateway is not required');
     }
     await syncChannelPointRedemptionEventSub(app.log);
-    if (config.ERWIN_GATEWAY_ENABLED) {
-      await syncSubscriberStatusFromGatewayWebhookEvents(app.log);
-    } else {
-      try {
-        await syncSubscriberStatusFromTwitch(app.log);
-      } catch (error) {
-        app.log.warn({ err: error }, 'Subscriber startup sync from Twitch failed, falling back to recent EventSub replay');
-        await syncSubscriberStatusFromRecentEvents(app.log);
-      }
-    }
+    app.log.info('Subscriber status startup sync skipped; player subscription state is not derived from subscription events');
     await app.listen({ port: config.PORT, host: config.HOST });
     app.log.info(`API listening on ${config.HOST}:${config.PORT}`);
   } catch (error) {

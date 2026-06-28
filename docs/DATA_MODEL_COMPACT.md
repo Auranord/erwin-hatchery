@@ -29,6 +29,18 @@ Important fields:
 - `is_subscriber`
 - `subscriber_ends_at`
 
+### twitch_player_tokens
+
+Stores player OAuth grants separately from broadcaster/setup tokens. Used for player-authorized subscription status checks. Never expose or log token values.
+
+Important fields:
+
+- `user_id` primary key
+- `access_token`
+- `refresh_token`
+- `scope`
+- `expires_at`
+
 ### roles
 
 Server-side roles per user: owner, admin, moderator, user.

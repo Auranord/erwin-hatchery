@@ -62,27 +62,6 @@ function verifyEventSubSignature(request: FastifyRequest): boolean {
 function shouldGrantRedemption(status: string | undefined): boolean {
   return status === 'unfulfilled' || status === 'fulfilled';
 }
-function subscriptionEndsAtFromNow(now: Date): Date {
-  const endsAt = new Date(now);
-  endsAt.setUTCDate(
-    endsAt.getUTCDate() + config.TWITCH_SUBSCRIPTION_RENEWAL_DAYS
-  );
-  return endsAt;
-}
-
-export function getSubscriptionStatusFromEventType(
-  eventType: string
-): boolean | null {
-  const activateTypes = new Set([
-    'channel.subscribe',
-    'channel.subscription.message'
-  ]);
-  const deactivateTypes = new Set(['channel.subscription.end']);
-  if (activateTypes.has(eventType)) return true;
-  if (deactivateTypes.has(eventType)) return false;
-  return null;
-}
-
 async function processRedemption(
   payload: EventSubEnvelope,
   log: FastifyRequest['log']
@@ -264,13 +243,14 @@ async function processSubscriberStatus(
   const twitchUserId = event?.user_id?.trim();
   if (!twitchUserId) return 'ignored';
 
-  const subscriberStatus = getSubscriptionStatusFromEventType(eventType);
-  if (subscriberStatus === null && eventType !== 'channel.subscription.gift')
-    return 'ignored';
+  if (eventType === 'channel.subscription.end') return 'ignored';
+  if (
+    eventType !== 'channel.subscribe' &&
+    eventType !== 'channel.subscription.message' &&
+    eventType !== 'channel.subscription.gift'
+  ) return 'ignored';
 
   const now = new Date();
-  const nextEndsAt = subscriptionEndsAtFromNow(now);
-  const shouldActivate = subscriberStatus === true;
   await db.transaction(async (tx) => {
     const existingUser = (
       await tx
@@ -296,18 +276,14 @@ async function processSubscriberStatus(
       )[0];
     if (!user) throw new Error('Failed to upsert user for subscription event');
 
-    if (subscriberStatus !== null) {
-      await tx
-        .update(users)
-        .set({
-          isSubscriber: shouldActivate,
-          subscriberEndsAt: shouldActivate ? nextEndsAt : now,
-          twitchLogin: event?.user_login ?? user.twitchLogin ?? null,
-          displayName: event?.user_name ?? user.displayName ?? null,
-          updatedAt: now
-        })
-        .where(eq(users.id, user.id));
-    }
+    await tx
+      .update(users)
+      .set({
+        twitchLogin: event?.user_login ?? user.twitchLogin ?? null,
+        displayName: event?.user_name ?? user.displayName ?? null,
+        updatedAt: now
+      })
+      .where(eq(users.id, user.id));
 
     if (
       eventType === 'channel.subscribe' ||
@@ -367,19 +343,8 @@ async function processSubscriberStatus(
     }
   });
 
-  log.info(
-    {
-      twitchUserId,
-      eventType,
-      isSubscriber: shouldActivate,
-      subscriberEndsAt: shouldActivate
-        ? nextEndsAt.toISOString()
-        : now.toISOString()
-    },
-    'Subscriber status updated'
-  );
-  if (eventType === 'channel.subscription.gift') return 'subscribed';
-  return shouldActivate ? 'subscribed' : 'unsubscribed';
+  log.info({ twitchUserId, eventType }, 'Subscription voucher event processed without subscriber status mutation');
+  return 'subscribed';
 }
 
 async function processBitsEvent(

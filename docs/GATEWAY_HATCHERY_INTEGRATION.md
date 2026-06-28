@@ -242,7 +242,7 @@ Hatchery behavior:
 - `twitch.channel.subscribe` grants +1 Gutschein to the identifiable subscriber.
 - `twitch.channel.subscription.message` grants +1 Gutschein to the identifiable resubscriber, matching the current MVP direct EventSub behavior.
 - `twitch.channel.subscription.gift` preserves the MVP fixed gift behavior: identifiable gifters receive fixed Gutscheine based on the gift count, identifiable recipients receive a fixed recipient Gutschein when present, and anonymous gifters are not credited.
-- `twitch.channel.subscription.end` updates local subscriber status only; it does not grant resources.
+- `twitch.channel.subscription.end` is audited/idempotently recorded only; it does not grant resources or mutate local subscriber status.
 - `twitch.channel.cheer` uses the existing Bits threshold Gutschein counter. Anonymous cheers are audited without voucher credit.
 - No sub/Bits path grants random eggs, random pets, mystery rewards, prize entries, giveaway chances, trading value, cash-out, or betting effects.
 
@@ -439,8 +439,8 @@ twitch.channel.update
 
 Rules:
 
-- Subs may grant fixed transparent perks, for example a subscriber incubator.
-- If a sub ends and the subscriber incubator is occupied, mark `remove_when_empty`.
+- Subs may grant fixed transparent perks through fixed Gutschein resources.
+- Subscriber-only status for later features should come from `GET /api/me/subscription`, which uses player Twitch OAuth-derived state, not from the latest subscription event.
 - Bits may be stored for future fixed transparent perks.
 - Bits and subs must never create random eggs, random pets, mystery prizes, giveaways, cash-out, trading, betting, or weighted reward chances.
 - Stream state is cached server-side from `twitch.stream.online`, `twitch.stream.offline`, and `twitch.channel.update`; cache fields include live/offline, title, category/game, viewer count when available, source, gateway event/delivery IDs, and update timestamps.
