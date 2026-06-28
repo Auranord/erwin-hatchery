@@ -149,13 +149,16 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const tokenJson = (await tokenResponse.json()) as TwitchTokenResponse;
-    if (!tokenJson.access_token || !tokenJson.refresh_token || !tokenJson.expires_in) {
+    const playerAccessToken = tokenJson.access_token;
+    const playerRefreshToken = tokenJson.refresh_token;
+    const playerTokenExpiresIn = tokenJson.expires_in;
+    if (!playerAccessToken || !playerRefreshToken || !playerTokenExpiresIn) {
       request.log.error('oauth token exchange returned incomplete token payload');
       return reply.code(502).send({ message: 'OAuth exchange failed' });
     }
     const meResponse = await fetch('https://api.twitch.tv/helix/users', {
       headers: {
-        Authorization: `Bearer ${tokenJson.access_token}`,
+        Authorization: `Bearer ${playerAccessToken}`,
         'Client-Id': config.TWITCH_CLIENT_ID
       }
     });
@@ -166,7 +169,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SESSION_TTL_DAYS * ONE_DAY_SECONDS * 1000);
-    const playerTokenExpiresAt = new Date(now.getTime() + tokenJson.expires_in * 1000);
+    const playerTokenExpiresAt = new Date(now.getTime() + playerTokenExpiresIn * 1000);
     const playerTokenScope = (tokenJson.scope ?? PLAYER_OAUTH_SCOPES).join(' ');
 
     const user = await db.transaction(async (tx) => {
@@ -203,21 +206,23 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         await tx.insert(roles).values({ userId: currentUser.id, role: 'owner', createdByUserId: currentUser.id });
       }
 
+      const playerTokenInsert: typeof twitchPlayerTokens.$inferInsert = {
+        userId: currentUser.id,
+        accessToken: playerAccessToken,
+        refreshToken: playerRefreshToken,
+        scope: playerTokenScope,
+        expiresAt: playerTokenExpiresAt,
+        updatedAt: now
+      };
+
       await tx
         .insert(twitchPlayerTokens)
-        .values({
-          userId: currentUser.id,
-          accessToken: tokenJson.access_token,
-          refreshToken: tokenJson.refresh_token,
-          scope: playerTokenScope,
-          expiresAt: playerTokenExpiresAt,
-          updatedAt: now
-        })
+        .values(playerTokenInsert)
         .onConflictDoUpdate({
           target: [twitchPlayerTokens.userId],
           set: {
-            accessToken: tokenJson.access_token,
-            refreshToken: tokenJson.refresh_token,
+            accessToken: playerAccessToken,
+            refreshToken: playerRefreshToken,
             scope: playerTokenScope,
             expiresAt: playerTokenExpiresAt,
             updatedAt: now
