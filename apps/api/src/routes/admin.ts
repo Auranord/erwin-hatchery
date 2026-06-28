@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import {
   adminActionLogs,
@@ -742,27 +742,104 @@ export async function registerAdminRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.get('/api/admin/debug/eventsubs', async (request, reply) => {
+  app.get('/api/admin/debug/webhook-events', async (request, reply) => {
     const identity = await getSessionIdentity(request);
     if (!identity || !hasAdminAccess(identity.roles))
       return reply.code(403).send({ message: 'Forbidden' });
 
-    const events = await db
-      .select({
-        id: twitchEvents.id,
-        twitchEventId: twitchEvents.twitchEventId,
-        type: twitchEvents.type,
-        source: twitchEvents.source,
-        processingStatus: twitchEvents.processingStatus,
-        receivedAt: twitchEvents.receivedAt,
-        processedAt: twitchEvents.processedAt,
-        error: twitchEvents.error
-      })
-      .from(twitchEvents)
-      .orderBy(desc(twitchEvents.receivedAt))
-      .limit(25);
+    const query = request.query as {
+      limit?: string;
+      source?: string;
+      status?: string;
+      type?: string;
+    };
+    const parsedLimit = Number.parseInt(String(query.limit ?? '25'), 10);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 200)
+      : 25;
+    const sourceFilter = String(query.source ?? 'all').trim().toLowerCase();
+    const statusFilter = String(query.status ?? '').trim();
+    const typeFilter = String(query.type ?? '').trim();
 
-    return { events };
+    const shouldLoadGateway = sourceFilter === 'all' || sourceFilter === 'gateway';
+    const shouldLoadDirect = sourceFilter === 'all' || sourceFilter === 'direct';
+    if (!shouldLoadGateway && !shouldLoadDirect) {
+      return reply.code(400).send({ message: 'Invalid source filter' });
+    }
+
+    const gatewayWhere: SQL[] = [];
+    const directWhere: SQL[] = [];
+    if (statusFilter) {
+      gatewayWhere.push(eq(gatewayWebhookEvents.processingStatus, statusFilter));
+      directWhere.push(eq(twitchEvents.processingStatus, statusFilter));
+    }
+    if (typeFilter) {
+      gatewayWhere.push(ilike(gatewayWebhookEvents.eventType, `%${typeFilter}%`));
+      directWhere.push(ilike(twitchEvents.type, `%${typeFilter}%`));
+    }
+
+    const [gatewayEvents, directEvents] = await Promise.all([
+      shouldLoadGateway
+        ? db
+            .select({
+              id: gatewayWebhookEvents.id,
+              eventId: gatewayWebhookEvents.eventId,
+              deliveryId: gatewayWebhookEvents.deliveryId,
+              twitchRedemptionId: gatewayWebhookEvents.twitchRedemptionId,
+              twitchMessageId: gatewayWebhookEvents.twitchMessageId,
+              type: gatewayWebhookEvents.eventType,
+              source: sql<string>`'erwin_gateway'`,
+              processingStatus: gatewayWebhookEvents.processingStatus,
+              receivedAt: gatewayWebhookEvents.createdAt,
+              processedAt: gatewayWebhookEvents.processedAt,
+              error: gatewayWebhookEvents.error,
+              twitchUserId: gatewayWebhookEvents.twitchUserId,
+              twitchUserLogin: gatewayWebhookEvents.twitchUserLogin,
+              twitchUserDisplayName: gatewayWebhookEvents.twitchUserDisplayName
+            })
+            .from(gatewayWebhookEvents)
+            .where(gatewayWhere.length ? and(...gatewayWhere) : undefined)
+            .orderBy(desc(gatewayWebhookEvents.createdAt))
+            .limit(limit)
+        : Promise.resolve([]),
+      shouldLoadDirect
+        ? db
+            .select({
+              id: twitchEvents.id,
+              eventId: twitchEvents.twitchEventId,
+              deliveryId: sql<string | null>`null`,
+              twitchRedemptionId: sql<string | null>`null`,
+              twitchMessageId: sql<string | null>`null`,
+              type: twitchEvents.type,
+              source: twitchEvents.source,
+              processingStatus: twitchEvents.processingStatus,
+              receivedAt: twitchEvents.receivedAt,
+              processedAt: twitchEvents.processedAt,
+              error: twitchEvents.error,
+              twitchUserId: sql<string | null>`null`,
+              twitchUserLogin: sql<string | null>`null`,
+              twitchUserDisplayName: sql<string | null>`null`
+            })
+            .from(twitchEvents)
+            .where(directWhere.length ? and(...directWhere) : undefined)
+            .orderBy(desc(twitchEvents.receivedAt))
+            .limit(limit)
+        : Promise.resolve([])
+    ]);
+
+    const events = [...gatewayEvents, ...directEvents]
+      .sort((left, right) => new Date(right.receivedAt).getTime() - new Date(left.receivedAt).getTime())
+      .slice(0, limit);
+
+    return { events, limit, filters: { source: sourceFilter, status: statusFilter, type: typeFilter } };
+  });
+
+  app.get('/api/admin/debug/eventsubs', async (request, reply) => {
+    return app.inject({
+      method: 'GET',
+      url: `/api/admin/debug/webhook-events${request.url.includes('?') ? request.url.slice(request.url.indexOf('?')) : ''}`,
+      headers: request.headers
+    }).then((response) => reply.code(response.statusCode).headers(response.headers).send(response.body));
   });
 
   app.get('/api/admin/ledger', async (request, reply) => {

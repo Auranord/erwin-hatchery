@@ -318,13 +318,19 @@ type AdminHealthIssue = {
 
 type EventSubFeedItem = {
   id: string;
-  twitchEventId: string;
+  eventId: string;
+  deliveryId: string | null;
+  twitchRedemptionId: string | null;
+  twitchMessageId: string | null;
   type: string;
   source: string;
   processingStatus: string;
   receivedAt: string;
   processedAt: string | null;
   error: string | null;
+  twitchUserId: string | null;
+  twitchUserLogin: string | null;
+  twitchUserDisplayName: string | null;
 };
 
 type GatewayEggRewardStatus = {
@@ -979,6 +985,12 @@ export function App(): JSX.Element {
   const [queuedShopItems, setQueuedShopItems] = useState<ShopOfferItem[]>([]);
   const [isBuyingShopQueue, setIsBuyingShopQueue] = useState(false);
   const [eventSubFeed, setEventSubFeed] = useState<EventSubFeedItem[]>([]);
+  const [eventSubFeedLimit, setEventSubFeedLimit] = useState('25');
+  const [eventSubFeedSource, setEventSubFeedSource] = useState('all');
+  const [eventSubFeedStatus, setEventSubFeedStatus] = useState('');
+  const [eventSubFeedType, setEventSubFeedType] = useState('');
+  const [eventSubFeedLoaded, setEventSubFeedLoaded] = useState(false);
+  const [eventSubFeedLoading, setEventSubFeedLoading] = useState(false);
   const [eventSubSubscriptionStatus, setEventSubSubscriptionStatus] =
     useState<EventSubSubscriptionStatus | null>(null);
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
@@ -1151,7 +1163,6 @@ export function App(): JSX.Element {
       void loadAdminHealth();
       void loadAdminEggTypes();
       void loadGatewayEggRewards();
-      void loadEventSubFeed();
       void loadEventSubSubscriptionStatus();
     }
   }, [isAdminRoute, setupStatus?.completed, me?.authenticated]);
@@ -1917,12 +1928,27 @@ export function App(): JSX.Element {
   }
 
   async function loadEventSubFeed(): Promise<void> {
-    const response = await fetch('/api/admin/debug/eventsubs', {
-      credentials: 'include'
-    });
-    if (!response.ok) return;
-    const payload = (await response.json()) as { events: EventSubFeedItem[] };
-    setEventSubFeed(payload.events);
+    setEventSubFeedLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: eventSubFeedLimit,
+        source: eventSubFeedSource
+      });
+      const status = eventSubFeedStatus.trim();
+      const type = eventSubFeedType.trim();
+      if (status) params.set('status', status);
+      if (type) params.set('type', type);
+
+      const response = await fetch(`/api/admin/debug/webhook-events?${params.toString()}`, {
+        credentials: 'include'
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as { events: EventSubFeedItem[] };
+      setEventSubFeed(payload.events);
+      setEventSubFeedLoaded(true);
+    } finally {
+      setEventSubFeedLoading(false);
+    }
   }
 
   async function loadEventSubSubscriptionStatus(
@@ -2807,27 +2833,77 @@ export function App(): JSX.Element {
         ) : null}
 
         <section className="card">
-          <h2>Debug: Webhook-Ereignisfeed (letzte 25)</h2>
-          <button onClick={() => void loadEventSubFeed()}>
-            Feed aktualisieren
+          <h2>Debug: Webhook-Ereignisfeed</h2>
+          <p>Der Feed wird erst geladen, wenn du den Button drückst.</p>
+          <div className="admin-form-grid admin-webhook-feed-filters">
+            <label>
+              Anzahl
+              <input
+                type="number"
+                min="1"
+                max="200"
+                value={eventSubFeedLimit}
+                onChange={(event) => setEventSubFeedLimit(event.target.value)}
+              />
+            </label>
+            <label>
+              Quelle
+              <select
+                value={eventSubFeedSource}
+                onChange={(event) => setEventSubFeedSource(event.target.value)}
+              >
+                <option value="all">Alle Webhooks</option>
+                <option value="gateway">erwin-gateway</option>
+                <option value="direct">Direkt/Legacy Twitch</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <input
+                placeholder="z. B. processed, failed, ignored"
+                value={eventSubFeedStatus}
+                onChange={(event) => setEventSubFeedStatus(event.target.value)}
+              />
+            </label>
+            <label>
+              Typ enthält
+              <input
+                placeholder="z. B. channel_points, subscription"
+                value={eventSubFeedType}
+                onChange={(event) => setEventSubFeedType(event.target.value)}
+              />
+            </label>
+          </div>
+          <button disabled={eventSubFeedLoading} onClick={() => void loadEventSubFeed()}>
+            {eventSubFeedLoading ? 'Feed wird geladen …' : 'Feed laden / aktualisieren'}
           </button>
-          <ul>
-            {eventSubFeed.map((event) => (
-              <li key={event.id}>
-                <strong>{event.type}</strong> ·{' '}
-                {new Date(event.receivedAt).toLocaleString()} · Status:{' '}
-                {event.processingStatus}
-                <div>Event ID: {event.twitchEventId}</div>
-                <div>Quelle: {event.source}</div>
-                {event.processedAt ? (
-                  <div>
-                    Verarbeitet: {new Date(event.processedAt).toLocaleString()}
-                  </div>
-                ) : null}
-                {event.error ? <div>Fehler: {event.error}</div> : null}
-              </li>
-            ))}
-          </ul>
+          {!eventSubFeedLoaded ? (
+            <p>Noch nicht geladen.</p>
+          ) : eventSubFeed.length === 0 ? (
+            <p>Keine Webhook-Ereignisse für diese Filter gefunden.</p>
+          ) : (
+            <ul>
+              {eventSubFeed.map((event) => (
+                <li key={`${event.source}:${event.id}`}>
+                  <strong>{event.type}</strong> · {new Date(event.receivedAt).toLocaleString()} · Status:{' '}
+                  {event.processingStatus}
+                  <div>Quelle: {event.source}</div>
+                  <div>Event ID: {event.eventId}</div>
+                  {event.deliveryId ? <div>Delivery ID: {event.deliveryId}</div> : null}
+                  {event.twitchMessageId ? <div>Twitch Message ID: {event.twitchMessageId}</div> : null}
+                  {event.twitchRedemptionId ? <div>Redemption ID: {event.twitchRedemptionId}</div> : null}
+                  {event.twitchUserDisplayName || event.twitchUserLogin || event.twitchUserId ? (
+                    <div>
+                      User: {event.twitchUserDisplayName ?? event.twitchUserLogin ?? event.twitchUserId}
+                      {event.twitchUserLogin ? ` (${event.twitchUserLogin})` : ''}
+                    </div>
+                  ) : null}
+                  {event.processedAt ? <div>Verarbeitet: {new Date(event.processedAt).toLocaleString()}</div> : null}
+                  {event.error ? <div>Fehler: {event.error}</div> : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="card">
